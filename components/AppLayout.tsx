@@ -1,7 +1,8 @@
 // components/AppLayout.tsx
 import Link from "next/link";
+import type { ReactNode } from "react";
 
-export function AppLayout({ children }: { children: React.ReactNode }) {
+export function AppLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-[#f5f5f5]">
       <header className="w-full bg-white border-b">
@@ -15,9 +16,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </nav>
         </div>
       </header>
-      <main className="max-w-5xl mx-auto px-4 py-6">
-        {children}
-      </main>
+      <main className="max-w-5xl mx-auto px-4 py-6">{children}</main>
     </div>
   );
 }
+

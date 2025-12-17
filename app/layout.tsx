@@ -1,22 +1,11 @@
-// app/layout.tsx
 import "./globals.css";
-import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import { AuthProvider } from "@/contexts/AuthContext";
 
-export const metadata: Metadata = {
-  title: "Jacla Portal",
-  description: "Jacla club portal",
-};
-
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ja">
-      <body>
-        {/* ここで全体を AuthProvider で包む */}
+      <body className="font-sans antialiased">
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

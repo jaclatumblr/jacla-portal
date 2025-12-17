@@ -4,8 +4,9 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import type { ReactNode } from "react";
 
-export function AuthGuard({ children }: { children: React.ReactNode }) {
+export function AuthGuard({ children }: { children: ReactNode }) {
   const { session, loading } = useAuth();
   const router = useRouter();
 

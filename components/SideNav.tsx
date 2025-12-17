@@ -20,7 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { id: "home", href: "/", label: "ホーム", icon: Home },
+  { id: "home", href: "/home", label: "ホーム", icon: Home },
   { id: "events", href: "/events", label: "イベント", icon: Calendar },
   { id: "pa", href: "/pa", label: "PA機材", icon: Music },
   { id: "lighting", href: "/lighting", label: "照明", icon: Lightbulb },
@@ -30,6 +30,7 @@ const navItems = [
 
 const bottomNavItems = [
   { id: "profile", href: "/me/profile", label: "アカウント", icon: User },
+  { id: "bands", href: "/me/bands", label: "マイバンド", icon: Music },
 ];
 
 const currentUser = {
@@ -73,7 +74,7 @@ export function SideNav() {
       >
         {/* ロゴ */}
         <div className="p-4 border-b border-border flex items-center h-20">
-          <Link href="/" className="flex items-center gap-3 w-full">
+          <Link href="/home" className="flex items-center gap-3 w-full">
             <div className="w-12 h-12 flex items-center justify-center shrink-0">
               <Image
                 src="/images/e3-83-ad-e3-82-b42-20-281-29.png"
@@ -258,7 +259,7 @@ export function SideNav() {
 
         <div className="p-6 pt-8 flex items-center justify-center">
           <Link
-            href="/"
+            href="/home"
             onClick={() => setIsMobileMenuOpen(false)}
             className="flex flex-col items-center gap-2"
           >

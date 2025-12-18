@@ -32,12 +32,14 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-[#f5f5f5]">
-      <div className="bg-white border rounded-lg shadow-sm p-6 w-full max-w-sm">
-        <h1 className="text-lg font-semibold mb-4 text-center">Jacla Portal ログイン</h1>
+    <main className="min-h-screen flex items-center justify-center bg-background p-4">
+      <div className="bg-card/50 border border-border rounded-lg shadow-sm p-6 w-full max-w-sm">
+        <h1 className="text-lg font-semibold mb-4 text-center">
+          Jacla Portal ログイン
+        </h1>
         <button
           onClick={handleGoogleLogin}
-          className="w-full border rounded px-4 py-2 text-sm bg-black text-white"
+          className="w-full border border-border rounded px-4 py-2 text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
         >
           Googleでログイン
         </button>

@@ -16,11 +16,14 @@ import {
   X,
   Bell,
   Settings,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTheme } from "next-themes";
 
 const navItems = [
-  { id: "home", href: "/home", label: "ホーム", icon: Home },
+  { id: "home", href: "/", label: "ホーム", icon: Home },
   { id: "events", href: "/events", label: "イベント", icon: Calendar },
   { id: "pa", href: "/pa", label: "PA機材", icon: Music },
   { id: "lighting", href: "/lighting", label: "照明", icon: Lightbulb },
@@ -42,6 +45,12 @@ export function SideNav() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const pathname = usePathname();
+  const { setTheme } = useTheme();
+
+  const toggleTheme = () => {
+    const isDark = document.documentElement.classList.contains("dark");
+    setTheme(isDark ? "light" : "dark");
+  };
 
   return (
     <>
@@ -74,7 +83,7 @@ export function SideNav() {
       >
         {/* ロゴ */}
         <div className="p-4 border-b border-border flex items-center h-20">
-          <Link href="/home" className="flex items-center gap-3 w-full">
+          <Link href="/" className="flex items-center gap-3 w-full">
             <div className="w-12 h-12 flex items-center justify-center shrink-0">
               <Image
                 src="/images/e3-83-ad-e3-82-b42-20-281-29.png"
@@ -101,7 +110,7 @@ export function SideNav() {
         </div>
 
         {/* メインナビゲーション */}
-        <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto">
+        <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto no-scrollbar">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive =
@@ -183,6 +192,38 @@ export function SideNav() {
             );
           })}
 
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className={cn(
+              "flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 group relative",
+              "text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+            aria-label="テーマを切り替える"
+          >
+            <div className="w-6 h-6 flex items-center justify-center shrink-0">
+              <Moon className="w-5 h-5 dark:hidden" />
+              <Sun className="w-5 h-5 hidden dark:block" />
+            </div>
+            <span
+              className={cn(
+                "flex-1 font-medium text-sm whitespace-nowrap transition-all duration-300",
+                isExpanded ? "opacity-100" : "opacity-0 w-0 overflow-hidden"
+              )}
+            >
+              <span className="dark:hidden">ダークモード</span>
+              <span className="hidden dark:inline">ライトモード</span>
+            </span>
+            {!isExpanded && (
+              <div className="absolute left-full ml-2 px-3 py-2 bg-card border border-border rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50 shadow-lg">
+                <span className="text-sm font-medium text-foreground">
+                  <span className="dark:hidden">ダークモード</span>
+                  <span className="hidden dark:inline">ライトモード</span>
+                </span>
+              </div>
+            )}
+          </button>
+
           {currentUser.isAdmin && (
             <Link
               href="/admin"
@@ -259,7 +300,7 @@ export function SideNav() {
 
         <div className="p-6 pt-8 flex items-center justify-center">
           <Link
-            href="/home"
+            href="/"
             onClick={() => setIsMobileMenuOpen(false)}
             className="flex flex-col items-center gap-2"
           >
@@ -279,15 +320,15 @@ export function SideNav() {
 
         <nav className="flex-1 flex flex-col justify-center px-8 py-4">
           <div className="space-y-2">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive =
-                pathname === item.href ||
-                (item.href !== "/" && pathname.startsWith(item.href));
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive =
+              pathname === item.href ||
+              (item.href !== "/" && pathname.startsWith(item.href));
 
-              return (
-                <Link
-                  key={item.id}
+            return (
+              <Link
+                key={item.id}
                   href={item.href}
                   onClick={() => setIsMobileMenuOpen(false)}
                   className={cn(
@@ -330,6 +371,25 @@ export function SideNav() {
             );
           })}
 
+          <button
+            type="button"
+            onClick={() => {
+              toggleTheme();
+              setIsMobileMenuOpen(false);
+            }}
+            className="flex items-center gap-4 px-6 py-4 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+            aria-label="テーマを切り替える"
+          >
+            <div className="w-6 h-6 flex items-center justify-center shrink-0">
+              <Moon className="w-6 h-6 dark:hidden" />
+              <Sun className="w-6 h-6 hidden dark:block" />
+            </div>
+            <span className="text-lg font-medium">
+              <span className="dark:hidden">ダークモード</span>
+              <span className="hidden dark:inline">ライトモード</span>
+            </span>
+          </button>
+
           {currentUser.isAdmin && (
             <Link
               href="/admin"
@@ -361,5 +421,3 @@ export function SideNav() {
     </>
   );
 }
-
-

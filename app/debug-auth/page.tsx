@@ -31,8 +31,8 @@ export default function DebugAuthPage() {
   }, []);
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-[#f5f5f5]">
-      <div className="bg-white border rounded-lg shadow-sm p-4 w-full max-w-md text-sm">
+    <main className="min-h-screen flex items-center justify-center bg-background p-4">
+      <div className="bg-card/50 border border-border rounded-lg shadow-sm p-4 w-full max-w-md text-sm">
         <h1 className="text-lg font-semibold mb-3">Debug: Auth Session</h1>
         {loading ? (
           <div>チェック中...</div>

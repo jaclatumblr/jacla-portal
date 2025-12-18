@@ -18,8 +18,8 @@ export function AuthGuard({ children }: { children: ReactNode }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f5f5f5]">
-        <div className="text-sm text-gray-600">ログイン確認中...</div>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-sm text-muted-foreground">ログイン確認中...</div>
       </div>
     );
   }

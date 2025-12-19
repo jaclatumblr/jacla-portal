@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -44,11 +44,21 @@ const currentUser = {
 };
 
 export function SideNav() {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.sessionStorage.getItem("sidenavExpanded") === "1";
+  });
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const { setTheme } = useTheme();
+
+  const updateExpanded = (value: boolean) => {
+    setIsExpanded(value);
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem("sidenavExpanded", value ? "1" : "0");
+    }
+  };
 
   const toggleTheme = () => {
     const isDark = document.documentElement.classList.contains("dark");
@@ -60,6 +70,18 @@ export function SideNav() {
     setIsMobileMenuOpen(false);
     router.replace("/login");
   };
+
+  useEffect(() => {
+    const original = document.body.style.overflow;
+    if (isMobileMenuOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = original || "";
+    }
+    return () => {
+      document.body.style.overflow = original || "";
+    };
+  }, [isMobileMenuOpen]);
 
   return (
     <>
@@ -82,8 +104,8 @@ export function SideNav() {
 
       {/* デスクトップ用サイドバー */}
       <aside
-        onMouseEnter={() => setIsExpanded(true)}
-        onMouseLeave={() => setIsExpanded(false)}
+        onMouseEnter={() => updateExpanded(true)}
+        onMouseLeave={() => updateExpanded(false)}
         className={cn(
           "fixed left-0 top-0 h-screen bg-card/95 backdrop-blur-xl border-r border-border transition-all duration-300 flex flex-col z-50",
           "hidden md:flex",
@@ -322,7 +344,7 @@ export function SideNav() {
           </Link>
         </div>
 
-        <nav className="flex-1 flex flex-col justify-center px-8 py-4 gap-4">
+        <nav className="flex-1 flex flex-col px-8 py-6 gap-6">
           <div className="space-y-1">
             {navItems.map((item) => {
               const Icon = item.icon;
@@ -350,7 +372,7 @@ export function SideNav() {
           </div>
         </nav>
 
-        <div className="px-8 pb-8 space-y-2">
+        <div className="px-8 pb-10 space-y-4">
           <div className="space-y-1">
             {bottomNavItems.map((item) => {
               const Icon = item.icon;
@@ -375,7 +397,9 @@ export function SideNav() {
                 </Link>
               );
             })}
+          </div>
 
+          <div className="space-y-1 border-t border-border pt-4">
             <button
               type="button"
               onClick={() => {

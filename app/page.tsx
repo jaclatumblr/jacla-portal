@@ -52,7 +52,7 @@ export default function HomePage() {
         <main className="flex-1 md:ml-20">
           <section
             id="home"
-            className="relative min-h-screen flex items-center justify-center overflow-hidden px-4 sm:px-6 pb-20 sm:pb-24 pt-16 sm:pt-10"
+            className="relative min-h-screen flex items-center justify-center overflow-hidden px-4 sm:px-6 pb-28 sm:pb-32 pt-16 sm:pt-20"
           >
             <div className="absolute inset-0 bg-gradient-to-br from-background via-background to-primary/10" />
             <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
@@ -103,7 +103,7 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="absolute bottom-6 sm:bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 animate-bounce">
+            <div className="pointer-events-none absolute bottom-6 sm:bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 animate-bounce">
               <span className="text-xs text-muted-foreground tracking-widest">
                 SCROLL
               </span>

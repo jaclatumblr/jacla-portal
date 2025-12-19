@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, Settings, Users } from "lucide-react";
+import { Calendar } from "lucide-react";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 
@@ -28,6 +29,23 @@ export default function AdminPage() {
           <section className="py-8 md:py-12">
             <div className="container mx-auto px-4 sm:px-6">
               <div className="max-w-4xl mx-auto grid sm:grid-cols-2 gap-4 md:gap-6">
+                <Link href="/admin/events" className="group">
+                  <div className="relative h-40 md:h-48 p-4 md:p-6 bg-card/50 border border-border rounded-lg hover:border-primary/50 transition-all">
+                    <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-lg" />
+                    <div className="relative h-full flex flex-col">
+                      <Calendar className="w-6 md:w-8 h-6 md:h-8 text-primary mb-3 md:mb-4" />
+                      <h3 className="text-base md:text-lg font-bold mb-2">イベント管理</h3>
+                      <p className="text-xs md:text-sm text-muted-foreground flex-1">
+                        イベントの作成・編集・ステータス更新
+                      </p>
+                      <div className="flex items-center gap-2 text-primary text-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span>開く</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+
                 <Link href="/members" className="group">
                   <div className="relative h-40 md:h-48 p-4 md:p-6 bg-card/50 border border-border rounded-lg hover:border-primary/50 transition-all">
                     <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-lg" />
@@ -64,4 +82,3 @@ export default function AdminPage() {
     </AuthGuard>
   );
 }
-

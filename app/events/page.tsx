@@ -21,9 +21,18 @@ type EventRow = {
 };
 
 function statusVariant(status: string) {
-  if (status === "募集中") return "default";
-  if (status === "準備中") return "secondary";
+  if (status === "recruiting" || status === "募集中") return "default";
+  if (status === "fixed" || status === "準備中" || status === "確定") return "secondary";
+  if (status === "closed") return "outline";
   return "outline";
+}
+
+function statusLabel(status: string) {
+  if (status === "draft") return "下書き";
+  if (status === "recruiting") return "募集中";
+  if (status === "fixed") return "確定";
+  if (status === "closed") return "終了";
+  return status;
 }
 
 export default function EventsPage() {
@@ -112,7 +121,9 @@ export default function EventsPage() {
                                 <h3 className="text-lg sm:text-xl font-bold text-foreground group-hover:text-primary transition-colors">
                                   {event.name}
                                 </h3>
-                                <Badge variant={statusVariant(event.status)}>{event.status}</Badge>
+                                <Badge variant={statusVariant(event.status)}>
+                                  {statusLabel(event.status)}
+                                </Badge>
                               </div>
                               <ArrowRight className="hidden sm:block w-5 h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all shrink-0" />
                             </div>
@@ -149,4 +160,3 @@ export default function EventsPage() {
     </AuthGuard>
   );
 }
-

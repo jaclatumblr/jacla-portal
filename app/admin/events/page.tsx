@@ -1,0 +1,363 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { ArrowRight, Calendar, Clock, MapPin, Plus, RefreshCw } from "lucide-react";
+import { SideNav } from "@/components/SideNav";
+import { AuthGuard } from "@/lib/AuthGuard";
+import { supabase } from "@/lib/supabaseClient";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/contexts/AuthContext";
+import { cn } from "@/lib/utils";
+
+type EventRow = {
+  id: string;
+  name: string;
+  date: string;
+  status: string;
+  venue: string | null;
+  open_time: string | null;
+  start_time: string | null;
+  note: string | null;
+  default_song_duration_sec: number;
+  default_changeover_min: number;
+};
+
+const statusOptions = [
+  { value: "draft", label: "下書き" },
+  { value: "recruiting", label: "募集中" },
+  { value: "fixed", label: "確定" },
+  { value: "closed", label: "終了" },
+];
+
+function statusVariant(status: string) {
+  if (status === "draft") return "outline";
+  if (status === "recruiting") return "default";
+  if (status === "fixed") return "secondary";
+  return "outline";
+}
+
+const emptyForm: EventRow = {
+  id: "",
+  name: "",
+  date: "",
+  status: "draft",
+  venue: "",
+  open_time: "",
+  start_time: "",
+  note: "",
+  default_song_duration_sec: 240,
+  default_changeover_min: 15,
+};
+
+export default function AdminEventsPage() {
+  const { session } = useAuth();
+  const [events, setEvents] = useState<EventRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState<EventRow>(emptyForm);
+
+  const userId = session?.user.id;
+
+  const canSubmit = useMemo(() => {
+    return form.name.trim().length > 0 && form.date.trim().length > 0 && !saving;
+  }, [form.date, form.name, saving]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      const { data, error } = await supabase
+        .from("events")
+        .select(
+          "id, name, date, status, venue, open_time, start_time, note, default_song_duration_sec, default_changeover_min"
+        )
+        .order("date", { ascending: true });
+      if (cancelled) return;
+      if (error) {
+        console.error(error);
+        setError("イベントの取得に失敗しました。");
+        setEvents([]);
+      } else {
+        setEvents((data ?? []) as EventRow[]);
+      }
+      setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleChange = (key: keyof EventRow, value: string | number) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canSubmit) return;
+    setSaving(true);
+    setError(null);
+
+    const payload = {
+      name: form.name.trim(),
+      date: form.date,
+      status: form.status,
+      venue: form.venue || null,
+      open_time: form.open_time || null,
+      start_time: form.start_time || null,
+      note: form.note || null,
+      default_song_duration_sec: Number(form.default_song_duration_sec) || 240,
+      default_changeover_min: Number(form.default_changeover_min) || 15,
+      created_by: userId ?? null,
+    };
+
+    const { data, error } = await supabase.from("events").insert([payload]).select().single();
+    if (error) {
+      console.error(error);
+      setError("イベントの作成に失敗しました。");
+      setSaving(false);
+      return;
+    }
+
+    setEvents((prev) => [...prev, data as EventRow].sort((a, b) => a.date.localeCompare(b.date)));
+    setForm(emptyForm);
+    setSaving(false);
+  };
+
+  return (
+    <AuthGuard>
+      <div className="flex min-h-screen bg-background">
+        <SideNav />
+
+        <main className="flex-1 md:ml-20">
+          <section className="relative py-12 md:py-16 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent" />
+            <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
+
+            <div className="relative z-10 container mx-auto px-4 sm:px-6">
+              <div className="max-w-5xl pt-8 md:pt-0">
+                <span className="text-xs text-primary tracking-[0.3em] font-mono">ADMIN</span>
+                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-3 mb-4">
+                  イベント管理
+                </h1>
+                <p className="text-muted-foreground text-sm md:text-base">
+                  イベントの作成・編集を行います。
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section className="py-8 md:py-12">
+            <div className="container mx-auto px-4 sm:px-6 grid lg:grid-cols-2 gap-6 lg:gap-10 items-start">
+              <form
+                onSubmit={handleSubmit}
+                className="bg-card/60 border border-border rounded-xl p-4 sm:p-6 space-y-4 shadow-sm"
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <Plus className="w-4 h-4 text-primary" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold">イベントを作成</h2>
+                    <p className="text-xs text-muted-foreground">
+                      必須: イベント名 / 開催日。ほかは後から編集できます。
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="space-y-1 block text-sm">
+                    <span className="text-foreground">イベント名</span>
+                    <Input
+                      required
+                      value={form.name}
+                      onChange={(e) => handleChange("name", e.target.value)}
+                      placeholder="春ライブ 2025"
+                    />
+                  </label>
+
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <label className="space-y-1 block text-sm">
+                      <span className="text-foreground">開催日</span>
+                      <Input
+                        type="date"
+                        required
+                        value={form.date}
+                        onChange={(e) => handleChange("date", e.target.value)}
+                      />
+                    </label>
+                    <label className="space-y-1 block text-sm">
+                      <span className="text-foreground">ステータス</span>
+                      <select
+                        aria-label="ステータス"
+                        className="h-10 w-full rounded-md border border-input bg-card/80 px-3 pr-9 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-colors"
+                        value={form.status}
+                        onChange={(e) => handleChange("status", e.target.value)}
+                      >
+                        {statusOptions.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <label className="space-y-1 block text-sm">
+                      <span className="text-foreground">開場時間</span>
+                      <Input
+                        type="time"
+                        value={form.open_time ?? ""}
+                        onChange={(e) => handleChange("open_time", e.target.value)}
+                      />
+                    </label>
+                    <label className="space-y-1 block text-sm">
+                      <span className="text-foreground">開演時間</span>
+                      <Input
+                        type="time"
+                        value={form.start_time ?? ""}
+                        onChange={(e) => handleChange("start_time", e.target.value)}
+                      />
+                    </label>
+                  </div>
+
+                  <label className="space-y-1 block text-sm">
+                    <span className="text-foreground">会場</span>
+                    <Input
+                      value={form.venue ?? ""}
+                      onChange={(e) => handleChange("venue", e.target.value)}
+                      placeholder="大学ホール"
+                    />
+                  </label>
+
+                  <label className="space-y-1 block text-sm">
+                    <span className="text-foreground">メモ</span>
+                    <textarea
+                      value={form.note ?? ""}
+                      onChange={(e) => handleChange("note", e.target.value)}
+                      rows={3}
+                      className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground"
+                      placeholder="備考や出演条件など"
+                    />
+                  </label>
+
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <label className="space-y-1 block text-sm">
+                      <span className="text-foreground">デフォルト演奏時間（秒）</span>
+                      <Input
+                        type="number"
+                        min={30}
+                        value={form.default_song_duration_sec}
+                        onChange={(e) => handleChange("default_song_duration_sec", Number(e.target.value))}
+                      />
+                    </label>
+                    <label className="space-y-1 block text-sm">
+                      <span className="text-foreground">デフォルト転換時間（分）</span>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={form.default_changeover_min}
+                        onChange={(e) => handleChange("default_changeover_min", Number(e.target.value))}
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {error && <p className="text-sm text-destructive">{error}</p>}
+
+                <div className="flex items-center gap-3 pt-1">
+                  <Button type="submit" disabled={!canSubmit} className="gap-2">
+                    {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                    イベントを作成
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setForm(emptyForm)}
+                    disabled={saving}
+                  >
+                    リセット
+                  </Button>
+                </div>
+              </form>
+
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-semibold">イベント一覧</h2>
+                  <Badge variant="secondary">{events.length}</Badge>
+                </div>
+
+                <div className="space-y-3">
+                  {loading ? (
+                    <div className="text-sm text-muted-foreground">読み込み中...</div>
+                  ) : events.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">イベントがありません。</div>
+                  ) : (
+                    events.map((event) => {
+                      const timeRange =
+                        event.open_time && event.start_time
+                          ? `${event.open_time} - ${event.start_time}`
+                          : "時間未定";
+                      return (
+                        <div
+                          key={event.id}
+                          className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 bg-card/50 border border-border rounded-lg"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge variant={statusVariant(event.status)} className="capitalize">
+                                {event.status}
+                              </Badge>
+                              <p className="font-semibold truncate">{event.name}</p>
+                            </div>
+                            <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2 text-xs text-muted-foreground">
+                              <span className="flex items-center gap-1">
+                                <Calendar className="w-4 h-4 text-primary" />
+                                {event.date}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-4 h-4 text-primary" />
+                                {timeRange}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <MapPin className="w-4 h-4 text-primary" />
+                                {event.venue ?? "未設定"}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex gap-2 shrink-0">
+                            <Link
+                              href={`/admin/events/${event.id}`}
+                              className={cn(
+                                "inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:border-primary/50 hover:text-primary transition-colors"
+                              )}
+                            >
+                              編集
+                              <ArrowRight className="w-4 h-4" />
+                            </Link>
+                            <Link
+                              href={`/events/${event.id}`}
+                              className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors"
+                            >
+                              詳細
+                              <ArrowRight className="w-4 h-4" />
+                            </Link>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </AuthGuard>
+  );
+}

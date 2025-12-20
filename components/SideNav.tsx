@@ -62,9 +62,8 @@ export function SideNav() {
     setTheme(isDark ? "light" : "dark");
   };
 
-  // ルートが変わったらメニューを閉じておく
+  // ルートが変わったらモバイルメニューだけ閉じる
   useEffect(() => {
-    updateExpanded(false);
     setIsMobileMenuOpen(false);
   }, [pathname]);
 

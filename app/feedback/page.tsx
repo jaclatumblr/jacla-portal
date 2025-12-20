@@ -67,7 +67,7 @@ export default function FeedbackPage() {
                 <span className="text-xs text-primary tracking-[0.3em] font-mono">FEEDBACK</span>
                 <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-3 mb-3">フィードバック</h1>
                 <p className="text-muted-foreground text-sm md:text-base">
-                  改善アイデアや不具合を共有してください。運営が確認します。
+                  改善アイデアや不具合を共有してください。矢内が確認します。
                 </p>
               </div>
             </div>

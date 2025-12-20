@@ -166,7 +166,7 @@ export default function HomePage() {
                         </span>
                       </div>
                       <h3 className="text-lg md:text-xl font-bold mb-2">
-                        PA機材管理
+                        PA
                       </h3>
                       <p className="text-xs md:text-sm text-muted-foreground flex-1">
                         音響機材の一覧、貸出状況、イベント別セットリスト
@@ -190,7 +190,7 @@ export default function HomePage() {
                         </span>
                       </div>
                       <h3 className="text-lg md:text-xl font-bold mb-2">
-                        照明機材管理
+                        照明
                       </h3>
                       <p className="text-xs md:text-sm text-muted-foreground flex-1">
                         照明機材の一覧、貸出状況、イベント別セットリスト

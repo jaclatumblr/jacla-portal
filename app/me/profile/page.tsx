@@ -139,11 +139,15 @@ export default function ProfilePage() {
   const leaderLabel = leaderRoles.length > 0 ? leaderRoles.join(" / ") : null;
   const roleBadge = leaderLabel ?? crewLabel;
   const joinDate = profile?.created_at ? profile.created_at.split("T")[0] : "-";
-  const discordLabel =
-    profile?.discord ||
+  const discordValue =
     profile?.discord_username ||
+    profile?.discord ||
     session?.user.user_metadata?.discord ||
-    "未設定";
+    "";
+  const discordLabel = discordValue || "未設定";
+  const discordUrl = discordValue
+    ? `https://discord.com/users/${encodeURIComponent(discordValue)}`
+    : null;
   const avatarUrl =
     session?.user.user_metadata?.avatar_url ||
     session?.user.user_metadata?.picture ||
@@ -228,7 +232,20 @@ export default function ProfilePage() {
                       <div className="min-w-0">
                         <p className="text-xs text-muted-foreground">Discord</p>
                         <p className="font-medium text-sm md:text-base truncate">
-                          {loading ? "..." : discordLabel}
+                          {loading ? (
+                            "..."
+                          ) : discordUrl ? (
+                            <a
+                              href={discordUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-primary hover:underline"
+                            >
+                              {discordLabel}
+                            </a>
+                          ) : (
+                            discordLabel
+                          )}
                         </p>
                       </div>
                     </div>

@@ -193,7 +193,7 @@ export default function AdminEventDetailPage() {
         id: p.id,
         display_name: p.display_name ?? p.full_name ?? p.name ?? p.email ?? "名前未登録",
         email: p.email ?? null,
-        discord: p.discord ?? p.discord_username ?? null,
+        discord: p.discord_username ?? p.discord ?? null,
         crew: p.crew ?? null,
       }));
       setProfiles(profileList);

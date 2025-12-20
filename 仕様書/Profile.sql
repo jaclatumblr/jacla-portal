@@ -174,7 +174,9 @@ alter table public.profiles
   add column if not exists leader leader_role not null default 'none',
   add column if not exists crew   crew_role   not null default 'User',
   add column if not exists part   part_role   not null default 'none',
-  add column if not exists muted  boolean     not null default false;
+  add column if not exists muted  boolean     not null default false,
+  add column if not exists discord text,
+  add column if not exists discord_username text;
 
 
 -- =========================================================

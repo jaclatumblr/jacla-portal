@@ -117,7 +117,7 @@ export default function MembersPage() {
           part: profile.part && profile.part !== "none" ? profile.part : null,
           crew: profile.crew ?? null,
           leaderRoles,
-          discord: profile.discord ?? profile.discord_username ?? null,
+          discord: profile.discord_username ?? profile.discord ?? null,
           bands: Array.from(bandMap.get(profile.id) ?? []),
         } satisfies Member;
       });
@@ -146,7 +146,7 @@ export default function MembersPage() {
                 <span className="text-xs text-primary tracking-[0.3em] font-mono">MEMBERS</span>
                 <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-4 mb-4">部員一覧</h1>
                 <p className="text-muted-foreground text-base md:text-lg max-w-2xl mb-8">
-                  部員情報と担当パートを確認できます。連絡はDiscordを利用してください。
+                  部員情報と担当パートを確認できます。
                 </p>
 
                 <div className="flex flex-col sm:flex-row gap-3 md:gap-4 max-w-xl">
@@ -188,6 +188,9 @@ export default function MembersPage() {
                     const roleLabel = leaderLabel ?? member.crew ?? "User";
                     const partLabel = member.part ?? "未設定";
                     const discordLabel = member.discord ?? "未連携";
+                    const discordUrl = member.discord
+                      ? `https://discord.com/users/${encodeURIComponent(member.discord)}`
+                      : null;
                     const bandLabels = member.bands.length > 0 ? member.bands : ["所属バンドなし"];
                     const initial = member.name.trim().charAt(0) || "?";
                     return (
@@ -223,7 +226,18 @@ export default function MembersPage() {
                             <div className="space-y-1 mb-3 md:mb-4 text-xs md:text-sm">
                               <div className="flex items-center gap-2 text-muted-foreground">
                                 <MessageCircle className="w-4 h-4 shrink-0" />
-                                <span className="truncate">Discord: {discordLabel}</span>
+                                {discordUrl ? (
+                                  <a
+                                    href={discordUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="truncate text-primary hover:underline"
+                                  >
+                                    Discord: {discordLabel}
+                                  </a>
+                                ) : (
+                                  <span className="truncate">Discord: {discordLabel}</span>
+                                )}
                               </div>
                             </div>
 

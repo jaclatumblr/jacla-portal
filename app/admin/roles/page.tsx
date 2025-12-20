@@ -105,6 +105,9 @@ export default function AdminRolesPage() {
     () => profiles.find((p) => p.id === selectedId) ?? null,
     [profiles, selectedId]
   );
+  const targetIsAdministrator = selectedProfile
+    ? leaderRoles.includes("Administrator") || selectedProfile.leader === "Administrator"
+    : false;
 
   useEffect(() => {
     if (!selectedProfile) {
@@ -241,11 +244,19 @@ export default function AdminRolesPage() {
       setError("ロール情報の読み込み中です。");
       return;
     }
-    const isAdministrator =
-      leaderRoles.includes("Administrator") || selectedProfile.leader === "Administrator";
-    if (!isAdministrator && !primaryPart) {
+    if (!targetIsAdministrator && !primaryPart) {
       setError("メイン楽器を選択してください。");
       return;
+    }
+    if (targetIsAdministrator && form.muted) {
+      setError("Administrator には muted を設定できません。");
+      return;
+    }
+    if (!selectedProfile.muted && form.muted) {
+      const confirmedOnce = window.confirm("本当によろしいですか？");
+      if (!confirmedOnce) return;
+      const confirmedTwice = window.confirm("このユーザーを muted にします。よろしいですか？");
+      if (!confirmedTwice) return;
     }
 
     setSaving(true);
@@ -310,7 +321,7 @@ export default function AdminRolesPage() {
 
     const deleteIds =
       (currentRoles ?? [])
-        .filter((row) => !desiredSet.has(row.leader))
+        .filter((row) => row.leader !== "Administrator" && !desiredSet.has(row.leader))
         .map((row) => row.id) ?? [];
     if (deleteIds.length > 0) {
       const { error: deleteError } = await supabase
@@ -656,9 +667,17 @@ export default function AdminRolesPage() {
                             className="h-4 w-4 accent-primary"
                             checked={form.muted}
                             onChange={(e) => setForm((prev) => ({ ...prev, muted: e.target.checked }))}
+                            disabled={targetIsAdministrator}
                           />
-                          <span className="text-foreground">muted（本人から更新不可）</span>
+                          <span className={targetIsAdministrator ? "text-muted-foreground" : "text-foreground"}>
+                            muted（本人から更新不可）
+                          </span>
                         </label>
+                        {targetIsAdministrator && (
+                          <p className="text-xs text-muted-foreground">
+                            Administrator には muted を設定できません。
+                          </p>
+                        )}
 
                         <div className="flex flex-wrap items-center gap-3">
                           <Button onClick={handleSave} disabled={saving || leadersLoading} className="gap-2">

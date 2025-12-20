@@ -30,6 +30,7 @@ const partOptions = [
   "Tp.",
   "Tb.",
   "Tu.",
+  "Hr.",
   "Eup.",
   "Cl.",
   "B.Cl.",
@@ -47,6 +48,7 @@ type ProfileRow = {
   crew: string | null;
   part: string | null;
   leader: string | null;
+  discord_username: string | null;
 };
 
 type ProfilePartRow = {
@@ -66,6 +68,7 @@ export default function OnboardingClient() {
   const [done, setDone] = useState(false);
 
   const [displayName, setDisplayName] = useState("");
+  const [discordUsername, setDiscordUsername] = useState("");
   const [crew, setCrew] = useState("User");
   const [part, setPart] = useState("");
   const [subParts, setSubParts] = useState<string[]>([]);
@@ -88,7 +91,7 @@ export default function OnboardingClient() {
 
       const { data, error } = await supabase
         .from("profiles")
-        .select("display_name, crew, part, leader")
+        .select("display_name, crew, part, leader, discord_username")
         .eq("id", session.user.id)
         .maybeSingle();
 
@@ -103,7 +106,7 @@ export default function OnboardingClient() {
             email: session.user.email,
             display_name: session.user.user_metadata.full_name ?? session.user.email ?? "",
           })
-          .select("display_name, crew, part, leader")
+          .select("display_name, crew, part, leader, discord_username")
           .maybeSingle();
 
         if (insertError) {
@@ -152,6 +155,7 @@ export default function OnboardingClient() {
         (!leadersRes.error && leaderValues.length === 0 && profile.leader === "Administrator");
 
       setDisplayName(profile.display_name ?? "");
+      setDiscordUsername(profile.discord_username ?? "");
       setCrew(profile.crew ?? "User");
       setPart(primaryPart ?? "");
       setSubParts(subs);
@@ -190,6 +194,7 @@ export default function OnboardingClient() {
       .from("profiles")
       .update({
         display_name: displayName.trim(),
+        discord_username: discordUsername.trim() || null,
         crew,
         part: partValue,
       })
@@ -320,6 +325,15 @@ export default function OnboardingClient() {
                           value={displayName}
                           onChange={(e) => setDisplayName(e.target.value)}
                           placeholder="例: 山田 太郎"
+                        />
+                      </label>
+
+                      <label className="space-y-1 block text-sm">
+                        <span className="text-foreground">Discordユーザー名</span>
+                        <Input
+                          value={discordUsername}
+                          onChange={(e) => setDiscordUsername(e.target.value)}
+                          placeholder="例: nia_8800"
                         />
                       </label>
 

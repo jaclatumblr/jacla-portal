@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Settings, Users } from "lucide-react";
+import { ArrowRight, Shield, Users } from "lucide-react";
 import { Calendar } from "lucide-react";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
@@ -26,9 +26,7 @@ export default function AdminPage() {
         <div className="min-h-screen flex items-center justify-center bg-background px-6">
           <div className="text-center space-y-3">
             <p className="text-xl font-semibold text-foreground">管理者のみアクセスできます</p>
-            <p className="text-sm text-muted-foreground">
-              アクセス権限がありません。管理者に問い合わせてください。
-            </p>
+            <p className="text-sm text-muted-foreground">管理者に問い合わせてください。</p>
             <Link
               href="/"
               className="inline-flex items-center justify-center px-4 py-2 rounded-lg border border-border text-sm text-foreground hover:border-primary/60 hover:text-primary transition-colors"
@@ -56,7 +54,7 @@ export default function AdminPage() {
                 <span className="text-xs text-primary tracking-[0.3em] font-mono">ADMIN</span>
                 <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-4 mb-4">管理</h1>
                 <p className="text-muted-foreground text-base md:text-lg max-w-2xl">
-                  管理機能は準備中です。必要に応じてここに管理メニューを追加します。
+                  管理者メニューからイベントやロールを設定できます。
                 </p>
               </div>
             </div>
@@ -82,14 +80,14 @@ export default function AdminPage() {
                   </div>
                 </Link>
 
-                <Link href="/members" className="group">
+                <Link href="/admin/roles" className="group">
                   <div className="relative h-40 md:h-48 p-4 md:p-6 bg-card/50 border border-border rounded-lg hover:border-primary/50 transition-all">
-                    <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-lg" />
+                    <div className="absolute inset-0 bg-gradient-to-br from-secondary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-lg" />
                     <div className="relative h-full flex flex-col">
-                      <Users className="w-6 md:w-8 h-6 md:h-8 text-primary mb-3 md:mb-4" />
-                      <h3 className="text-base md:text-lg font-bold mb-2">部員一覧</h3>
+                      <Shield className="w-6 md:w-8 h-6 md:h-8 text-primary mb-3 md:mb-4" />
+                      <h3 className="text-base md:text-lg font-bold mb-2">ロール管理</h3>
                       <p className="text-xs md:text-sm text-muted-foreground flex-1">
-                        部員情報を確認
+                        Administrator/Supervisor が役職・crew・part を更新
                       </p>
                       <div className="flex items-center gap-2 text-primary text-sm opacity-0 group-hover:opacity-100 transition-opacity">
                         <span>開く</span>
@@ -99,17 +97,20 @@ export default function AdminPage() {
                   </div>
                 </Link>
 
-                <div className="group">
-                  <div className="relative h-40 md:h-48 p-4 md:p-6 bg-card/50 border border-border rounded-lg">
+                <Link href="/members" className="group">
+                  <div className="relative h-40 md:h-48 p-4 md:p-6 bg-card/50 border border-border rounded-lg hover:border-primary/50 transition-all">
+                    <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-lg" />
                     <div className="relative h-full flex flex-col">
-                      <Settings className="w-6 md:w-8 h-6 md:h-8 text-muted-foreground mb-3 md:mb-4" />
-                      <h3 className="text-base md:text-lg font-bold mb-2">設定</h3>
-                      <p className="text-xs md:text-sm text-muted-foreground flex-1">
-                        近日実装予定
-                      </p>
+                      <Users className="w-6 md:w-8 h-6 md:h-8 text-primary mb-3 md:mb-4" />
+                      <h3 className="text-base md:text-lg font-bold mb-2">部員一覧</h3>
+                      <p className="text-xs md:text-sm text-muted-foreground flex-1">部員情報を確認</p>
+                      <div className="flex items-center gap-2 text-primary text-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span>開く</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </div>
                     </div>
                   </div>
-                </div>
+                </Link>
               </div>
             </div>
           </section>

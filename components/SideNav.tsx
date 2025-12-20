@@ -62,6 +62,12 @@ export function SideNav() {
     setTheme(isDark ? "light" : "dark");
   };
 
+  // ルートが変わったらメニューを閉じておく
+  useEffect(() => {
+    updateExpanded(false);
+    setIsMobileMenuOpen(false);
+  }, [pathname]);
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setIsMobileMenuOpen(false);

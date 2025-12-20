@@ -23,28 +23,51 @@ export function useIsAdmin(): AdminHookResult {
 
     if (!userId) return;
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     setError(null);
 
-    supabase
-      .from("profiles")
-      .select("leader")
-      .eq("id", userId)
-      .maybeSingle()
-      .then(({ data, error }) => {
+    (async () => {
+      const { data: leadersData, error: leadersError } = await supabase
+        .from("profile_leaders")
+        .select("leader")
+        .eq("profile_id", userId);
+
+      if (cancelled) return;
+
+      const leaders = (leadersData ?? [])
+        .map((row) => (row as { leader?: string }).leader)
+        .filter((role) => role && role !== "none") as string[];
+
+      let adminFlag =
+        leaders.includes("Administrator") || leaders.includes("Supervisor");
+
+      if (leadersError || leaders.length === 0) {
+        if (leadersError) {
+          console.error(leadersError);
+        }
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("leader")
+          .eq("id", userId)
+          .maybeSingle();
+
         if (cancelled) return;
         if (error) {
           console.error(error);
           setIsAdmin(false);
-          setError("権限の確認に失敗しました");
-        } else {
-          const leader = (data as { leader?: string } | null)?.leader;
-          setIsAdmin(leader === "Administrator" || leader === "Supervisor");
-          setError(null);
+          setError("管理権限の確認に失敗しました。");
+          setLoading(false);
+          return;
         }
-        setLoading(false);
-      });
+
+        const leader = (data as { leader?: string } | null)?.leader;
+        adminFlag = leader === "Administrator" || leader === "Supervisor";
+      }
+
+      setIsAdmin(adminFlag);
+      setError(null);
+      setLoading(false);
+    })();
 
     return () => {
       cancelled = true;

@@ -22,6 +22,7 @@ function LoginPageContent() {
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
   const [isSent, setIsSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const queryError = (() => {
@@ -44,6 +45,7 @@ function LoginPageContent() {
       if (cancelled) return;
       if (error) console.error(error);
       if (data.session) {
+        setIsRedirecting(true);
         router.replace("/");
       }
     })();
@@ -84,6 +86,10 @@ function LoginPageContent() {
       provider: "google",
       options: {
         redirectTo: getAuthCallbackUrl(),
+        queryParams: {
+          // アカウント選択を毎回表示
+          prompt: "select_account",
+        },
       },
     });
 
@@ -94,8 +100,10 @@ function LoginPageContent() {
     }
   };
 
+  const showFullscreenLoader = isLoading || isRedirecting;
+
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex relative">
       <div className="hidden lg:flex lg:w-1/2 relative bg-card overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-background to-secondary/10" />
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl" />
@@ -272,6 +280,17 @@ function LoginPageContent() {
           </div>
         </div>
       </div>
+
+      {showFullscreenLoader && (
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <div className="flex items-center gap-3 px-4 py-3 rounded-lg border border-border bg-card shadow-lg">
+            <Loader2 className="w-5 h-5 animate-spin text-primary" />
+            <span className="text-sm text-foreground">
+              ログイン処理中です…
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

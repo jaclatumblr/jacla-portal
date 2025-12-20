@@ -379,8 +379,11 @@ begin
 
   -- UPDATE: crew の変更ルール
   if new.crew is distinct from old.crew then
+    -- Self update: allow changing crew freely (enum restriction applies).
+    if actor = old.id then
+      null;
     -- PA長：PA/User のみ
-    if actor_is_pa_leader then
+    elsif actor_is_pa_leader then
       if new.crew not in ('PA'::crew_role, 'User'::crew_role) then
         raise exception 'PA Leader can set crew only to PA/User.';
       end if;
@@ -392,7 +395,7 @@ begin
       end if;
 
     else
-      raise exception 'Only Administrator/Supervisor or relevant leader can change crew.';
+      raise exception 'Only Administrator/Supervisor, self, or relevant leader can change crew.';
     end if;
   end if;
 

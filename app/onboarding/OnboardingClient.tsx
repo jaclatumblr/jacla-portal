@@ -156,25 +156,9 @@ export default function OnboardingClient() {
       const effectiveLeaders = leaderValues.length > 0 ? leaderValues : fallbackLeaders;
 
       const isAdmin = effectiveLeaders.includes("Administrator");
-      const isSupervisor = effectiveLeaders.includes("Supervisor");
-      const isPaLeader = effectiveLeaders.includes("PA Leader");
-      const isLightingLeader = effectiveLeaders.includes("Lighting Leader");
-      const canEditCrewValue = isAdmin || isSupervisor || isPaLeader || isLightingLeader;
-
-      let allowedCrew = crewOptions;
       const currentCrew = profile.crew ?? "User";
-      if (isAdmin || isSupervisor) {
-        allowedCrew = crewOptions;
-      } else if (isPaLeader) {
-        allowedCrew = ["User", "PA"];
-      } else if (isLightingLeader) {
-        allowedCrew = ["User", "Lighting"];
-      } else {
-        allowedCrew = [currentCrew];
-      }
-      if (!allowedCrew.includes(currentCrew)) {
-        allowedCrew = [currentCrew, ...allowedCrew];
-      }
+      const canEditCrewValue = true;
+      const allowedCrew = crewOptions;
 
       setDisplayName(profile.display_name ?? "");
       setDiscordUsername(profile.discord_username ?? "");

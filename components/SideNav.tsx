@@ -22,11 +22,12 @@ import {
 import { cn } from "@/lib/utils";
 import { useTheme } from "next-themes";
 import { supabase } from "@/lib/supabaseClient";
+import { useIsAdmin } from "@/lib/useIsAdmin";
 
 const navItems = [
   { id: "home", href: "/", label: "ホーム", icon: Home },
   { id: "events", href: "/events", label: "イベント", icon: Calendar },
-  { id: "pa", href: "/pa", label: "PA機材", icon: Music },
+  { id: "pa", href: "/pa", label: "PA", icon: Music },
   { id: "lighting", href: "/lighting", label: "照明", icon: Lightbulb },
   { id: "announcements", href: "/announcements", label: "お知らせ", icon: Bell },
   { id: "members", href: "/members", label: "部員一覧", icon: Users },
@@ -38,11 +39,6 @@ const bottomNavItems = [
 ];
 const utilityNavItems = bottomNavItems;
 
-const currentUser = {
-  // TODO: 認証ロジックとつないで admin 判定を行う
-  isAdmin: true,
-};
-
 export function SideNav() {
   const [isExpanded, setIsExpanded] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -52,6 +48,7 @@ export function SideNav() {
   const pathname = usePathname();
   const router = useRouter();
   const { setTheme } = useTheme();
+  const { isAdmin } = useIsAdmin();
 
   const updateExpanded = (value: boolean) => {
     setIsExpanded(value);
@@ -130,12 +127,8 @@ export function SideNav() {
                 isExpanded ? "opacity-100 w-auto" : "opacity-0 w-0"
               )}
             >
-              <p className="text-sm font-bold text-foreground whitespace-nowrap">
-                jacla
-              </p>
-              <p className="text-xs text-muted-foreground whitespace-nowrap">
-                総合音楽部
-              </p>
+              <p className="text-sm font-bold text-foreground whitespace-nowrap">jacla</p>
+              <p className="text-xs text-muted-foreground whitespace-nowrap">総合音楽部</p>
             </div>
           </Link>
         </div>
@@ -145,8 +138,7 @@ export function SideNav() {
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive =
-              pathname === item.href ||
-              (item.href !== "/" && pathname.startsWith(item.href));
+              pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
 
             return (
               <Link
@@ -172,9 +164,7 @@ export function SideNav() {
                 </span>
                 {!isExpanded && (
                   <div className="absolute left-full ml-2 px-3 py-2 bg-card border border-border rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50 shadow-lg">
-                    <span className="text-sm font-medium text-foreground">
-                      {item.label}
-                    </span>
+                    <span className="text-sm font-medium text-foreground">{item.label}</span>
                   </div>
                 )}
               </Link>
@@ -188,8 +178,7 @@ export function SideNav() {
             {utilityNavItems.map((item) => {
               const Icon = item.icon;
               const isActive =
-                pathname === item.href ||
-                (item.href !== "/" && pathname.startsWith(item.href));
+                pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
 
               return (
                 <Link
@@ -215,9 +204,7 @@ export function SideNav() {
                   </span>
                   {!isExpanded && (
                     <div className="absolute left-full ml-2 px-3 py-2 bg-card border border-border rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50 shadow-lg">
-                      <span className="text-sm font-medium text-foreground">
-                        {item.label}
-                      </span>
+                      <span className="text-sm font-medium text-foreground">{item.label}</span>
                     </div>
                   )}
                 </Link>
@@ -246,18 +233,10 @@ export function SideNav() {
                 <span className="dark:hidden">ダークモード</span>
                 <span className="hidden dark:inline">ライトモード</span>
               </span>
-              {!isExpanded && (
-                <div className="absolute left-full ml-2 px-3 py-2 bg-card border border-border rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50 shadow-lg">
-                  <span className="text-sm font-medium text-foreground">
-                    <span className="dark:hidden">ダークモード</span>
-                    <span className="hidden dark:inline">ライトモード</span>
-                  </span>
-                </div>
-              )}
             </button>
           </div>
 
-          {currentUser.isAdmin && (
+          {isAdmin && (
             <Link
               href="/admin"
               className={cn(
@@ -280,9 +259,7 @@ export function SideNav() {
               </span>
               {!isExpanded && (
                 <div className="absolute left-full ml-2 px-3 py-2 bg-card border border-border rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50 shadow-lg">
-                  <span className="text-sm font-medium text-foreground">
-                    管理
-                  </span>
+                  <span className="text-sm font-medium">管理</span>
                 </div>
               )}
             </Link>
@@ -315,21 +292,15 @@ export function SideNav() {
         <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-primary/50 via-secondary/30 to-transparent" />
       </aside>
 
-      {/* モバイル用サイドバー */}
+      {/* モバイルメニュー */}
       <aside
         className={cn(
           "md:hidden fixed inset-0 bg-card/98 backdrop-blur-xl z-50 transition-all duration-300 flex flex-col",
-          isMobileMenuOpen
-            ? "opacity-100 visible"
-            : "opacity-0 invisible pointer-events-none"
+          isMobileMenuOpen ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none"
         )}
       >
         <div className="p-6 pt-12 flex items-center justify-center">
-          <Link
-            href="/"
-            onClick={() => setIsMobileMenuOpen(false)}
-            className="flex flex-col items-center gap-2"
-          >
+          <Link href="/" onClick={() => setIsMobileMenuOpen(false)} className="flex flex-col items-center gap-2">
             <Image
               src="/images/e3-83-ad-e3-82-b42-20-281-29.png"
               alt="jacla logo"
@@ -344,13 +315,12 @@ export function SideNav() {
           </Link>
         </div>
 
-        <nav className="flex-1 flex flex-col px-8 py-6 gap-6">
-          <div className="space-y-1">
+        <nav className="flex-1 flex flex-col px-8 py-6 gap-6 overflow-y-auto no-scrollbar">
+          <div className="grid grid-cols-2 gap-2">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive =
-                pathname === item.href ||
-                (item.href !== "/" && pathname.startsWith(item.href));
+                pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
 
               return (
                 <Link
@@ -358,47 +328,65 @@ export function SideNav() {
                   href={item.href}
                   onClick={() => setIsMobileMenuOpen(false)}
                   className={cn(
-                    "flex items-center gap-3 px-5 py-3 rounded-lg transition-all duration-200",
+                    "flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200",
                     isActive
                       ? "bg-foreground text-background"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   )}
                 >
                   <Icon className="w-5 h-5 shrink-0" />
-                  <span className="text-base font-medium">{item.label}</span>
+                  <span className="text-sm font-medium truncate">{item.label}</span>
                 </Link>
               );
             })}
+          </div>
+
+          <div className="space-y-1 border border-border rounded-xl p-4 bg-card/70">
+            <p className="text-xs text-muted-foreground mb-2">アカウント / 管理</p>
+            <div className="grid grid-cols-2 gap-2">
+              {utilityNavItems.map((item) => {
+                const Icon = item.icon;
+                const isActive =
+                  pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
+
+                return (
+                  <Link
+                    key={item.id}
+                    href={item.href}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className={cn(
+                      "flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200",
+                      isActive
+                        ? "bg-foreground text-background"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    )}
+                  >
+                    <Icon className="w-5 h-5 shrink-0" />
+                    <span className="text-sm font-medium truncate">{item.label}</span>
+                  </Link>
+                );
+              })}
+
+              {isAdmin && (
+                <Link
+                  href="/admin"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={cn(
+                    "flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200",
+                    pathname.startsWith("/admin")
+                      ? "bg-primary text-primary-foreground"
+                      : "text-primary hover:bg-primary/10"
+                  )}
+                >
+                  <Settings className="w-5 h-5 shrink-0" />
+                  <span className="text-sm font-medium truncate">管理</span>
+                </Link>
+              )}
+            </div>
           </div>
         </nav>
 
         <div className="px-8 pb-10 space-y-4">
-          <div className="space-y-1">
-            {bottomNavItems.map((item) => {
-              const Icon = item.icon;
-              const isActive =
-                pathname === item.href ||
-                (item.href !== "/" && pathname.startsWith(item.href));
-
-              return (
-                <Link
-                  key={item.id}
-                  href={item.href}
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className={cn(
-                    "flex items-center gap-3 px-5 py-3 rounded-lg transition-all duration-200",
-                    isActive
-                      ? "bg-foreground text-background"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                  )}
-                >
-                  <Icon className="w-5 h-5 shrink-0" />
-                  <span className="text-base font-medium">{item.label}</span>
-                </Link>
-              );
-            })}
-          </div>
-
           <div className="space-y-1 border-t border-border pt-4">
             <button
               type="button"
@@ -419,22 +407,6 @@ export function SideNav() {
               </span>
             </button>
           </div>
-
-          {currentUser.isAdmin && (
-            <Link
-              href="/admin"
-              onClick={() => setIsMobileMenuOpen(false)}
-              className={cn(
-                "flex items-center gap-4 px-6 py-4 rounded-lg transition-all duration-200",
-                pathname.startsWith("/admin")
-                  ? "bg-primary text-primary-foreground"
-                  : "text-primary hover:bg-primary/10"
-              )}
-            >
-              <Settings className="w-6 h-6 shrink-0" />
-              <span className="text-lg font-medium">管理</span>
-            </Link>
-          )}
 
           <button
             type="button"

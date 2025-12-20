@@ -1,4 +1,4 @@
-import { Mail, Music, Phone, Search } from "lucide-react";
+import { MessageCircle, Music, Search } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -6,12 +6,20 @@ import { Input } from "@/components/ui/input";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 
-const members = [
+type Member = {
+  id: number;
+  name: string;
+  discord: string;
+  part: string;
+  year: string;
+  bands: string[];
+};
+
+const members: Member[] = [
   {
     id: 1,
     name: "山田 太郎",
-    email: "yamada@example.com",
-    phone: "090-1234-5678",
+    discord: "yamada#1234",
     part: "ボーカル",
     year: "3年",
     bands: ["The Rockers", "Acoustic Duo"],
@@ -19,8 +27,7 @@ const members = [
   {
     id: 2,
     name: "佐藤 花子",
-    email: "sato@example.com",
-    phone: "090-2345-6789",
+    discord: "hanako#5678",
     part: "ギター",
     year: "2年",
     bands: ["Jazz Quartet"],
@@ -28,8 +35,7 @@ const members = [
   {
     id: 3,
     name: "鈴木 一郎",
-    email: "suzuki@example.com",
-    phone: "090-3456-7890",
+    discord: "ichiro#9012",
     part: "ドラム",
     year: "4年",
     bands: ["The Rockers", "Metal Heads"],
@@ -37,8 +43,7 @@ const members = [
   {
     id: 4,
     name: "田中 美咲",
-    email: "tanaka@example.com",
-    phone: "090-4567-8901",
+    discord: "misaki#3456",
     part: "ベース",
     year: "1年",
     bands: ["Pop Stars"],
@@ -46,8 +51,7 @@ const members = [
   {
     id: 5,
     name: "高橋 健太",
-    email: "takahashi@example.com",
-    phone: "090-5678-9012",
+    discord: "kenta#7890",
     part: "キーボード",
     year: "3年",
     bands: ["Jazz Quartet", "Electronic Beats"],
@@ -55,8 +59,7 @@ const members = [
   {
     id: 6,
     name: "伊藤 さくら",
-    email: "ito@example.com",
-    phone: "090-6789-0123",
+    discord: "sakura#2468",
     part: "ボーカル",
     year: "2年",
     bands: ["Indie Band"],
@@ -79,13 +82,16 @@ export default function MembersPage() {
                 <span className="text-xs text-primary tracking-[0.3em] font-mono">MEMBERS</span>
                 <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-4 mb-4">部員一覧</h1>
                 <p className="text-muted-foreground text-base md:text-lg max-w-2xl mb-8">
-                  部員情報、連絡先、担当パートを確認できます。
+                  部員情報と担当パートを確認できます。連絡はDiscordを利用してください。
                 </p>
 
                 <div className="flex flex-col sm:flex-row gap-3 md:gap-4 max-w-xl">
                   <div className="flex-1 relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input placeholder="名前、パート、バンドで検索..." className="pl-10 bg-card/50 border-border" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="名前、パート、バンドで検索..."
+                      className="pl-10 bg-card/50 border-border"
+                    />
                   </div>
                   <Button variant="outline" className="bg-transparent w-full sm:w-auto">
                     絞り込み
@@ -131,17 +137,8 @@ export default function MembersPage() {
 
                         <div className="space-y-1 mb-3 md:mb-4 text-xs md:text-sm">
                           <div className="flex items-center gap-2 text-muted-foreground">
-                            <Mail className="w-4 h-4 shrink-0" />
-                            <a
-                              href={`mailto:${member.email}`}
-                              className="hover:text-primary transition-colors truncate"
-                            >
-                              {member.email}
-                            </a>
-                          </div>
-                          <div className="flex items-center gap-2 text-muted-foreground">
-                            <Phone className="w-4 h-4 shrink-0" />
-                            <span>{member.phone}</span>
+                            <MessageCircle className="w-4 h-4 shrink-0" />
+                            <span className="truncate">Discord: {member.discord}</span>
                           </div>
                         </div>
 
@@ -164,4 +161,3 @@ export default function MembersPage() {
     </AuthGuard>
   );
 }
-

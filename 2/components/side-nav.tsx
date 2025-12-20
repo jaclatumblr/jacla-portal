@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils"
 const navItems = [
   { id: "home", href: "/", label: "ホーム", icon: Home },
   { id: "events", href: "/events", label: "イベント", icon: Calendar },
-  { id: "pa", href: "/pa", label: "PA機材", icon: Music },
+  { id: "pa", href: "/pa", label: "PA", icon: Music },
   { id: "lighting", href: "/lighting", label: "照明", icon: Lightbulb },
   { id: "announcements", href: "/announcements", label: "お知らせ", icon: Bell },
   { id: "members", href: "/members", label: "部員一覧", icon: Users },

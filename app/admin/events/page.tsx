@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
+import { useIsAdmin } from "@/lib/useIsAdmin";
 
 type EventRow = {
   id: string;
@@ -54,8 +55,9 @@ const emptyForm: EventRow = {
 
 export default function AdminEventsPage() {
   const { session } = useAuth();
+  const { isAdmin, loading: adminLoading } = useIsAdmin();
   const [events, setEvents] = useState<EventRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<EventRow>(emptyForm);
@@ -67,6 +69,7 @@ export default function AdminEventsPage() {
   }, [form.date, form.name, saving]);
 
   useEffect(() => {
+    if (adminLoading || !isAdmin) return;
     let cancelled = false;
     (async () => {
       setLoading(true);
@@ -90,7 +93,7 @@ export default function AdminEventsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [adminLoading, isAdmin]);
 
   const handleChange = (key: keyof EventRow, value: string | number) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -98,7 +101,7 @@ export default function AdminEventsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canSubmit) return;
+    if (!canSubmit || !isAdmin) return;
     setSaving(true);
     setError(null);
 
@@ -127,6 +130,35 @@ export default function AdminEventsPage() {
     setForm(emptyForm);
     setSaving(false);
   };
+
+  if (adminLoading) {
+    return (
+      <AuthGuard>
+        <div className="min-h-screen flex items-center justify-center bg-background">
+          <p className="text-sm text-muted-foreground">権限を確認しています...</p>
+        </div>
+      </AuthGuard>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <AuthGuard>
+        <div className="min-h-screen flex items-center justify-center bg-background px-6">
+          <div className="text-center space-y-3">
+            <p className="text-xl font-semibold text-foreground">管理者のみアクセスできます</p>
+            <p className="text-sm text-muted-foreground">管理者に問い合わせてください。</p>
+            <Link
+              href="/"
+              className="inline-flex items-center justify-center px-4 py-2 rounded-lg border border-border text-sm text-foreground hover:border-primary/60 hover:text-primary transition-colors"
+            >
+              ホームに戻る
+            </Link>
+          </div>
+        </div>
+      </AuthGuard>
+    );
+  }
 
   return (
     <AuthGuard>
@@ -361,3 +393,4 @@ export default function AdminEventsPage() {
     </AuthGuard>
   );
 }
+

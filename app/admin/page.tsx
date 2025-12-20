@@ -1,10 +1,46 @@
+"use client";
+
 import Link from "next/link";
 import { ArrowRight, Settings, Users } from "lucide-react";
 import { Calendar } from "lucide-react";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
+import { useIsAdmin } from "@/lib/useIsAdmin";
 
 export default function AdminPage() {
+  const { isAdmin, loading: adminLoading } = useIsAdmin();
+
+  if (adminLoading) {
+    return (
+      <AuthGuard>
+        <div className="min-h-screen flex items-center justify-center bg-background">
+          <p className="text-sm text-muted-foreground">権限を確認しています...</p>
+        </div>
+      </AuthGuard>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <AuthGuard>
+        <div className="min-h-screen flex items-center justify-center bg-background px-6">
+          <div className="text-center space-y-3">
+            <p className="text-xl font-semibold text-foreground">管理者のみアクセスできます</p>
+            <p className="text-sm text-muted-foreground">
+              アクセス権限がありません。管理者に問い合わせてください。
+            </p>
+            <Link
+              href="/"
+              className="inline-flex items-center justify-center px-4 py-2 rounded-lg border border-border text-sm text-foreground hover:border-primary/60 hover:text-primary transition-colors"
+            >
+              ホームに戻る
+            </Link>
+          </div>
+        </div>
+      </AuthGuard>
+    );
+  }
+
   return (
     <AuthGuard>
       <div className="flex min-h-screen bg-background">

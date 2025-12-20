@@ -1,20 +1,42 @@
-import { AlertCircle, CheckCircle, Package } from "lucide-react";
+import Link from "next/link";
+import { AlertCircle, CheckCircle, NotebookPen, Package, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 
-const equipment = [
-  { id: 1, name: "SM58 マイク", category: "マイク", quantity: 5, available: 4, status: "available" as const },
-  { id: 2, name: "SHURE BETA 58A", category: "マイク", quantity: 3, available: 3, status: "available" as const },
-  { id: 3, name: "XLRケーブル 5m", category: "ケーブル", quantity: 10, available: 7, status: "available" as const },
-  { id: 4, name: "XLRケーブル 10m", category: "ケーブル", quantity: 8, available: 5, status: "available" as const },
-  { id: 5, name: "DIボックス", category: "DI", quantity: 4, available: 2, status: "low" as const },
-  { id: 6, name: "パワードスピーカー", category: "スピーカー", quantity: 2, available: 0, status: "out" as const },
-  { id: 7, name: "モニタースピーカー", category: "スピーカー", quantity: 4, available: 4, status: "available" as const },
-  { id: 8, name: "ミキサー YAMAHA MG16", category: "ミキサー", quantity: 1, available: 1, status: "available" as const },
+type EquipmentStatus = "available" | "low" | "out";
+type EquipmentRow = {
+  id: number;
+  name: string;
+  category: string;
+  quantity: number;
+  available: number;
+  status: EquipmentStatus;
+};
+
+const equipment: EquipmentRow[] = [
+  { id: 1, name: "SM58 マイク", category: "マイク", quantity: 5, available: 4, status: "available" },
+  { id: 2, name: "SHURE BETA 58A", category: "マイク", quantity: 3, available: 3, status: "available" },
+  { id: 3, name: "XLRケーブル 5m", category: "ケーブル", quantity: 10, available: 7, status: "available" },
+  { id: 4, name: "XLRケーブル 10m", category: "ケーブル", quantity: 8, available: 5, status: "available" },
+  { id: 5, name: "DIボックス", category: "DI", quantity: 4, available: 2, status: "low" },
+  { id: 6, name: "パワードスピーカー", category: "スピーカー", quantity: 2, available: 0, status: "out" },
+  { id: 7, name: "モニタースピーカー", category: "スピーカー", quantity: 4, available: 4, status: "available" },
+  { id: 8, name: "ミキサー YAMAHA MG16", category: "ミキサー", quantity: 1, available: 1, status: "available" },
 ];
+
+function statusBadge(status: EquipmentStatus) {
+  if (status === "available") return <Badge className="bg-emerald-600 text-white">在庫あり</Badge>;
+  if (status === "low") return <Badge variant="secondary">残りわずか</Badge>;
+  return (
+    <Badge variant="destructive" className="gap-1">
+      <AlertCircle className="w-3 h-3" />
+      なし
+    </Badge>
+  );
+}
 
 export default function PAPage() {
   return (
@@ -29,16 +51,43 @@ export default function PAPage() {
 
             <div className="relative z-10 container mx-auto px-4 sm:px-6">
               <div className="max-w-6xl pt-12 md:pt-0">
-                <span className="text-xs text-secondary tracking-[0.3em] font-mono">PA EQUIPMENT</span>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-4 mb-4">PA機材一覧</h1>
-                <p className="text-muted-foreground text-base md:text-lg max-w-2xl">
-                  音響機材の在庫状況を確認し、貸出管理を行います。
+                <span className="text-xs text-secondary tracking-[0.3em] font-mono">PA</span>
+                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-4 mb-4">PAダッシュボード</h1>
+                <p className="text-muted-foreground text-base md:text-lg max-w-3xl">
+                  PA指示・Live Adviser・機材一覧をまとめました。必要なセクションを選んで確認してください。
                 </p>
 
-                <div className="mt-8">
-                  <Button className="bg-secondary text-secondary-foreground hover:bg-secondary/90 w-full sm:w-auto">
-                    新規機材追加
-                  </Button>
+                <div className="mt-8 grid sm:grid-cols-3 gap-3 md:gap-4 max-w-4xl">
+                  <Link
+                    href="/pa/instructions"
+                    className="p-4 rounded-lg border border-border bg-card/60 hover:border-secondary/70 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <NotebookPen className="w-5 h-5 text-secondary" />
+                      <span className="text-sm font-semibold">PA指示</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">セット進行・キューの共有</p>
+                  </Link>
+                  <Link
+                    href="/pa/live-adviser"
+                    className="p-4 rounded-lg border border-border bg-card/60 hover:border-secondary/70 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-secondary" />
+                      <span className="text-sm font-semibold">Live Adviser</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">リアルタイムのアドバイス</p>
+                  </Link>
+                  <Link
+                    href="/pa"
+                    className="p-4 rounded-lg border border-border bg-card/60 hover:border-secondary/70 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Package className="w-5 h-5 text-secondary" />
+                      <span className="text-sm font-semibold">PA機材</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">在庫と貸出管理</p>
+                  </Link>
                 </div>
               </div>
             </div>
@@ -53,7 +102,7 @@ export default function PAPage() {
                     <span className="text-xs md:text-sm text-muted-foreground">総機材数</span>
                   </div>
                   <p className="text-3xl md:text-4xl font-bold">37</p>
-                  <p className="text-xs md:text-sm text-muted-foreground mt-1">8カテゴリー</p>
+                  <p className="text-xs md:text-sm text-muted-foreground mt-1">8カテゴリ</p>
                 </div>
 
                 <div className="p-4 md:p-6 bg-card/50 border border-border rounded-lg">
@@ -61,116 +110,53 @@ export default function PAPage() {
                     <CheckCircle className="w-5 h-5 md:w-6 md:h-6 text-green-500" />
                     <span className="text-xs md:text-sm text-muted-foreground">利用可能</span>
                   </div>
-                  <p className="text-3xl md:text-4xl font-bold text-green-500">26</p>
-                  <p className="text-xs md:text-sm text-muted-foreground mt-1">貸出可能数</p>
+                  <p className="text-3xl md:text-4xl font-bold">29</p>
+                  <p className="text-xs md:text-sm text-muted-foreground mt-1">貸出中を除く在庫</p>
                 </div>
 
                 <div className="p-4 md:p-6 bg-card/50 border border-border rounded-lg">
                   <div className="flex items-center gap-3 mb-3 md:mb-4">
-                    <AlertCircle className="w-5 h-5 md:w-6 md:h-6 text-orange-500" />
-                    <span className="text-xs md:text-sm text-muted-foreground">貸出中</span>
+                    <AlertCircle className="w-5 h-5 md:w-6 md:h-6 text-amber-500" />
+                    <span className="text-xs md:text-sm text-muted-foreground">要補充</span>
                   </div>
-                  <p className="text-3xl md:text-4xl font-bold text-orange-500">11</p>
-                  <p className="text-xs md:text-sm text-muted-foreground mt-1">返却待ち</p>
+                  <p className="text-3xl md:text-4xl font-bold">3</p>
+                  <p className="text-xs md:text-sm text-muted-foreground mt-1">在庫少/欠品</p>
                 </div>
               </div>
 
-              <div className="max-w-6xl mx-auto">
-                <div className="mb-6">
-                  <span className="text-xs text-primary tracking-[0.3em] font-mono">LIST</span>
-                  <h2 className="text-xl md:text-2xl font-bold mt-2">機材リスト</h2>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-xl font-bold">機材一覧</h2>
+                  <p className="text-sm text-muted-foreground">在庫の目安をチェックしてください。</p>
                 </div>
+                <Button className="bg-secondary text-secondary-foreground hover:bg-secondary/90">
+                  新規機材追加
+                </Button>
+              </div>
 
-                <div className="hidden md:block bg-card/50 border border-border rounded-lg overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="border-border hover:bg-transparent">
-                        <TableHead className="text-muted-foreground">機材名</TableHead>
-                        <TableHead className="text-muted-foreground">カテゴリー</TableHead>
-                        <TableHead className="text-center text-muted-foreground">総数</TableHead>
-                        <TableHead className="text-center text-muted-foreground">利用可能</TableHead>
-                        <TableHead className="text-center text-muted-foreground">ステータス</TableHead>
-                        <TableHead className="text-right text-muted-foreground">操作</TableHead>
+              <div className="overflow-x-auto border border-border rounded-lg">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/40">
+                      <TableHead>名前</TableHead>
+                      <TableHead>カテゴリ</TableHead>
+                      <TableHead>在庫 / 総数</TableHead>
+                      <TableHead className="text-right">状態</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {equipment.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell className="font-medium">{item.name}</TableCell>
+                        <TableCell>{item.category}</TableCell>
+                        <TableCell>
+                          {item.available} / {item.quantity}
+                        </TableCell>
+                        <TableCell className="text-right">{statusBadge(item.status)}</TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {equipment.map((item) => (
-                        <TableRow key={item.id} className="border-border hover:bg-primary/5">
-                          <TableCell className="font-medium">{item.name}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="bg-transparent">
-                              {item.category}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-center">{item.quantity}</TableCell>
-                          <TableCell className="text-center font-medium">{item.available}</TableCell>
-                          <TableCell className="text-center">
-                            {item.status === "available" && (
-                              <Badge className="bg-green-600/20 text-green-500 border-green-600/30">
-                                在庫あり
-                              </Badge>
-                            )}
-                            {item.status === "low" && <Badge variant="secondary">残りわずか</Badge>}
-                            {item.status === "out" && (
-                              <Badge className="bg-orange-600/20 text-orange-500 border-orange-600/30">
-                                貸出中
-                              </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button variant="ghost" size="sm" className="text-primary">
-                              詳細
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                <div className="md:hidden space-y-3">
-                  {equipment.map((item) => (
-                    <div key={item.id} className="p-4 bg-card/50 border border-border rounded-lg">
-                      <div className="flex items-start justify-between mb-3">
-                        <div>
-                          <h3 className="font-medium text-sm">{item.name}</h3>
-                          <Badge variant="outline" className="bg-transparent text-xs mt-1">
-                            {item.category}
-                          </Badge>
-                        </div>
-                        {item.status === "available" && (
-                          <Badge className="bg-green-600/20 text-green-500 border-green-600/30 text-xs">
-                            在庫あり
-                          </Badge>
-                        )}
-                        {item.status === "low" && (
-                          <Badge variant="secondary" className="text-xs">
-                            残りわずか
-                          </Badge>
-                        )}
-                        {item.status === "out" && (
-                          <Badge className="bg-orange-600/20 text-orange-500 border-orange-600/30 text-xs">
-                            貸出中
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <div className="flex gap-4 text-muted-foreground">
-                          <span>
-                            総数: <span className="text-foreground font-medium">{item.quantity}</span>
-                          </span>
-                          <span>
-                            利用可能:{" "}
-                            <span className="text-foreground font-medium">{item.available}</span>
-                          </span>
-                        </div>
-                        <Button variant="ghost" size="sm" className="text-primary h-8 px-2">
-                          詳細
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             </div>
           </section>
@@ -179,4 +165,3 @@ export default function PAPage() {
     </AuthGuard>
   );
 }
-

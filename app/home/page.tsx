@@ -280,7 +280,7 @@ export default function DashboardPage() {
                         className="flex flex-col items-center gap-2 p-3 rounded-lg border border-border hover:border-secondary/50 hover:bg-secondary/5 transition-all"
                       >
                         <Music className="w-5 h-5 text-secondary" />
-                        <span className="text-xs font-medium">PA機材</span>
+                        <span className="text-xs font-medium">PA</span>
                       </Link>
                       <Link
                         href="/lighting"

@@ -20,9 +20,8 @@ begin;
 drop trigger if exists trg_profiles_block_privilege_escalation on public.profiles;
 
 drop function if exists public.profiles_block_privilege_escalation();
-drop function if exists public.is_admin_or_supervisor(uuid);
-drop function if exists public.is_pa_leader(uuid);
-drop function if exists public.is_lighting_leader(uuid);
+-- NOTE: Do not drop helper functions referenced by policies on other tables.
+-- Use CREATE OR REPLACE later in this script.
 
 drop policy if exists "profiles_select_all_authenticated" on public.profiles;
 drop policy if exists "profiles_insert_own" on public.profiles;

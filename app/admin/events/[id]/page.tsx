@@ -1,19 +1,32 @@
 ﻿"use client";
-"use client";
-/* eslint-disable react-hooks/set-state-in-effect */
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, CheckCircle2, RefreshCw } from "lucide-react";
+import { useParams } from "next/navigation";
+import {
+  AlertCircle,
+  ArrowLeft,
+  BadgeCheck,
+  Calendar,
+  CheckCircle2,
+  MapPin,
+  PencilLine,
+  Plus,
+  RefreshCw,
+  Trash2,
+  Users,
+} from "lucide-react";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { supabase } from "@/lib/supabaseClient";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useAuth } from "@/contexts/AuthContext";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useIsAdmin } from "@/lib/useIsAdmin";
+import { useAuth } from "@/contexts/AuthContext";
+import { cn } from "@/lib/utils";
 
 type EventRow = {
   id: string;
@@ -28,13 +41,39 @@ type EventRow = {
   default_changeover_min: number;
 };
 
-type BandRow = {
+type Band = {
   id: string;
+  event_id: string;
   name: string;
   is_approved: boolean;
   note_pa: string | null;
   note_lighting: string | null;
+  stage_plot_data: Record<string, any> | null;
   created_by: string | null;
+};
+
+type ProfileOption = {
+  id: string;
+  display_name: string;
+  email?: string | null;
+  discord?: string | null;
+  crew?: string | null;
+};
+
+type BandMember = {
+  id: string;
+  band_id: string;
+  user_id: string;
+  instrument: string;
+};
+
+type Song = {
+  id: string;
+  band_id: string;
+  title: string;
+  artist: string | null;
+  duration_sec: number | null;
+  memo: string | null;
 };
 
 const statusOptions = [
@@ -44,217 +83,371 @@ const statusOptions = [
   { value: "closed", label: "終了" },
 ];
 
-export default function AdminEventEditPage() {
-  const params = useParams<{ id: string }>();
-  const router = useRouter();
-  const eventId = params?.id;
-  const { session } = useAuth();
+function statusBadge(status: string) {
+  if (status === "recruiting") return "default";
+  if (status === "fixed") return "secondary";
+  return "outline";
+}
+
+function statusLabel(status: string) {
+  return statusOptions.find((s) => s.value === status)?.label ?? status;
+}
+
+export default function AdminEventDetailPage() {
+  const params = useParams();
+  const eventId =
+    typeof params?.id === "string" ? params.id : Array.isArray(params?.id) ? params.id[0] : "";
   const { isAdmin, loading: adminLoading } = useIsAdmin();
+  const { session } = useAuth();
+  const userId = session?.user.id;
 
-  const [form, setForm] = useState<EventRow | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-
-  const [bands, setBands] = useState<BandRow[]>([]);
-  const [bandsLoading, setBandsLoading] = useState(false);
-  const [bandsError, setBandsError] = useState<string | null>(null);
-  const [bandSaving, setBandSaving] = useState(false);
-  const [bandUpdating, setBandUpdating] = useState(false);
+  const [event, setEvent] = useState<EventRow | null>(null);
+  const [eventForm, setEventForm] = useState<EventRow | null>(null);
+  const [bands, setBands] = useState<Band[]>([]);
+  const [selectedBandId, setSelectedBandId] = useState<string | null>(null);
   const [bandForm, setBandForm] = useState({
     name: "",
     is_approved: false,
     note_pa: "",
     note_lighting: "",
+    stagePlotNote: "",
   });
-  const [selectedBandId, setSelectedBandId] = useState<string | null>(null);
-  const [bandEdit, setBandEdit] = useState({
-    name: "",
-    is_approved: false,
-    note_pa: "",
-    note_lighting: "",
-  });
+  const [profiles, setProfiles] = useState<ProfileOption[]>([]);
+  const [members, setMembers] = useState<BandMember[]>([]);
+  const [songs, setSongs] = useState<Song[]>([]);
+  const [newBandName, setNewBandName] = useState("");
+  const [memberForm, setMemberForm] = useState({ profileId: "", instrument: "" });
+  const [songForm, setSongForm] = useState({ title: "", artist: "", duration_sec: "", memo: "" });
+  const [savingEvent, setSavingEvent] = useState(false);
+  const [savingBand, setSavingBand] = useState(false);
+  const [savingMember, setSavingMember] = useState(false);
+  const [savingSong, setSavingSong] = useState(false);
 
+  const selectedBand = useMemo(
+    () => bands.find((b) => b.id === selectedBandId) ?? null,
+    [bands, selectedBandId]
+  );
+
+  const profilesMap = useMemo(() => {
+    const map = new Map<string, ProfileOption>();
+    profiles.forEach((p) => map.set(p.id, p));
+    return map;
+  }, [profiles]);
+
+  const selectedBandMembers = useMemo(
+    () => members.filter((m) => m.band_id === selectedBandId),
+    [members, selectedBandId]
+  );
+
+  const selectedBandSongs = useMemo(
+    () => songs.filter((s) => s.band_id === selectedBandId),
+    [songs, selectedBandId]
+  );
   useEffect(() => {
-    if (adminLoading) return;
-    if (!eventId || !isAdmin) {
-      setLoading(false);
-      return;
-    }
+    if (!eventId || adminLoading || !isAdmin) return;
     let cancelled = false;
     (async () => {
       setLoading(true);
       setError(null);
-      const { data, error } = await supabase
-        .from("events")
-        .select(
-          "id, name, date, status, venue, open_time, start_time, note, default_song_duration_sec, default_changeover_min"
-        )
-        .eq("id", eventId)
-        .maybeSingle();
+
+      const [eventRes, bandsRes, profilesRes] = await Promise.all([
+        supabase
+          .from("events")
+          .select(
+            "id, name, date, status, venue, open_time, start_time, note, default_song_duration_sec, default_changeover_min"
+          )
+          .eq("id", eventId)
+          .maybeSingle(),
+        supabase
+          .from("bands")
+          .select("id, event_id, name, is_approved, note_pa, note_lighting, stage_plot_data, created_by")
+          .eq("event_id", eventId)
+          .order("created_at", { ascending: true }),
+        supabase.from("profiles").select("*").order("display_name", { ascending: true }),
+      ]);
 
       if (cancelled) return;
-      if (error) {
-        console.error(error);
-        setError("イベントの取得に失敗しました。");
-        setForm(null);
-      } else if (!data) {
-        setError("イベントが見つかりませんでした。");
-        setForm(null);
-      } else {
-        setForm(data as EventRow);
+
+      if (eventRes.error || !eventRes.data) {
+        console.error(eventRes.error);
+        setError("イベント情報の取得に失敗しました。");
+        setEvent(null);
+        setBands([]);
+        setProfiles([]);
+        setMembers([]);
+        setSongs([]);
+        setLoading(false);
+        return;
       }
+
+      setEvent(eventRes.data as EventRow);
+      setEventForm(eventRes.data as EventRow);
+
+      const bandList = (bandsRes.data ?? []) as Band[];
+      setBands(bandList);
+      setSelectedBandId((prev) => prev ?? bandList[0]?.id ?? null);
+
+      const profileList = (profilesRes.data ?? []).map((p: any) => ({
+        id: p.id,
+        display_name: p.display_name ?? p.full_name ?? p.name ?? p.email ?? "名前未登録",
+        email: p.email ?? null,
+        discord: p.discord ?? p.discord_username ?? null,
+        crew: p.crew ?? null,
+      }));
+      setProfiles(profileList);
+
+      const bandIds = bandList.map((b) => b.id);
+      if (bandIds.length === 0) {
+        setMembers([]);
+        setSongs([]);
+        setLoading(false);
+        return;
+      }
+
+      const [membersRes, songsRes] = await Promise.all([
+        supabase.from("band_members").select("id, band_id, user_id, instrument").in("band_id", bandIds),
+        supabase.from("songs").select("id, band_id, title, artist, duration_sec, memo").in("band_id", bandIds),
+      ]);
+
+      if (!cancelled) {
+        if (membersRes.error) {
+          console.error(membersRes.error);
+          setError("バンドメンバーの取得に失敗しました。");
+        } else {
+          setMembers((membersRes.data ?? []) as BandMember[]);
+        }
+
+        if (songsRes.error) {
+          console.error(songsRes.error);
+          setError((prev) => prev ?? "セットリストの取得に失敗しました。");
+        } else {
+          setSongs((songsRes.data ?? []) as Song[]);
+        }
+      }
+
       setLoading(false);
     })();
+
     return () => {
       cancelled = true;
     };
   }, [adminLoading, eventId, isAdmin]);
 
   useEffect(() => {
-    if (!eventId || !isAdmin) return;
-    let cancelled = false;
-    (async () => {
-      setBandsLoading(true);
-      setBandsError(null);
-      const { data, error } = await supabase
-        .from("bands")
-        .select("id, name, is_approved, note_pa, note_lighting, created_by")
-        .eq("event_id", eventId)
-        .order("name", { ascending: true });
-      if (cancelled) return;
-      if (error) {
-        console.error(error);
-        setBandsError("バンド一覧の取得に失敗しました。");
-        setBands([]);
-      } else {
-        setBands((data ?? []) as BandRow[]);
-        if (!selectedBandId && data && data.length > 0) {
-          setSelectedBandId(data[0].id);
-          const first = data[0] as BandRow;
-          setBandEdit({
-            name: first.name,
-            is_approved: first.is_approved,
-            note_pa: first.note_pa ?? "",
-            note_lighting: first.note_lighting ?? "",
-          });
-        }
-      }
-      setBandsLoading(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [eventId, isAdmin, selectedBandId]);
-
-  const canSubmit = useMemo(() => {
-    if (!form) return false;
-    return form.name.trim().length > 0 && form.date.trim().length > 0 && !saving;
-  }, [form, saving]);
-
-  const handleChange = (key: keyof EventRow, value: string | number | null) => {
-    setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
-  };
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form || !canSubmit || !isAdmin) return;
-    setSaving(true);
-    setError(null);
-    setMessage(null);
-
-    const payload = {
-      name: form.name.trim(),
-      date: form.date,
-      status: form.status,
-      venue: form.venue || null,
-      open_time: form.open_time || null,
-      start_time: form.start_time || null,
-      note: form.note || null,
-      default_song_duration_sec: Number(form.default_song_duration_sec) || 240,
-      default_changeover_min: Number(form.default_changeover_min) || 15,
-    };
-
-    const { error } = await supabase.from("events").update(payload).eq("id", form.id);
-    if (error) {
-      console.error(error);
-      setError("保存に失敗しました。");
-      setSaving(false);
+    if (!selectedBand) {
+      setBandForm({
+        name: "",
+        is_approved: false,
+        note_pa: "",
+        note_lighting: "",
+        stagePlotNote: "",
+      });
       return;
     }
-    setMessage("保存しました。");
-    setSaving(false);
+    setBandForm({
+      name: selectedBand.name,
+      is_approved: Boolean(selectedBand.is_approved),
+      note_pa: selectedBand.note_pa ?? "",
+      note_lighting: selectedBand.note_lighting ?? "",
+      stagePlotNote:
+        (selectedBand.stage_plot_data?.note as string) ??
+        (selectedBand.stage_plot_data?.stage_plot as string) ??
+        "",
+    });
+  }, [selectedBand]);
+  const handleEventChange = (key: keyof EventRow, value: string | number) => {
+    if (!eventForm) return;
+    setEventForm((prev) => (prev ? { ...prev, [key]: value } : prev));
   };
 
-  const canCreateBand = bandForm.name.trim().length > 0 && !bandSaving;
-  const selectedBand = selectedBandId ? bands.find((b) => b.id === selectedBandId) ?? null : null;
-  const canUpdateBand = selectedBand && bandEdit.name.trim().length > 0 && !bandUpdating;
-
-  const handleBandCreate = async (e: React.FormEvent) => {
+  const handleUpdateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!eventId || !canCreateBand || !isAdmin) return;
-    setBandSaving(true);
-    setBandsError(null);
+    if (!eventForm || savingEvent) return;
+    setSavingEvent(true);
+    setError(null);
+
     const payload = {
-      event_id: eventId,
-      name: bandForm.name.trim(),
+      name: eventForm.name.trim(),
+      date: eventForm.date,
+      status: eventForm.status,
+      venue: eventForm.venue || null,
+      open_time: eventForm.open_time || null,
+      start_time: eventForm.start_time || null,
+      note: eventForm.note || null,
+      default_song_duration_sec: Number(eventForm.default_song_duration_sec) || 240,
+      default_changeover_min: Number(eventForm.default_changeover_min) || 15,
+    };
+
+    const { data, error } = await supabase
+      .from("events")
+      .update(payload)
+      .eq("id", eventId)
+      .select()
+      .maybeSingle();
+
+    if (error || !data) {
+      console.error(error);
+      setError("イベントの更新に失敗しました。");
+    } else {
+      setEvent(data as EventRow);
+      setEventForm(data as EventRow);
+    }
+    setSavingEvent(false);
+  };
+
+  const handleCreateBand = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newBandName.trim() || savingBand) return;
+    setSavingBand(true);
+    setError(null);
+
+    const { data, error } = await supabase
+      .from("bands")
+      .insert([
+        {
+          event_id: eventId,
+          name: newBandName.trim(),
+          created_by: userId ?? null,
+          is_approved: false,
+        },
+      ])
+      .select()
+      .maybeSingle();
+
+    if (error || !data) {
+      console.error(error);
+      setError("バンドの作成に失敗しました。");
+      setSavingBand(false);
+      return;
+    }
+
+    const added = data as Band;
+    setBands((prev) => [...prev, added]);
+    setSelectedBandId(added.id);
+    setNewBandName("");
+    setSavingBand(false);
+  };
+
+  const handleUpdateBand = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedBandId || savingBand) return;
+    setSavingBand(true);
+    setError(null);
+
+    const payload = {
+      name: bandForm.name.trim() || "未命名バンド",
       is_approved: bandForm.is_approved,
       note_pa: bandForm.note_pa || null,
       note_lighting: bandForm.note_lighting || null,
-      created_by: session?.user.id ?? null,
+      stage_plot_data: bandForm.stagePlotNote ? { note: bandForm.stagePlotNote } : {},
     };
-    const { data, error } = await supabase.from("bands").insert([payload]).select().single();
-    if (error) {
+
+    const { data, error } = await supabase
+      .from("bands")
+      .update(payload)
+      .eq("id", selectedBandId)
+      .select()
+      .maybeSingle();
+
+    if (error || !data) {
       console.error(error);
-      setBandsError("バンドの作成に失敗しました。");
-      setBandSaving(false);
+      setError("バンド情報の更新に失敗しました。");
+      setSavingBand(false);
       return;
     }
-    setBands((prev) => [...prev, data as BandRow].sort((a, b) => a.name.localeCompare(b.name)));
-    if (!selectedBandId) {
-      setSelectedBandId(data.id as string);
-    }
-    setBandForm({ name: "", is_approved: false, note_pa: "", note_lighting: "" });
-    setBandSaving(false);
+
+    const updated = data as Band;
+    setBands((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
+    setSavingBand(false);
   };
 
-  const handleBandSelect = (band: BandRow) => {
-    setSelectedBandId(band.id);
-    setBandEdit({
-      name: band.name,
-      is_approved: band.is_approved,
-      note_pa: band.note_pa ?? "",
-      note_lighting: band.note_lighting ?? "",
-    });
-  };
-
-  const handleBandUpdate = async (e: React.FormEvent) => {
+  const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedBand || !eventId || !bandEdit.name.trim() || !isAdmin) return;
-    setBandUpdating(true);
-    setBandsError(null);
-    const payload = {
-      name: bandEdit.name.trim(),
-      is_approved: bandEdit.is_approved,
-      note_pa: bandEdit.note_pa || null,
-      note_lighting: bandEdit.note_lighting || null,
-    };
-    const { error } = await supabase.from("bands").update(payload).eq("id", selectedBand.id);
-    if (error) {
-      console.error(error);
-      setBandsError("バンドの更新に失敗しました。");
-      setBandUpdating(false);
+    if (!selectedBandId || !memberForm.profileId || !memberForm.instrument.trim() || savingMember) {
       return;
     }
-    setBands((prev) =>
-      prev.map((b) => (b.id === selectedBand.id ? { ...b, ...payload } : b)).sort((a, b) =>
-        a.name.localeCompare(b.name)
-      )
-    );
-    setBandUpdating(false);
+    setSavingMember(true);
+    setError(null);
+
+    const { data, error } = await supabase
+      .from("band_members")
+      .insert([
+        {
+          band_id: selectedBandId,
+          user_id: memberForm.profileId,
+          instrument: memberForm.instrument.trim(),
+        },
+      ])
+      .select()
+      .maybeSingle();
+
+    if (error || !data) {
+      console.error(error);
+      setError("メンバーの追加に失敗しました。");
+      setSavingMember(false);
+      return;
+    }
+
+    setMembers((prev) => [...prev, data as BandMember]);
+    setMemberForm({ profileId: "", instrument: "" });
+    setSavingMember(false);
   };
 
+  const handleRemoveMember = async (memberId: string) => {
+    if (!memberId) return;
+    const { error } = await supabase.from("band_members").delete().eq("id", memberId);
+    if (error) {
+      console.error(error);
+      setError("メンバーの削除に失敗しました。");
+      return;
+    }
+    setMembers((prev) => prev.filter((m) => m.id !== memberId));
+  };
+
+  const handleAddSong = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedBandId || !songForm.title.trim() || savingSong) return;
+    setSavingSong(true);
+    setError(null);
+
+    const { data, error } = await supabase
+      .from("songs")
+      .insert([
+        {
+          band_id: selectedBandId,
+          title: songForm.title.trim(),
+          artist: songForm.artist || null,
+          duration_sec: songForm.duration_sec ? Number(songForm.duration_sec) : null,
+          memo: songForm.memo || null,
+        },
+      ])
+      .select()
+      .maybeSingle();
+
+    if (error || !data) {
+      console.error(error);
+      setError("セットリストの追加に失敗しました。");
+      setSavingSong(false);
+      return;
+    }
+
+    setSongs((prev) => [...prev, data as Song]);
+    setSongForm({ title: "", artist: "", duration_sec: "", memo: "" });
+    setSavingSong(false);
+  };
+
+  const handleRemoveSong = async (songId: string) => {
+    if (!songId) return;
+    const { error } = await supabase.from("songs").delete().eq("id", songId);
+    if (error) {
+      console.error(error);
+      setError("曲の削除に失敗しました。");
+      return;
+    }
+    setSongs((prev) => prev.filter((s) => s.id !== songId));
+  };
   if (adminLoading) {
     return (
       <AuthGuard>
@@ -284,95 +477,96 @@ export default function AdminEventEditPage() {
     );
   }
 
-  if (loading || !form) {
+  if (loading || !eventForm) {
     return (
       <AuthGuard>
         <div className="min-h-screen flex items-center justify-center bg-background">
-          <p className="text-sm text-muted-foreground">読み込み中です...</p>
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <RefreshCw className="w-4 h-4 animate-spin" />
+            読み込み中です...
+          </div>
         </div>
       </AuthGuard>
     );
   }
-
   return (
     <AuthGuard>
       <div className="flex min-h-screen bg-background">
         <SideNav />
+
         <main className="flex-1 md:ml-20">
           <section className="relative py-12 md:py-16 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent" />
-            <div className="absolute top-0 right-1/4 w-96 h-96 bg-secondary/5 rounded-full blur-3xl" />
+            <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-secondary/5 to-transparent" />
+            <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
 
             <div className="relative z-10 container mx-auto px-4 sm:px-6">
-              <div className="pt-10 md:pt-0">
-                <Link
-                  href="/admin/events"
-                  className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors mb-6"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  <span className="text-sm">イベント一覧に戻る</span>
+              <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                <ArrowLeft className="w-4 h-4" />
+                <Link href="/admin/events" className="hover:text-primary transition-colors">
+                  イベント一覧に戻る
                 </Link>
-
-                <div className="flex items-center gap-3 mb-2">
-                  <Badge variant="outline">イベント編集</Badge>
-                  {form?.status && (
-                    <Badge variant="secondary" className="capitalize">
-                      {form.status}
-                    </Badge>
+              </div>
+              <div className="max-w-5xl mt-6">
+                <span className="text-xs text-primary tracking-[0.3em] font-mono">ADMIN</span>
+                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-3 mb-3">イベント編集</h1>
+                <p className="text-muted-foreground text-sm md:text-base">
+                  イベント情報・バンド・メンバー・セットリストを管理します。
+                </p>
+                <div className="flex flex-wrap items-center gap-3 mt-4">
+                  <Badge variant={statusBadge(eventForm.status)}>{statusLabel(eventForm.status)}</Badge>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Calendar className="w-4 h-4 text-primary" />
+                    <span>{eventForm.date}</span>
+                  </div>
+                  {eventForm.venue && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <MapPin className="w-4 h-4 text-primary" />
+                      <span>{eventForm.venue}</span>
+                    </div>
                   )}
                 </div>
-                <h1 className="text-3xl sm:text-4xl font-bold">
-                  {form?.name || "イベント編集"}
-                </h1>
-                {form?.date && (
-                  <p className="text-muted-foreground mt-1 text-sm">{form.date}</p>
-                )}
               </div>
             </div>
           </section>
 
-          <section className="py-8 md:py-12">
-            <div className="container mx-auto px-4 sm:px-6">
-              {loading ? (
-                <p className="text-sm text-muted-foreground">読み込み中...</p>
-              ) : error ? (
-                <p className="text-sm text-destructive">{error}</p>
-              ) : !form ? (
-                <p className="text-sm text-muted-foreground">データがありません。</p>
-              ) : (
-                <div className="space-y-10">
-                  <form
-                    onSubmit={handleSave}
-                    className="bg-card/60 border border-border rounded-xl p-4 sm:p-6 space-y-4 shadow-sm max-w-3xl"
-                  >
-                    <div className="grid sm:grid-cols-2 gap-4">
+          <section className="pb-12 md:pb-16">
+            <div className="container mx-auto px-4 sm:px-6 space-y-8 md:space-y-10">
+              {error && (
+                <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-lg px-4 py-3">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <Card className="bg-card/60 border-border">
+                <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <CardTitle className="text-xl">イベント情報</CardTitle>
+                    <CardDescription>基本情報とデフォルト設定を更新します。</CardDescription>
+                  </div>
+                  <Badge variant="outline" className="gap-1">
+                    <Users className="w-4 h-4" />
+                    Admin only
+                  </Badge>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleUpdateEvent} className="space-y-4">
+                    <div className="grid md:grid-cols-2 gap-4">
                       <label className="space-y-1 block text-sm">
                         <span className="text-foreground">イベント名</span>
                         <Input
                           required
-                          value={form.name}
-                          onChange={(e) => handleChange("name", e.target.value)}
+                          value={eventForm.name}
+                          onChange={(e) => handleEventChange("name", e.target.value)}
+                          placeholder="春ライブ 2025"
                         />
                       </label>
-                      <label className="space-y-1 block text-sm">
-                        <span className="text-foreground">開催日</span>
-                        <Input
-                          type="date"
-                          required
-                          value={form.date}
-                          onChange={(e) => handleChange("date", e.target.value)}
-                        />
-                      </label>
-                    </div>
-
-                    <div className="grid sm:grid-cols-2 gap-4">
                       <label className="space-y-1 block text-sm">
                         <span className="text-foreground">ステータス</span>
                         <select
-                          aria-label="ステータス"
-                          className="h-10 w-full rounded-md border border-input bg-card/80 px-3 pr-9 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-colors"
-                          value={form.status}
-                          onChange={(e) => handleChange("status", e.target.value)}
+                          className="h-10 w-full rounded-md border border-input bg-card px-3 pr-9 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-colors"
+                          value={eventForm.status}
+                          onChange={(e) => handleEventChange("status", e.target.value)}
                         >
                           {statusOptions.map((opt) => (
                             <option key={opt.value} value={opt.value}>
@@ -381,305 +575,443 @@ export default function AdminEventEditPage() {
                           ))}
                         </select>
                       </label>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <label className="space-y-1 block text-sm">
+                        <span className="text-foreground">開催日</span>
+                        <Input
+                          type="date"
+                          required
+                          value={eventForm.date}
+                          onChange={(e) => handleEventChange("date", e.target.value)}
+                        />
+                      </label>
                       <label className="space-y-1 block text-sm">
                         <span className="text-foreground">会場</span>
                         <Input
-                          value={form.venue ?? ""}
-                          onChange={(e) => handleChange("venue", e.target.value)}
+                          value={eventForm.venue ?? ""}
+                          onChange={(e) => handleEventChange("venue", e.target.value)}
                           placeholder="大学ホール"
                         />
                       </label>
                     </div>
 
-                    <div className="grid sm:grid-cols-2 gap-4">
-                      <label className="space-y-1 block text-sm">
-                        <span className="text-foreground">開場時間</span>
-                        <Input
-                          type="time"
-                          value={form.open_time ?? ""}
-                          onChange={(e) => handleChange("open_time", e.target.value)}
-                        />
-                      </label>
-                      <label className="space-y-1 block text-sm">
-                        <span className="text-foreground">開演時間</span>
-                        <Input
-                          type="time"
-                          value={form.start_time ?? ""}
-                          onChange={(e) => handleChange("start_time", e.target.value)}
-                        />
-                      </label>
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        <label className="space-y-1 block text-sm">
+                          <span className="text-foreground">開場時間</span>
+                          <Input
+                            type="time"
+                            value={eventForm.open_time ?? ""}
+                            onChange={(e) => handleEventChange("open_time", e.target.value)}
+                          />
+                        </label>
+                        <label className="space-y-1 block text-sm">
+                          <span className="text-foreground">開演時間</span>
+                          <Input
+                            type="time"
+                            value={eventForm.start_time ?? ""}
+                            onChange={(e) => handleEventChange("start_time", e.target.value)}
+                          />
+                        </label>
+                      </div>
+
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        <label className="space-y-1 block text-sm">
+                          <span className="text-foreground">デフォルト演奏時間（秒）</span>
+                          <Input
+                            type="number"
+                            min={30}
+                            value={eventForm.default_song_duration_sec}
+                            onChange={(e) =>
+                              handleEventChange("default_song_duration_sec", Number(e.target.value))
+                            }
+                          />
+                        </label>
+                        <label className="space-y-1 block text-sm">
+                          <span className="text-foreground">デフォルト転換時間（分）</span>
+                          <Input
+                            type="number"
+                            min={0}
+                            value={eventForm.default_changeover_min}
+                            onChange={(e) =>
+                              handleEventChange("default_changeover_min", Number(e.target.value))
+                            }
+                          />
+                        </label>
+                      </div>
                     </div>
 
                     <label className="space-y-1 block text-sm">
                       <span className="text-foreground">メモ</span>
-                      <textarea
-                        value={form.note ?? ""}
-                        onChange={(e) => handleChange("note", e.target.value)}
+                      <Textarea
                         rows={3}
-                        className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground"
+                        value={eventForm.note ?? ""}
+                        onChange={(e) => handleEventChange("note", e.target.value)}
                         placeholder="備考や出演条件など"
                       />
                     </label>
 
-                    <div className="grid sm:grid-cols-2 gap-4">
-                      <label className="space-y-1 block text-sm">
-                        <span className="text-foreground">デフォルト演奏時間（秒）</span>
-                        <Input
-                          type="number"
-                          min={30}
-                          value={form.default_song_duration_sec}
-                          onChange={(e) =>
-                            handleChange("default_song_duration_sec", Number(e.target.value))
-                          }
-                        />
-                      </label>
-                      <label className="space-y-1 block text-sm">
-                        <span className="text-foreground">デフォルト転換時間（分）</span>
-                        <Input
-                          type="number"
-                          min={0}
-                          value={form.default_changeover_min}
-                          onChange={(e) =>
-                            handleChange("default_changeover_min", Number(e.target.value))
-                          }
-                        />
-                      </label>
-                    </div>
-
-                    {error && <p className="text-sm text-destructive">{error}</p>}
-                    {message && <p className="text-sm text-green-500">{message}</p>}
-
-                    <div className="flex items-center gap-3">
-                      <Button type="submit" disabled={!canSubmit} className="gap-2">
-                        {saving ? (
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <ArrowRight className="w-4 h-4" />
-                        )}
-                        保存
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Button type="submit" disabled={savingEvent} className="gap-2">
+                        {savingEvent ? <RefreshCw className="w-4 h-4 animate-spin" /> : <PencilLine className="w-4 h-4" />}
+                        保存する
                       </Button>
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={() => router.push(`/events/${form.id}`)}
+                        onClick={() => setEventForm(event ?? null)}
+                        disabled={savingEvent}
                       >
-                        公開ページを見る
+                        変更を戻す
                       </Button>
                     </div>
                   </form>
-
-                  <div className="mt-10 space-y-4">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline">バンド管理</Badge>
-                      <span className="text-sm text-muted-foreground">このイベントに紐づくバンド</span>
-                    </div>
-
-                    <form
-                      onSubmit={handleBandCreate}
-                      className="bg-card/60 border border-border rounded-xl p-4 sm:p-5 space-y-3"
-                    >
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-base font-semibold">バンドを追加</h3>
-                        <Badge variant="secondary">event_id: {form.id}</Badge>
-                      </div>
-                      <div className="grid sm:grid-cols-2 gap-3">
-                        <label className="space-y-1 block text-sm">
-                          <span className="text-foreground">バンド名</span>
-                          <Input
-                            required
-                            value={bandForm.name}
-                            onChange={(e) => setBandForm((p) => ({ ...p, name: e.target.value }))}
-                            placeholder="Band Name"
-                          />
-                        </label>
-                        <label className="space-y-1 block text-sm">
-                          <span className="text-foreground">承認ステータス</span>
-                          <select
-                            className="h-10 w-full rounded-md border border-input bg-card/80 px-3 pr-9 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-colors"
-                            value={bandForm.is_approved ? "1" : "0"}
-                            onChange={(e) =>
-                              setBandForm((p) => ({ ...p, is_approved: e.target.value === "1" }))
-                            }
-                          >
-                            <option value="0">未承認</option>
-                            <option value="1">承認済み</option>
-                          </select>
-                        </label>
-                      </div>
-
-                      <div className="grid sm:grid-cols-2 gap-3">
-                        <label className="space-y-1 block text-sm">
-                          <span className="text-foreground">PAメモ</span>
-                          <Input
-                            value={bandForm.note_pa}
-                            onChange={(e) => setBandForm((p) => ({ ...p, note_pa: e.target.value }))}
-                            placeholder="PAに関する注意点など"
-                          />
-                        </label>
-                        <label className="space-y-1 block text-sm">
-                          <span className="text-foreground">照明メモ</span>
-                          <Input
-                            value={bandForm.note_lighting}
-                            onChange={(e) =>
-                              setBandForm((p) => ({ ...p, note_lighting: e.target.value }))
-                            }
-                            placeholder="照明に関する注意点など"
-                          />
-                        </label>
-                      </div>
-
-                      {bandsError && <p className="text-sm text-destructive">{bandsError}</p>}
-
-                      <div className="flex items-center gap-3">
-                        <Button type="submit" disabled={!canCreateBand} className="gap-2">
-                          {bandSaving ? (
-                            <RefreshCw className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <ArrowRight className="w-4 h-4" />
-                          )}
-                          追加
-                        </Button>
-                        <span className="text-xs text-muted-foreground">
-                          作成者ID: {session?.user.id ?? "unknown"}
-                        </span>
-                      </div>
-                    </form>
-
-                    <div className="bg-card/60 border border-border rounded-xl p-4 sm:p-5 space-y-3">
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-base font-semibold">バンド一覧</h3>
-                        <Badge variant="secondary">{bands.length}</Badge>
-                      </div>
-                      {bandsLoading ? (
-                        <p className="text-sm text-muted-foreground">バンドを読み込み中...</p>
-                      ) : bands.length === 0 ? (
+                </CardContent>
+              </Card>
+              <div className="grid lg:grid-cols-[320px,1fr] gap-6">
+                <Card className="bg-card/60 border-border">
+                  <CardHeader>
+                    <CardTitle className="text-lg">バンド</CardTitle>
+                    <CardDescription>選択または新規作成</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      {bands.length === 0 ? (
                         <p className="text-sm text-muted-foreground">まだバンドがありません。</p>
                       ) : (
                         <div className="space-y-2">
                           {bands.map((band) => (
-                            <div
+                            <button
                               key={band.id}
-                              className="flex flex-col sm:flex-row sm:items-center gap-2 p-3 rounded-lg border border-border bg-card/40"
-                              onClick={() => handleBandSelect(band)}
+                              type="button"
+                              onClick={() => setSelectedBandId(band.id)}
+                              className={cn(
+                                "w-full flex items-center justify-between rounded-lg border px-3 py-2 text-left transition-colors",
+                                selectedBandId === band.id
+                                  ? "border-primary/60 bg-primary/10"
+                                  : "border-border hover:border-primary/40 hover:bg-muted/50"
+                              )}
                             >
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-medium">{band.name}</span>
-                                  {band.is_approved && (
-                                    <Badge className="bg-green-600 text-white gap-1">
-                                      <CheckCircle2 className="w-4 h-4" />
-                                      承認済み
-                                    </Badge>
-                                  )}
-                                </div>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  PA: {band.note_pa || "なし"} / 照明: {band.note_lighting || "なし"}
-                                </p>
+                              <div className="flex flex-col">
+                                <span className="font-semibold text-sm">{band.name}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  {band.note_pa ? "PAメモあり" : "PAメモなし"}
+                                </span>
                               </div>
-                              <div className="flex gap-2" />
-                            </div>
+                              {band.is_approved ? (
+                                <CheckCircle2 className="w-4 h-4 text-primary" />
+                              ) : (
+                                <BadgeCheck className="w-4 h-4 text-muted-foreground" />
+                              )}
+                            </button>
                           ))}
                         </div>
                       )}
                     </div>
 
-                    {selectedBand && (
-                      <div className="bg-card/60 border border-border rounded-xl p-4 sm:p-5 space-y-4">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline">バンド詳細</Badge>
-                          <span className="text-sm text-muted-foreground">
-                            選択中: {selectedBand.name} （編集は保存で反映）
-                          </span>
-                        </div>
+                    <form onSubmit={handleCreateBand} className="space-y-2">
+                      <label className="space-y-1 block text-sm">
+                        <span className="text-foreground">新規バンド名</span>
+                        <Input
+                          value={newBandName}
+                          onChange={(e) => setNewBandName(e.target.value)}
+                          placeholder="バンド名を入力"
+                        />
+                      </label>
+                      <Button type="submit" disabled={savingBand || !newBandName.trim()} className="gap-2 w-full">
+                        {savingBand ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                        追加
+                      </Button>
+                    </form>
+                  </CardContent>
+                </Card>
 
-                        <form onSubmit={handleBandUpdate} className="space-y-3">
-                          <div className="grid sm:grid-cols-2 gap-3">
+                <div className="space-y-6">
+                  <Card className="bg-card/60 border-border">
+                    <CardHeader>
+                      <CardTitle className="text-lg">バンド詳細</CardTitle>
+                      <CardDescription>承認状態・PA/照明メモ・ステージプロット</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {!selectedBand ? (
+                        <p className="text-sm text-muted-foreground">バンドを選択してください。</p>
+                      ) : (
+                        <form onSubmit={handleUpdateBand} className="space-y-4">
+                          <div className="grid md:grid-cols-2 gap-4">
                             <label className="space-y-1 block text-sm">
                               <span className="text-foreground">バンド名</span>
                               <Input
-                                value={bandEdit.name}
-                                onChange={(e) => setBandEdit((p) => ({ ...p, name: e.target.value }))}
-                                required
+                                value={bandForm.name}
+                                onChange={(e) => setBandForm((prev) => ({ ...prev, name: e.target.value }))}
                               />
                             </label>
-                            <label className="space-y-1 block text-sm">
-                              <span className="text-foreground">承認ステータス</span>
-                              <select
-                                className="h-10 w-full rounded-md border border-input bg-card/80 px-3 pr-9 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-colors"
-                                value={bandEdit.is_approved ? "1" : "0"}
-                                onChange={(e) => setBandEdit((p) => ({ ...p, is_approved: e.target.value === "1" }))}
-                              >
-                                <option value="0">未承認</option>
-                                <option value="1">承認済み</option>
-                              </select>
+                            <label className="space-y-2 block text-sm">
+                              <span className="text-foreground">承認状態</span>
+                              <div className="flex items-center gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => setBandForm((prev) => ({ ...prev, is_approved: !prev.is_approved }))}
+                                  className={cn(
+                                    "flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors",
+                                    bandForm.is_approved
+                                      ? "border-primary text-primary bg-primary/10"
+                                      : "border-border text-muted-foreground hover:border-primary/40"
+                                  )}
+                                >
+                                  {bandForm.is_approved ? <CheckCircle2 className="w-4 h-4" /> : <BadgeCheck className="w-4 h-4" />}
+                                  {bandForm.is_approved ? "承認済み" : "未承認"}
+                                </button>
+                              </div>
                             </label>
                           </div>
 
-                          <div className="grid sm:grid-cols-2 gap-3">
+                          <div className="grid md:grid-cols-2 gap-4">
                             <label className="space-y-1 block text-sm">
                               <span className="text-foreground">PAメモ</span>
-                              <Input
-                                value={bandEdit.note_pa}
-                                onChange={(e) => setBandEdit((p) => ({ ...p, note_pa: e.target.value }))}
-                                placeholder="PAに関する注意点など"
+                              <Textarea
+                                rows={3}
+                                value={bandForm.note_pa}
+                                onChange={(e) => setBandForm((prev) => ({ ...prev, note_pa: e.target.value }))}
+                                placeholder="マイアンプ / インプット本数 / 注意点など"
                               />
                             </label>
                             <label className="space-y-1 block text-sm">
                               <span className="text-foreground">照明メモ</span>
-                              <Input
-                                value={bandEdit.note_lighting}
-                                onChange={(e) => setBandEdit((p) => ({ ...p, note_lighting: e.target.value }))}
-                                placeholder="照明に関する注意点など"
+                              <Textarea
+                                rows={3}
+                                value={bandForm.note_lighting}
+                                onChange={(e) => setBandForm((prev) => ({ ...prev, note_lighting: e.target.value }))}
+                                placeholder="曲の雰囲気、色の希望など"
                               />
                             </label>
                           </div>
 
-                          <div className="flex items-center gap-2">
-                            <Button type="submit" disabled={!canUpdateBand} className="gap-2">
-                              {bandUpdating ? (
-                                <RefreshCw className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <ArrowRight className="w-4 h-4" />
-                              )}
-                              バンドを保存
+                          <label className="space-y-1 block text-sm">
+                            <span className="text-foreground">ステージプロット / 機材図</span>
+                            <Textarea
+                              rows={3}
+                              value={bandForm.stagePlotNote}
+                              onChange={(e) => setBandForm((prev) => ({ ...prev, stagePlotNote: e.target.value }))}
+                              placeholder="共有リンクやテキストで記載（画像URLでもOK）"
+                            />
+                          </label>
+
+                          <div className="flex flex-wrap items-center gap-3">
+                            <Button type="submit" disabled={savingBand} className="gap-2">
+                              {savingBand ? <RefreshCw className="w-4 h-4 animate-spin" /> : <PencilLine className="w-4 h-4" />}
+                              バンド情報を保存
                             </Button>
-                            <span className="text-xs text-muted-foreground">
-                              songs/band_members/stage_plot は後続対応（DB未用意）
-                            </span>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => {
+                                setBandForm({
+                                  name: selectedBand.name,
+                                  is_approved: Boolean(selectedBand.is_approved),
+                                  note_pa: selectedBand.note_pa ?? "",
+                                  note_lighting: selectedBand.note_lighting ?? "",
+                                  stagePlotNote:
+                                    (selectedBand.stage_plot_data?.note as string) ??
+                                    (selectedBand.stage_plot_data?.stage_plot as string) ??
+                                    "",
+                                });
+                              }}
+                            >
+                              変更を戻す
+                            </Button>
                           </div>
                         </form>
+                      )}
+                    </CardContent>
+                  </Card>
 
-                        <div className="grid lg:grid-cols-2 gap-4">
-                          <div className="p-4 rounded-lg border border-border bg-card/50 space-y-2">
-                            <div className="flex items-center gap-2">
-                              <Badge>セットリスト</Badge>
-                              <span className="text-xs text-muted-foreground">（準備中）</span>
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <Card className="bg-card/60 border-border">
+                      <CardHeader>
+                        <CardTitle className="text-lg">メンバー</CardTitle>
+                        <CardDescription>Discord連携を優先して表示します。</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        {!selectedBand ? (
+                          <p className="text-sm text-muted-foreground">バンドを選択してください。</p>
+                        ) : (
+                          <>
+                            <form onSubmit={handleAddMember} className="space-y-3">
+                              <div className="space-y-1 text-sm">
+                                <span className="text-foreground">プロフィール</span>
+                                <select
+                                  required
+                                  className="w-full h-10 rounded-md border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-colors"
+                                  value={memberForm.profileId}
+                                  onChange={(e) => setMemberForm((prev) => ({ ...prev, profileId: e.target.value }))}
+                                >
+                                  <option value="">選択してください</option>
+                                  {profiles.map((profile) => (
+                                    <option key={profile.id} value={profile.id}>
+                                      {profile.display_name}
+                                      {profile.crew ? ` / ${profile.crew}` : ""}
+                                    </option>
+                                  ))}
+                                </select>
+                                {memberForm.profileId && (
+                                  <p className="text-xs text-muted-foreground">
+                                    Discord: {profilesMap.get(memberForm.profileId)?.discord ?? "未連携"}
+                                  </p>
+                                )}
+                              </div>
+                              <label className="space-y-1 block text-sm">
+                                <span className="text-foreground">パート / 担当</span>
+                                <Input
+                                  required
+                                  value={memberForm.instrument}
+                                  onChange={(e) => setMemberForm((prev) => ({ ...prev, instrument: e.target.value }))}
+                                  placeholder="Gt. / Vo. / Dr. など"
+                                />
+                              </label>
+                              <Button
+                                type="submit"
+                                disabled={savingMember || !memberForm.profileId || !memberForm.instrument.trim()}
+                                className="gap-2 w-full"
+                              >
+                                {savingMember ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                                メンバーを追加
+                              </Button>
+                            </form>
+
+                            <div className="space-y-2">
+                              {selectedBandMembers.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">追加されたメンバーはいません。</p>
+                              ) : (
+                                selectedBandMembers.map((member) => {
+                                  const profile = profilesMap.get(member.user_id);
+                                  return (
+                                    <div
+                                      key={member.id}
+                                      className="flex items-center justify-between rounded-lg border border-border px-3 py-2"
+                                    >
+                                      <div className="space-y-1">
+                                        <p className="font-medium text-sm">{profile?.display_name ?? "不明なユーザー"}</p>
+                                        <p className="text-xs text-muted-foreground">{member.instrument}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                          Discord: {profile?.discord ?? "未連携"}
+                                        </p>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveMember(member.id)}
+                                        className="p-2 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                                        aria-label="メンバーを削除"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                  );
+                                })
+                              )}
                             </div>
-                            <p className="text-sm text-muted-foreground">
-                              songsテーブルが未作成のためUIのみ。曲名・アーティスト・尺をここに並べる予定です。
-                            </p>
-                            <Button size="sm" variant="outline" disabled>
-                              セットリストを追加（準備中）
-                            </Button>
-                          </div>
-                          <div className="p-4 rounded-lg border border-border bg-card/50 space-y-2">
-                            <div className="flex items-center gap-2">
-                              <Badge>ステージプロット</Badge>
-                              <span className="text-xs text-muted-foreground">（準備中）</span>
+                          </>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    <Card className="bg-card/60 border-border">
+                      <CardHeader>
+                        <CardTitle className="text-lg">セットリスト</CardTitle>
+                        <CardDescription>演奏曲と所要時間を管理します。</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        {!selectedBand ? (
+                          <p className="text-sm text-muted-foreground">バンドを選択してください。</p>
+                        ) : (
+                          <>
+                            <form onSubmit={handleAddSong} className="space-y-3">
+                              <div className="grid md:grid-cols-2 gap-3">
+                                <label className="space-y-1 block text-sm">
+                                  <span className="text-foreground">曲名</span>
+                                  <Input
+                                    required
+                                    value={songForm.title}
+                                    onChange={(e) => setSongForm((prev) => ({ ...prev, title: e.target.value }))}
+                                    placeholder="曲名を入力"
+                                  />
+                                </label>
+                                <label className="space-y-1 block text-sm">
+                                  <span className="text-foreground">アーティスト</span>
+                                  <Input
+                                    value={songForm.artist}
+                                    onChange={(e) => setSongForm((prev) => ({ ...prev, artist: e.target.value }))}
+                                    placeholder="任意"
+                                  />
+                                </label>
+                              </div>
+                              <div className="grid md:grid-cols-2 gap-3">
+                                <label className="space-y-1 block text-sm">
+                                  <span className="text-foreground">演奏時間（秒）</span>
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    value={songForm.duration_sec}
+                                    onChange={(e) => setSongForm((prev) => ({ ...prev, duration_sec: e.target.value }))}
+                                    placeholder="未設定の場合はデフォルト時間"
+                                  />
+                                </label>
+                                <label className="space-y-1 block text-sm">
+                                  <span className="text-foreground">メモ</span>
+                                  <Input
+                                    value={songForm.memo}
+                                    onChange={(e) => setSongForm((prev) => ({ ...prev, memo: e.target.value }))}
+                                    placeholder="Key変更 / 繰り返し回数 など"
+                                  />
+                                </label>
+                              </div>
+                              <Button
+                                type="submit"
+                                disabled={savingSong || !songForm.title.trim()}
+                                className="gap-2 w-full"
+                              >
+                                {savingSong ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                                曲を追加
+                              </Button>
+                            </form>
+
+                            <div className="space-y-2">
+                              {selectedBandSongs.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">セットリストがありません。</p>
+                              ) : (
+                                selectedBandSongs.map((song) => (
+                                  <div
+                                    key={song.id}
+                                    className="flex items-start justify-between rounded-lg border border-border px-3 py-2"
+                                  >
+                                    <div className="space-y-1">
+                                      <p className="font-medium text-sm">{song.title}</p>
+                                      <p className="text-xs text-muted-foreground">{song.artist ?? "アーティスト未設定"}</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {song.duration_sec ? `${song.duration_sec} 秒` : "時間未設定"}
+                                      </p>
+                                      {song.memo && <p className="text-xs text-muted-foreground">メモ: {song.memo}</p>}
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveSong(song.id)}
+                                      className="p-2 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                                      aria-label="曲を削除"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                ))
+                              )}
                             </div>
-                            <p className="text-sm text-muted-foreground">
-                              stage_plot_data(tldraw JSON) を保存/読み込みする予定です。図面エディタを後続で実装します。
-                            </p>
-                            <Button size="sm" variant="outline" disabled>
-                              プロットを編集（準備中）
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                          </>
+                        )}
+                      </CardContent>
+                    </Card>
                   </div>
                 </div>
-              )}
+              </div>
             </div>
           </section>
         </main>
@@ -687,3 +1019,5 @@ export default function AdminEventEditPage() {
     </AuthGuard>
   );
 }
+
+

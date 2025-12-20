@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useIsAdmin } from "@/lib/useIsAdmin";
+import { useIsAdministrator } from "@/lib/useIsAdministrator";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 
@@ -98,6 +99,7 @@ export default function AdminEventDetailPage() {
   const eventId =
     typeof params?.id === "string" ? params.id : Array.isArray(params?.id) ? params.id[0] : "";
   const { isAdmin, loading: adminLoading } = useIsAdmin();
+  const { isAdministrator: viewerIsAdministrator } = useIsAdministrator();
   const { session } = useAuth();
   const userId = session?.user.id;
 
@@ -191,8 +193,13 @@ export default function AdminEventDetailPage() {
 
       const profileList = (profilesRes.data ?? []).map((p: any) => ({
         id: p.id,
-        display_name: p.display_name ?? p.full_name ?? p.name ?? p.email ?? "名前未登録",
-        email: p.email ?? null,
+        display_name:
+          p.display_name ??
+          p.full_name ??
+          p.name ??
+          (viewerIsAdministrator ? p.email : null) ??
+          "名前未登録",
+        email: viewerIsAdministrator ? p.email ?? null : null,
         discord: p.discord_username ?? p.discord ?? null,
         crew: p.crew ?? null,
       }));
@@ -233,7 +240,7 @@ export default function AdminEventDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [adminLoading, eventId, isAdmin]);
+  }, [adminLoading, eventId, isAdmin, viewerIsAdministrator]);
 
   useEffect(() => {
     if (!selectedBand) {

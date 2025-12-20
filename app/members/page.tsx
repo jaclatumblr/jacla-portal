@@ -10,10 +10,12 @@ import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/contexts/AuthContext";
+import { useIsAdministrator } from "@/lib/useIsAdministrator";
 
 type Member = {
   id: string;
   name: string;
+  email: string | null;
   discord: string | null;
   part: string | null;
   crew: string | null;
@@ -24,7 +26,7 @@ type Member = {
 type ProfileRow = {
   id: string;
   display_name: string | null;
-  email: string | null;
+  email?: string | null;
   part: string | null;
   crew: string | null;
   leader: string | null;
@@ -44,22 +46,30 @@ type LeaderRow = {
 
 export default function MembersPage() {
   const { session, loading: authLoading } = useAuth();
+  const { isAdministrator, loading: adminLoading } = useIsAdministrator();
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (authLoading || !session) return;
+    if (authLoading || adminLoading || !session) return;
     let cancelled = false;
     (async () => {
       setLoading(true);
       setError(null);
 
+      const profilesPromise = isAdministrator
+        ? supabase
+            .from("profiles")
+            .select("id, display_name, email, part, crew, leader, discord, discord_username")
+            .order("display_name", { ascending: true })
+        : supabase
+            .from("profiles")
+            .select("id, display_name, part, crew, leader, discord, discord_username")
+            .order("display_name", { ascending: true });
+
       const [profilesRes, bandsRes, leadersRes] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("id, display_name, email, part, crew, leader, discord, discord_username")
-          .order("display_name", { ascending: true }),
+        profilesPromise,
         supabase.from("band_members").select("user_id, bands(id, name)"),
         supabase.from("profile_leaders").select("profile_id, leader"),
       ]);
@@ -113,7 +123,8 @@ export default function MembersPage() {
         const leaderRoles = Array.from(leaderMap.get(profile.id) ?? leaderFallback);
         return {
           id: profile.id,
-          name: profile.display_name ?? profile.email ?? "名前未登録",
+          name: profile.display_name ?? "名前未登録",
+          email: isAdministrator ? profile.email ?? null : null,
           part: profile.part && profile.part !== "none" ? profile.part : null,
           crew: profile.crew ?? null,
           leaderRoles,
@@ -129,7 +140,7 @@ export default function MembersPage() {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, session]);
+  }, [authLoading, adminLoading, isAdministrator, session]);
 
   return (
     <AuthGuard>
@@ -217,6 +228,11 @@ export default function MembersPage() {
                                 {roleLabel}
                               </Badge>
                             </div>
+                            {isAdministrator && (
+                              <p className="text-xs text-muted-foreground truncate">
+                                {member.email ?? "メール未登録"}
+                              </p>
+                            )}
 
                             <div className="flex items-center gap-2 mb-3">
                               <Music className="w-4 h-4 text-primary shrink-0" />

@@ -73,6 +73,8 @@ export default function OnboardingClient() {
   const [part, setPart] = useState("");
   const [subParts, setSubParts] = useState<string[]>([]);
   const [isAdminLeader, setIsAdminLeader] = useState(false);
+  const [canEditCrew, setCanEditCrew] = useState(false);
+  const [crewOptionsForUser, setCrewOptionsForUser] = useState<string[]>(crewOptions);
 
   useEffect(() => {
     if (!part) {
@@ -149,17 +151,39 @@ export default function OnboardingClient() {
         .map((row) => (row as { leader?: string }).leader)
         .filter((role) => role && role !== "none") as string[];
 
-      const isAdmin =
-        leaderValues.includes("Administrator") ||
-        (leadersRes.error && profile.leader === "Administrator") ||
-        (!leadersRes.error && leaderValues.length === 0 && profile.leader === "Administrator");
+      const fallbackLeaders =
+        profile.leader && profile.leader !== "none" ? [profile.leader] : [];
+      const effectiveLeaders = leaderValues.length > 0 ? leaderValues : fallbackLeaders;
+
+      const isAdmin = effectiveLeaders.includes("Administrator");
+      const isSupervisor = effectiveLeaders.includes("Supervisor");
+      const isPaLeader = effectiveLeaders.includes("PA Leader");
+      const isLightingLeader = effectiveLeaders.includes("Lighting Leader");
+      const canEditCrewValue = isAdmin || isSupervisor || isPaLeader || isLightingLeader;
+
+      let allowedCrew = crewOptions;
+      const currentCrew = profile.crew ?? "User";
+      if (isAdmin || isSupervisor) {
+        allowedCrew = crewOptions;
+      } else if (isPaLeader) {
+        allowedCrew = ["User", "PA"];
+      } else if (isLightingLeader) {
+        allowedCrew = ["User", "Lighting"];
+      } else {
+        allowedCrew = [currentCrew];
+      }
+      if (!allowedCrew.includes(currentCrew)) {
+        allowedCrew = [currentCrew, ...allowedCrew];
+      }
 
       setDisplayName(profile.display_name ?? "");
       setDiscordUsername(profile.discord_username ?? "");
-      setCrew(profile.crew ?? "User");
+      setCrew(currentCrew);
       setPart(primaryPart ?? "");
       setSubParts(subs);
       setIsAdminLeader(isAdmin);
+      setCanEditCrew(canEditCrewValue);
+      setCrewOptionsForUser(allowedCrew);
       setLoading(false);
     })();
 
@@ -190,15 +214,21 @@ export default function OnboardingClient() {
     setError(null);
 
     const partValue = part || "none";
-    const profileRes = await supabase
-      .from("profiles")
-      .update({
-        display_name: displayName.trim(),
-        discord_username: discordUsername.trim() || null,
-        crew,
-        part: partValue,
-      })
-      .eq("id", session.user.id);
+    const updates: {
+      display_name: string;
+      discord_username: string | null;
+      part: string;
+      crew?: string;
+    } = {
+      display_name: displayName.trim(),
+      discord_username: discordUsername.trim() || null,
+      part: partValue,
+    };
+    if (canEditCrew) {
+      updates.crew = crew;
+    }
+
+    const profileRes = await supabase.from("profiles").update(updates).eq("id", session.user.id);
 
     if (profileRes.error) {
       console.error(profileRes.error);
@@ -343,14 +373,20 @@ export default function OnboardingClient() {
                           <select
                             value={crew}
                             onChange={(e) => setCrew(e.target.value)}
+                            disabled={!canEditCrew}
                             className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-colors"
                           >
-                            {crewOptions.map((value) => (
+                            {crewOptionsForUser.map((value) => (
                               <option key={value} value={value}>
                                 {value}
                               </option>
                             ))}
                           </select>
+                          {!canEditCrew && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              クルーは管理者が設定します。
+                            </p>
+                          )}
                         </label>
 
                         <label className="space-y-1 block text-sm">

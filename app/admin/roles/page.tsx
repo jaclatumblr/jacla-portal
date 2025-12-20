@@ -16,6 +16,7 @@ import {
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { useIsAdmin } from "@/lib/useIsAdmin";
+import { useIsAdministrator } from "@/lib/useIsAdministrator";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
 import { Input } from "@/components/ui/input";
@@ -61,6 +62,7 @@ const partOptions = [
   "Tp.",
   "Tb.",
   "Tu.",
+  "Hr.",
   "Eup.",
   "Cl.",
   "B.Cl.",
@@ -75,6 +77,7 @@ const partOptions = [
 
 export default function AdminRolesPage() {
   const { isAdmin, loading: adminLoading } = useIsAdmin();
+  const { isAdministrator: viewerIsAdministrator } = useIsAdministrator();
   const { session } = useAuth();
   const userId = session?.user.id;
 
@@ -96,10 +99,11 @@ export default function AdminRolesPage() {
     const q = search.trim().toLowerCase();
     if (!q) return profiles;
     return profiles.filter((p) => {
-      const text = `${p.display_name ?? ""} ${p.email ?? ""}`.toLowerCase();
+      const emailText = viewerIsAdministrator ? p.email ?? "" : "";
+      const text = `${p.display_name ?? ""} ${emailText}`.toLowerCase();
       return text.includes(q);
     });
-  }, [profiles, search]);
+  }, [profiles, search, viewerIsAdministrator]);
 
   const selectedProfile = useMemo(
     () => profiles.find((p) => p.id === selectedId) ?? null,
@@ -533,7 +537,9 @@ export default function AdminRolesPage() {
                               <p className="font-medium text-sm text-foreground">
                                 {p.display_name ?? "名前未登録"}
                               </p>
-                              <p className="text-xs text-muted-foreground">{p.email ?? "メール未登録"}</p>
+                              {viewerIsAdministrator && (
+                                <p className="text-xs text-muted-foreground">{p.email ?? "メール未登録"}</p>
+                              )}
                             </div>
                             <div className="flex items-center gap-2 text-xs text-muted-foreground">
                               <BadgeCheck className="w-4 h-4 text-primary" />
@@ -567,7 +573,11 @@ export default function AdminRolesPage() {
                           <p className="text-sm font-semibold text-foreground">
                             {selectedProfile.display_name ?? "名前未登録"}
                           </p>
-                          <p className="text-xs text-muted-foreground">{selectedProfile.email ?? "メール未登録"}</p>
+                          {viewerIsAdministrator && (
+                            <p className="text-xs text-muted-foreground">
+                              {selectedProfile.email ?? "メール未登録"}
+                            </p>
+                          )}
                           {selectedProfile.id === userId && (
                             <p className="text-xs text-primary">※自分自身の権限を編集中</p>
                           )}

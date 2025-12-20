@@ -44,32 +44,9 @@ declare
   ];
   part_expected   text[] := array[
     'none',
-    'Gt.',
-    'Ba.',
-    'Dr.',
-    'Key.',
-    'Syn.',
-    'Acc.',
-    'W.Syn.',
-    'S.Sax.',
-    'A.Sax.',
-    'T.Sax.',
-    'B.Sax.',
-    'Tp.',
-    'Tb.',
-    'Tu.',
-    'Eup.',
-    'Cl.',
-    'B.Cl.',
-    'Ob.',
-    'Fg.'
-    'Fl.',
-    'Vn.',
-    'Vc.',
-    'Per.',
-    'Ukl.',
-    'Mand.',
-    'etc'
+    'Gt.','A.Gt.','C.Gt.','Ba.','Dr.','Key.','Syn.','Acc.','W.Syn.',
+    'S.Sax.','A.Sax.','T.Sax.','B.Sax.','Tp.','Tb.','Tu.','Hr.','Eup.','Cl.','B.Cl.',
+    'Ob.','Fl.','Vn.','Va.','Vc.','Per.','etc'
   ];
 
   found int;
@@ -159,7 +136,7 @@ begin
       create type part_role as enum (
         'none',
         'Gt.','A.Gt.','C.Gt.','Ba.','Dr.','Key.','Syn.','Acc.','W.Syn.',
-        'S.Sax.','A.Sax.','T.Sax.','B.Sax.','Tp.','Tb.','Tu.','Eup.','Cl.','B.Cl.',
+        'S.Sax.','A.Sax.','T.Sax.','B.Sax.','Tp.','Tb.','Tu.','Hr.','Eup.','Cl.','B.Cl.',
         'Ob.','Fl.','Vn.','Va.','Vc.','Per.','etc'
       );
     $e$;
@@ -174,9 +151,7 @@ alter table public.profiles
   add column if not exists leader leader_role not null default 'none',
   add column if not exists crew   crew_role   not null default 'User',
   add column if not exists part   part_role   not null default 'none',
-  add column if not exists muted  boolean     not null default false,
-  add column if not exists discord text,
-  add column if not exists discord_username text;
+  add column if not exists muted  boolean     not null default false;
 
 
 -- =========================================================
@@ -219,6 +194,19 @@ alter table public.profiles
 alter table public.profiles
   alter column part type part_role
   using (part::text)::part_role;
+
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'profile_parts'
+      and column_name = 'part'
+  ) then
+    execute 'alter table public.profile_parts alter column part type part_role using (part::text)::part_role';
+  end if;
+end $$;
 
 alter table public.profiles
   alter column leader set default 'none'::leader_role,

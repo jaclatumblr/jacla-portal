@@ -105,3 +105,16 @@ html {
     display: none;
   }
 }
+
+@keyframes pageFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.page-fade-in {
+  animation: pageFadeIn var(--page-fade-duration, 420ms) ease both;
+}

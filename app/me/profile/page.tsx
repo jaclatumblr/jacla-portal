@@ -26,7 +26,7 @@ type ProfileData = {
 
 type BandMemberRow = {
   instrument: string | null;
-  bands: { id: string; name: string } | null;
+  bands: { id: string; name: string } | { id: string; name: string }[] | null;
 };
 
 type BandItem = {
@@ -100,12 +100,17 @@ export default function ProfilePage() {
         const map = new Map<string, { name: string; roles: Set<string> }>();
         (bandRes.data ?? []).forEach((row) => {
           const bandRow = row as BandMemberRow;
-          const band = bandRow.bands;
-          if (!band) return;
+          const bandEntries = Array.isArray(bandRow.bands)
+            ? bandRow.bands
+            : bandRow.bands
+            ? [bandRow.bands]
+            : [];
           const role = bandRow.instrument?.trim();
-          const entry = map.get(band.id) ?? { name: band.name, roles: new Set<string>() };
-          if (role) entry.roles.add(role);
-          map.set(band.id, entry);
+          bandEntries.forEach((band) => {
+            const entry = map.get(band.id) ?? { name: band.name, roles: new Set<string>() };
+            if (role) entry.roles.add(role);
+            map.set(band.id, entry);
+          });
         });
         const list = Array.from(map.entries()).map(([id, entry]) => ({
           id,

@@ -34,7 +34,7 @@ type ProfileRow = {
 
 type BandMemberRow = {
   user_id: string;
-  bands: { id: string; name: string } | null;
+  bands: { id: string; name: string } | { id: string; name: string }[] | null;
 };
 
 type LeaderRow = {
@@ -81,10 +81,13 @@ export default function MembersPage() {
       } else {
         (bandsRes.data ?? []).forEach((row) => {
           const bandRow = row as BandMemberRow;
-          const band = bandRow.bands;
-          if (!band) return;
+          const bandEntries = Array.isArray(bandRow.bands)
+            ? bandRow.bands
+            : bandRow.bands
+            ? [bandRow.bands]
+            : [];
           const current = bandMap.get(bandRow.user_id) ?? new Set<string>();
-          current.add(band.name);
+          bandEntries.forEach((band) => current.add(band.name));
           bandMap.set(bandRow.user_id, current);
         });
       }

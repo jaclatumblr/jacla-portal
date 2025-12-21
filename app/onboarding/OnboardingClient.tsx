@@ -217,7 +217,7 @@ export default function OnboardingClient() {
       setError("本名を入力してください。");
       return;
     }
-    if (!studentId.trim()) {
+    if (!studentId.trim() && !isAdminLeader) {
       setError("学籍番号を入力してください。");
       return;
     }
@@ -412,9 +412,12 @@ export default function OnboardingClient() {
                       </label>
 
                       <label className="space-y-1 block text-sm">
-                        <span className="text-foreground">学籍番号</span>
+                        <span className="text-foreground">
+                          学籍番号
+                          {isAdminLeader && <span className="ml-2 text-xs text-muted-foreground">任意</span>}
+                        </span>
                         <Input
-                          required
+                          required={!isAdminLeader}
                           value={studentId}
                           onChange={(e) => setStudentId(e.target.value)}
                           placeholder="例: 24A1234"

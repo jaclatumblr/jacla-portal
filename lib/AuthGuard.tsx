@@ -53,7 +53,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
         profileData.display_name.trim().length === 0 ||
         !profileData.real_name ||
         profileData.real_name.trim().length === 0 ||
-        studentIdValue.trim().length === 0 ||
+        (!isAdmin && studentIdValue.trim().length === 0) ||
         (!isAdmin && (!profileData.part || profileData.part === "none"));
 
       if (needsOnboarding) {

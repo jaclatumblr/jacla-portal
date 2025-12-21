@@ -546,7 +546,7 @@ export default function AdminRolesPage() {
 
     const desiredPositions = Array.from(
       new Set(
-        positions.filter(
+        [...positions, ...Array.from(autoPositions)].filter(
           (position) => position && position !== "none" && allowedPositions.has(position)
         )
       )
@@ -995,12 +995,12 @@ export default function AdminRolesPage() {
                           ) : (
                             <div className="grid sm:grid-cols-2 gap-2">
                               {visiblePositionOptions.map((option) => {
-                                const checked = positions.includes(option.value);
                                 const isAuto = autoPositions.has(option.value);
+                                const checked = isAuto || positions.includes(option.value);
                                 return (
                                   <label key={option.value} className="flex items-center gap-2 text-sm">
                                     <input
-                                      type="checkbox"
+                                      type={isAuto ? "radio" : "checkbox"}
                                       className="h-4 w-4 accent-primary"
                                       checked={checked}
                                       onChange={() => togglePosition(option.value)}

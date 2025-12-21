@@ -183,8 +183,8 @@ export default function MembersPage() {
         console.error(enrollmentRes.error);
         setError((prev) => prev ?? "入学年度の取得に失敗しました。");
       } else {
-        (enrollmentRes.data ?? []).forEach((row) => {
-          const entry = row as EnrollmentYearRow;
+        const enrollmentRows = (enrollmentRes.data ?? []) as EnrollmentYearRow[];
+        enrollmentRows.forEach((entry) => {
           if (!entry.profile_id) return;
           const yearValue = entry.enrollment_year != null ? String(entry.enrollment_year) : "";
           if (yearValue) {

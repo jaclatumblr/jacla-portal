@@ -44,12 +44,37 @@ declare
   ];
   part_expected   text[] := array[
     'none',
-    'Gt.','A.Gt.','C.Gt.','Ba.','Dr.','Key.','Syn.','Acc.','W.Syn.',
-    'S.Sax.','A.Sax.','T.Sax.','B.Sax.','Tp.','Tb.','Tu.','Hr.','Eup.','Cl.','B.Cl.',
-    'Ob.','Fl.','Vn.','Va.','Vc.','Per.','etc'
+    'Gt.',
+    'Ba.',
+    'Dr.',
+    'Key.',
+    'Syn.',
+    'Acc.',
+    'W.Syn.',
+    'S.Sax.',
+    'A.Sax.',
+    'T.Sax.',
+    'B.Sax.',
+    'Tp.',
+    'Tb.',
+    'Tu.',
+    'Hr.',
+    'Eup.',
+    'Cl.',
+    'B.Cl.',
+    'Ob.',
+    'Fg.'
+    'Fl.',
+    'Vn.',
+    'Vc.',
+    'Per.',
+    'Ukl.',
+    'Mand.',
+    'etc'
   ];
 
   found int;
+  found_old int;
 begin
   -- ---- leader_role ----
   if exists (select 1 from pg_type where typname = 'leader_role') then
@@ -121,13 +146,24 @@ begin
       and e.enumlabel = any(part_expected);
 
     if found <> array_length(part_expected, 1) then
-      begin
-        execute 'drop type if exists part_role_old';
-      exception when others then
-        null;
-      end;
+      if exists (select 1 from pg_type where typname = 'part_role_old') then
+        select count(*) into found_old
+        from pg_attribute a
+        join pg_type t on t.oid = a.atttypid
+        where t.typname = 'part_role_old'
+          and a.attnum > 0
+          and not a.attisdropped;
 
-      execute 'alter type part_role rename to part_role_old';
+        if found_old = 0 then
+          execute 'drop type if exists part_role_old';
+        else
+          raise notice 'part_role_old is still in use; skipping rename.';
+        end if;
+      end if;
+
+      if not exists (select 1 from pg_type where typname = 'part_role_old') then
+        execute 'alter type part_role rename to part_role_old';
+      end if;
     end if;
   end if;
 
@@ -151,7 +187,8 @@ alter table public.profiles
   add column if not exists leader leader_role not null default 'none',
   add column if not exists crew   crew_role   not null default 'User',
   add column if not exists part   part_role   not null default 'none',
-  add column if not exists muted  boolean     not null default false;
+  add column if not exists muted  boolean     not null default false,
+  add column if not exists avatar_url text;
 
 
 -- =========================================================
@@ -194,19 +231,6 @@ alter table public.profiles
 alter table public.profiles
   alter column part type part_role
   using (part::text)::part_role;
-
-do $$
-begin
-  if exists (
-    select 1
-    from information_schema.columns
-    where table_schema = 'public'
-      and table_name = 'profile_parts'
-      and column_name = 'part'
-  ) then
-    execute 'alter table public.profile_parts alter column part type part_role using (part::text)::part_role';
-  end if;
-end $$;
 
 alter table public.profiles
   alter column leader set default 'none'::leader_role,
@@ -436,6 +460,36 @@ begin
     execute 'drop type if exists part_role_old';
   exception when others then null;
   end;
+end $$;
+
+-- =========================================================
+-- 8. 古い型の片付け
+-- =========================================================
+do $$
+begin
+  if exists (select 1 from pg_type where typname = 'part_role_old') then
+    if exists (
+      select 1
+      from information_schema.columns
+      where table_schema = 'public'
+        and table_name = 'profiles'
+        and column_name = 'part'
+    ) then
+      execute 'alter table public.profiles alter column part type part_role using (part::text)::part_role';
+    end if;
+
+    if exists (
+      select 1
+      from information_schema.columns
+      where table_schema = 'public'
+        and table_name = 'profile_parts'
+        and column_name = 'part'
+    ) then
+      execute 'alter table public.profile_parts alter column part type part_role using (part::text)::part_role';
+    end if;
+
+    execute 'drop type part_role_old';
+  end if;
 end $$;
 
 commit;

@@ -101,12 +101,17 @@ export default function OnboardingClient() {
 
       let profile = data as ProfileRow | null;
       if (error || !profile) {
+        const avatarCandidate =
+          session.user.user_metadata?.avatar_url ||
+          session.user.user_metadata?.picture ||
+          null;
         const { data: inserted, error: insertError } = await supabase
           .from("profiles")
           .insert({
             id: session.user.id,
             email: session.user.email,
             display_name: session.user.user_metadata.full_name ?? session.user.email ?? "",
+            avatar_url: avatarCandidate,
           })
           .select("display_name, crew, part, leader, discord_username")
           .maybeSingle();
@@ -198,11 +203,14 @@ export default function OnboardingClient() {
     setError(null);
 
     const partValue = part || "none";
+    const avatarCandidate =
+      session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture || null;
     const updates: {
       display_name: string;
       discord_username: string | null;
       part: string;
       crew?: string;
+      avatar_url?: string | null;
     } = {
       display_name: displayName.trim(),
       discord_username: discordUsername.trim() || null,
@@ -210,6 +218,9 @@ export default function OnboardingClient() {
     };
     if (canEditCrew) {
       updates.crew = crew;
+    }
+    if (avatarCandidate) {
+      updates.avatar_url = avatarCandidate;
     }
 
     const profileRes = await supabase.from("profiles").update(updates).eq("id", session.user.id);

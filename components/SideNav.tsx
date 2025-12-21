@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -40,6 +40,7 @@ const bottomNavItems = [
 const utilityNavItems = bottomNavItems;
 
 export function SideNav() {
+  const asideRef = useRef<HTMLElement | null>(null);
   const [isExpanded, setIsExpanded] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.sessionStorage.getItem("sidenavExpanded") === "1";
@@ -65,6 +66,16 @@ export function SideNav() {
   // ルートが変わったらモバイルメニューだけ閉じる
   useEffect(() => {
     setIsMobileMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    const el = asideRef.current;
+    if (!el) return;
+    const id = window.requestAnimationFrame(() => {
+      const hovering = el.matches(":hover");
+      updateExpanded(hovering);
+    });
+    return () => window.cancelAnimationFrame(id);
   }, [pathname]);
 
   const handleLogout = async () => {
@@ -106,6 +117,7 @@ export function SideNav() {
 
       {/* デスクトップ用サイドバー */}
       <aside
+        ref={asideRef}
         onMouseEnter={() => updateExpanded(true)}
         onMouseLeave={() => updateExpanded(false)}
         className={cn(

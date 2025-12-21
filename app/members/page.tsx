@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { MessageCircle, Music, RefreshCw, Search } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,7 @@ type Member = {
   crew: string | null;
   leaderRoles: string[];
   bands: string[];
+  avatarUrl: string | null;
 };
 
 type ProfileRow = {
@@ -32,6 +33,7 @@ type ProfileRow = {
   leader: string | null;
   discord: string | null;
   discord_username: string | null;
+  avatar_url?: string | null;
 };
 
 type BandMemberRow = {
@@ -61,11 +63,13 @@ export default function MembersPage() {
       const profilesPromise = isAdministrator
         ? supabase
             .from("profiles")
-            .select("id, display_name, email, part, crew, leader, discord, discord_username")
+            .select(
+              "id, display_name, email, part, crew, leader, discord, discord_username, avatar_url"
+            )
             .order("display_name", { ascending: true })
         : supabase
             .from("profiles")
-            .select("id, display_name, part, crew, leader, discord, discord_username")
+            .select("id, display_name, part, crew, leader, discord, discord_username, avatar_url")
             .order("display_name", { ascending: true });
 
       const [profilesRes, bandsRes, leadersRes] = await Promise.all([
@@ -130,6 +134,7 @@ export default function MembersPage() {
           leaderRoles,
           discord: profile.discord_username ?? profile.discord ?? null,
           bands: Array.from(bandMap.get(profile.id) ?? []),
+          avatarUrl: profile.avatar_url ?? null,
         } satisfies Member;
       });
 
@@ -213,6 +218,9 @@ export default function MembersPage() {
 
                         <div className="relative flex items-start gap-3 md:gap-4">
                           <Avatar className="w-12 h-12 md:w-16 md:h-16 border-2 border-border shrink-0">
+                            {member.avatarUrl && (
+                              <AvatarImage src={member.avatarUrl} alt={member.name} />
+                            )}
                             <AvatarFallback className="bg-primary/10 text-primary font-bold text-base md:text-lg">
                               {initial}
                             </AvatarFallback>

@@ -9,7 +9,6 @@ import {
   CheckCircle2,
   RefreshCw,
   Shield,
-  ShieldCheck,
   SwitchCamera,
   UserCog,
 } from "lucide-react";
@@ -22,6 +21,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +33,7 @@ type ProfileRow = {
   crew: string;
   part: string | null;
   muted: boolean;
+  avatar_url?: string | null;
 };
 
 type ProfilePartRow = {
@@ -93,7 +94,19 @@ export default function AdminRolesPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ id: number; message: string } | null>(null);
+  const [toastVisible, setToastVisible] = useState(false);
+
+  useEffect(() => {
+    if (!toast) return;
+    setToastVisible(true);
+    const hideTimer = window.setTimeout(() => setToastVisible(false), 2200);
+    const clearTimer = window.setTimeout(() => setToast(null), 2600);
+    return () => {
+      window.clearTimeout(hideTimer);
+      window.clearTimeout(clearTimer);
+    };
+  }, [toast?.id]);
 
   const filteredProfiles = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -212,7 +225,7 @@ export default function AdminRolesPage() {
       setError(null);
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, display_name, email, leader, crew, part, muted")
+        .select("id, display_name, email, leader, crew, part, muted, avatar_url")
         .order("display_name", { ascending: true });
       if (cancelled) return;
       if (error) {
@@ -265,7 +278,7 @@ export default function AdminRolesPage() {
 
     setSaving(true);
     setError(null);
-    setMessage(null);
+    setToast(null);
 
     const partValue = primaryPart || "none";
     const profileRes = await supabase
@@ -418,7 +431,7 @@ export default function AdminRolesPage() {
         )
       );
     }
-    setMessage("保存しました。");
+    setToast({ id: Date.now(), message: "保存しました。" });
     setSaving(false);
   };
 
@@ -455,6 +468,17 @@ export default function AdminRolesPage() {
     <AuthGuard>
       <div className="flex min-h-screen bg-background">
         <SideNav />
+        {toast && (
+          <div
+            className={cn(
+              "fixed right-6 top-6 z-[90] flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-emerald-500 shadow-lg backdrop-blur transition-all",
+              toastVisible ? "translate-x-0 opacity-100" : "translate-x-4 opacity-0"
+            )}
+          >
+            <CheckCircle2 className="h-4 w-4" />
+            <span className="text-sm">{toast.message}</span>
+          </div>
+        )}
 
         <main className="flex-1 md:ml-20">
           <section className="relative py-12 md:py-16 overflow-hidden">
@@ -480,17 +504,15 @@ export default function AdminRolesPage() {
 
           <section className="pb-12 md:pb-16">
             <div className="container mx-auto px-4 sm:px-6 space-y-8 md:space-y-10">
-              {(error || message) && (
+              {error && (
                 <div
                   className={cn(
                     "flex items-center gap-2 px-4 py-3 rounded-lg border",
-                    error
-                      ? "text-destructive bg-destructive/10 border-destructive/30"
-                      : "text-emerald-500 bg-emerald-500/10 border-emerald-500/30"
+                    "text-destructive bg-destructive/10 border-destructive/30"
                   )}
                 >
-                  {error ? <AlertCircle className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
-                  <span className="text-sm">{error ?? message}</span>
+                  <AlertCircle className="w-4 h-4" />
+                  <span className="text-sm">{error}</span>
                 </div>
               )}
 
@@ -528,18 +550,30 @@ export default function AdminRolesPage() {
                             onClick={() => setSelectedId(p.id)}
                             className={cn(
                               "w-full text-left px-4 py-3 flex items-center justify-between transition-colors",
-                              selectedId === p.id
+        selectedId === p.id
                                 ? "bg-primary/10 border-l-2 border-primary"
                                 : "hover:bg-muted/50"
                             )}
                           >
-                            <div className="space-y-1">
-                              <p className="font-medium text-sm text-foreground">
-                                {p.display_name ?? "名前未登録"}
-                              </p>
-                              {viewerIsAdministrator && (
-                                <p className="text-xs text-muted-foreground">{p.email ?? "メール未登録"}</p>
-                              )}
+                            <div className="flex items-center gap-3 min-w-0">
+                              <Avatar className="h-9 w-9 border border-border">
+                                {p.avatar_url && (
+                                  <AvatarImage src={p.avatar_url} alt={p.display_name ?? "member"} />
+                                )}
+                                <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
+                                  {(p.display_name ?? "?").trim().charAt(0)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="space-y-1 min-w-0">
+                                <p className="font-medium text-sm text-foreground truncate">
+                                  {p.display_name ?? "名前未登録"}
+                                </p>
+                                {viewerIsAdministrator && (
+                                  <p className="text-xs text-muted-foreground truncate">
+                                    {p.email ?? "メール未登録"}
+                                  </p>
+                                )}
+                              </div>
                             </div>
                             <div className="flex items-center gap-2 text-xs text-muted-foreground">
                               <BadgeCheck className="w-4 h-4 text-primary" />
@@ -569,18 +603,31 @@ export default function AdminRolesPage() {
                       <p className="text-sm text-muted-foreground">メンバーを選択してください。</p>
                     ) : (
                       <>
-                        <div className="space-y-1">
-                          <p className="text-sm font-semibold text-foreground">
-                            {selectedProfile.display_name ?? "名前未登録"}
-                          </p>
-                          {viewerIsAdministrator && (
-                            <p className="text-xs text-muted-foreground">
-                              {selectedProfile.email ?? "メール未登録"}
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-10 w-10 border border-border">
+                            {selectedProfile.avatar_url && (
+                              <AvatarImage
+                                src={selectedProfile.avatar_url}
+                                alt={selectedProfile.display_name ?? "member"}
+                              />
+                            )}
+                            <AvatarFallback className="bg-primary/10 text-primary text-sm font-bold">
+                              {(selectedProfile.display_name ?? "?").trim().charAt(0)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="space-y-1 min-w-0">
+                            <p className="text-sm font-semibold text-foreground truncate">
+                              {selectedProfile.display_name ?? "名前未登録"}
                             </p>
-                          )}
-                          {selectedProfile.id === userId && (
-                            <p className="text-xs text-primary">※自分自身の権限を編集中</p>
-                          )}
+                            {viewerIsAdministrator && (
+                              <p className="text-xs text-muted-foreground truncate">
+                                {selectedProfile.email ?? "メール未登録"}
+                              </p>
+                            )}
+                            {selectedProfile.id === userId && (
+                              <p className="text-xs text-primary">※自分自身の権限を編集中</p>
+                            )}
+                          </div>
                         </div>
 
                         <div className="space-y-2">

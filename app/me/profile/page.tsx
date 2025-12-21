@@ -22,6 +22,7 @@ type ProfileData = {
   created_at?: string | null;
   discord?: string | null;
   discord_username?: string | null;
+  avatar_url?: string | null;
 };
 
 type BandMemberRow = {
@@ -149,6 +150,7 @@ export default function ProfilePage() {
     ? `https://discord.com/users/${encodeURIComponent(discordValue)}`
     : null;
   const avatarUrl =
+    profile?.avatar_url ||
     session?.user.user_metadata?.avatar_url ||
     session?.user.user_metadata?.picture ||
     "";

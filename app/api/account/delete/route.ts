@@ -70,7 +70,13 @@ export async function POST(request: Request) {
     }
 
     if (!isPrivileged) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return NextResponse.json(
+        {
+          error: "Forbidden",
+          details: "Administrator/Supervisor のみ他ユーザーを削除できます。",
+        },
+        { status: 403 }
+      );
     }
   }
 

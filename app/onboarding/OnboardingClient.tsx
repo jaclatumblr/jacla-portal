@@ -375,8 +375,11 @@ export default function OnboardingClient() {
         body: JSON.stringify({}),
       });
       if (!res.ok) {
-        const data = (await res.json().catch(() => null)) as { error?: string } | null;
-        setDeleteError(data?.error ?? "アカウントの削除に失敗しました。");
+        const data = (await res.json().catch(() => null)) as
+          | { error?: string; details?: string }
+          | null;
+        const message = data?.details ? `${data.error ?? "削除エラー"}: ${data.details}` : data?.error;
+        setDeleteError(message ?? "アカウントの削除に失敗しました。");
         setDeleting(false);
         return;
       }

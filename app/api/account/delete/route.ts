@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 
 const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
   auth: { persistSession: false },
@@ -15,6 +15,13 @@ const authClient = createClient(supabaseUrl, supabaseAnonKey, {
 const adminLeaders = new Set(["Administrator", "Supervisor"]);
 
 export async function POST(request: Request) {
+  if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
+    return NextResponse.json(
+      { error: "Server configuration missing (Supabase keys)." },
+      { status: 500 }
+    );
+  }
+
   const authHeader = request.headers.get("authorization") ?? "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
   if (!token) {
@@ -71,13 +78,19 @@ export async function POST(request: Request) {
 
   if (profileDeleteError) {
     console.error(profileDeleteError);
-    return NextResponse.json({ error: "Profile delete failed" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Profile delete failed", details: profileDeleteError.message },
+      { status: 500 }
+    );
   }
 
   const { error: authDeleteError } = await adminClient.auth.admin.deleteUser(targetUserId);
   if (authDeleteError) {
     console.error(authDeleteError);
-    return NextResponse.json({ error: "Auth delete failed" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Auth delete failed", details: authDeleteError.message },
+      { status: 500 }
+    );
   }
 
   return NextResponse.json({ ok: true });

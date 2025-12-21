@@ -59,6 +59,7 @@ type ProfilePartRow = {
 
 type ProfilePrivateRow = {
   student_id: string | null;
+  enrollment_year: number | null;
 };
 
 export default function OnboardingClient() {
@@ -77,6 +78,7 @@ export default function OnboardingClient() {
   const [displayName, setDisplayName] = useState("");
   const [realName, setRealName] = useState("");
   const [studentId, setStudentId] = useState("");
+  const [enrollmentYear, setEnrollmentYear] = useState("");
   const [discordUsername, setDiscordUsername] = useState("");
   const [crew, setCrew] = useState("User");
   const [part, setPart] = useState("");
@@ -145,7 +147,7 @@ export default function OnboardingClient() {
           .eq("profile_id", session.user.id),
         supabase
           .from("profile_private")
-          .select("student_id")
+          .select("student_id, enrollment_year")
           .eq("profile_id", session.user.id)
           .maybeSingle(),
       ]);
@@ -187,6 +189,11 @@ export default function OnboardingClient() {
       setStudentId(
         privateRes.data ? ((privateRes.data as ProfilePrivateRow).student_id ?? "") : ""
       );
+      setEnrollmentYear(
+        privateRes.data
+          ? String((privateRes.data as ProfilePrivateRow).enrollment_year ?? "")
+          : ""
+      );
       setDiscordUsername(profile.discord_username ?? "");
       setCrew(currentCrew);
       setPart(primaryPart ?? "");
@@ -221,6 +228,15 @@ export default function OnboardingClient() {
     }
     if (!studentId.trim() && !isAdminLeader) {
       setError("学籍番号を入力してください。");
+      return;
+    }
+    const enrollmentYearValue = enrollmentYear.trim();
+    if (!enrollmentYearValue && !isAdminLeader) {
+      setError("入学年度を入力してください。");
+      return;
+    }
+    if (enrollmentYearValue && !/^\d{4}$/.test(enrollmentYearValue)) {
+      setError("入学年度は西暦4桁で入力してください。");
       return;
     }
     if (!isAdminLeader && !part) {
@@ -269,6 +285,7 @@ export default function OnboardingClient() {
         {
           profile_id: session.user.id,
           student_id: studentId.trim(),
+          enrollment_year: enrollmentYearValue ? Number(enrollmentYearValue) : null,
         },
         { onConflict: "profile_id" }
       );
@@ -420,7 +437,7 @@ export default function OnboardingClient() {
                 <CardHeader>
                   <CardTitle className="text-xl">基本情報</CardTitle>
                   <CardDescription>
-                    必須: 表示名/本名/学籍番号/メイン楽器。サブ楽器も選択できます。
+                    必須: 表示名/本名/学籍番号/入学年度/メイン楽器。サブ楽器も選択できます。
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -461,6 +478,21 @@ export default function OnboardingClient() {
                           value={studentId}
                           onChange={(e) => setStudentId(e.target.value)}
                           placeholder="例: 24A1234"
+                        />
+                      </label>
+
+                      <label className="space-y-1 block text-sm">
+                        <span className="text-foreground">
+                          入学年度
+                          {isAdminLeader && <span className="ml-2 text-xs text-muted-foreground">任意</span>}
+                        </span>
+                        <Input
+                          required={!isAdminLeader}
+                          value={enrollmentYear}
+                          onChange={(e) => setEnrollmentYear(e.target.value)}
+                          placeholder="例: 2024"
+                          inputMode="numeric"
+                          maxLength={4}
                         />
                       </label>
 

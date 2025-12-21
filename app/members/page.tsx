@@ -26,6 +26,7 @@ type Member = {
   positions: string[];
   bands: string[];
   avatarUrl: string | null;
+  enrollmentYear: string | null;
 };
 
 type ProfileRow = {
@@ -44,6 +45,11 @@ type ProfileRow = {
 type ProfilePrivateRow = {
   profile_id: string;
   student_id: string;
+};
+
+type EnrollmentYearRow = {
+  profile_id: string;
+  enrollment_year: number | null;
 };
 
 type BandMemberRow = {
@@ -108,11 +114,12 @@ export default function MembersPage() {
             .select("id, display_name, real_name, part, crew, leader, discord, discord_username, avatar_url")
             .order("display_name", { ascending: true });
 
-      const [profilesRes, bandsRes, leadersRes, positionsRes] = await Promise.all([
+      const [profilesRes, bandsRes, leadersRes, positionsRes, enrollmentRes] = await Promise.all([
         profilesPromise,
         supabase.from("band_members").select("user_id, bands(id, name)"),
         supabase.from("profile_leaders").select("profile_id, leader"),
         supabase.from("profile_positions").select("profile_id, position"),
+        supabase.rpc("get_profile_enrollment_years"),
       ]);
 
       if (cancelled) return;
@@ -171,6 +178,21 @@ export default function MembersPage() {
         });
       }
 
+      const enrollmentMap = new Map<string, string>();
+      if (enrollmentRes.error) {
+        console.error(enrollmentRes.error);
+        setError((prev) => prev ?? "入学年度の取得に失敗しました。");
+      } else {
+        (enrollmentRes.data ?? []).forEach((row) => {
+          const entry = row as EnrollmentYearRow;
+          if (!entry.profile_id) return;
+          const yearValue = entry.enrollment_year != null ? String(entry.enrollment_year) : "";
+          if (yearValue) {
+            enrollmentMap.set(entry.profile_id, yearValue);
+          }
+        });
+      }
+
       const studentMap = new Map<string, string>();
       if (canViewStudentId) {
         const { data: privateData, error: privateError } = await supabase
@@ -200,6 +222,7 @@ export default function MembersPage() {
           realName: profile.real_name ?? null,
           email: isAdministrator ? profile.email ?? null : null,
           studentId: canViewStudentId ? studentMap.get(profile.id) ?? null : null,
+          enrollmentYear: enrollmentMap.get(profile.id) ?? null,
           part: profile.part && profile.part !== "none" ? profile.part : null,
           crew: profile.crew ?? null,
           leaderRoles,
@@ -419,6 +442,9 @@ export default function MembersPage() {
                             </div>
                             <p className="text-xs text-muted-foreground truncate">
                               本名: {member.realName ?? "未設定"}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              入学年度: {member.enrollmentYear ?? "未登録"}
                             </p>
                             {canViewStudentId && (
                               <p className="text-xs text-muted-foreground truncate">

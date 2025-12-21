@@ -809,9 +809,9 @@ export default function AdminRolesPage() {
               </div>
               <div className="max-w-5xl mt-6">
                 <span className="text-xs text-primary tracking-[0.3em] font-mono">ADMIN</span>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-3 mb-3">ロール管理</h1>
+                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-3 mb-3">ユーザー管理</h1>
                 <p className="text-muted-foreground text-sm md:text-base">
-                  Administrator / Supervisor がメンバーのロールと楽器情報を更新できます。
+                  Administrator / Supervisor がユーザーのロールと楽器情報を更新できます。
                 </p>
               </div>
             </div>

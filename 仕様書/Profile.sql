@@ -221,9 +221,13 @@ alter table public.profiles
 create table if not exists public.profile_private (
   profile_id uuid primary key references public.profiles(id) on delete cascade,
   student_id text not null,
+  enrollment_year integer,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.profile_private
+  add column if not exists enrollment_year integer;
 
 create or replace function public.profile_private_set_updated_at()
 returns trigger
@@ -439,6 +443,20 @@ for update
 to authenticated
 using (profile_id = auth.uid())
 with check (profile_id = auth.uid());
+
+-- 5-7-1) 入学年度は全員閲覧できるように RPC で提供
+create or replace function public.get_profile_enrollment_years()
+returns table (profile_id uuid, enrollment_year integer)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select profile_id, enrollment_year from public.profile_private;
+$$;
+
+revoke execute on function public.get_profile_enrollment_years() from public;
+grant execute on function public.get_profile_enrollment_years() to authenticated;
 
 -- 5-8) 役職（profile_positions）
 alter table public.profile_positions enable row level security;

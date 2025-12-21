@@ -14,7 +14,7 @@ const exactTitles: Record<string, string> = {
   "/lighting": "照明",
   "/lighting/instructions": "照明指示",
   "/admin": "管理",
-  "/admin/roles": "権限管理",
+  "/admin/roles": "ユーザー管理",
   "/admin/events": "イベント管理",
   "/me": "マイページ",
   "/me/profile": "プロフィール",

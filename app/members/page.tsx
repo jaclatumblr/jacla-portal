@@ -62,6 +62,7 @@ type PositionRow = {
 };
 
 const positionLabels: Record<string, string> = {
+  Official: "Official",
   President: "部長",
   "Vice President": "副部長",
   Treasurer: "会計",
@@ -71,12 +72,13 @@ const positionLabels: Record<string, string> = {
 };
 
 const positionPriority: Record<string, number> = {
-  President: 0,
-  "Vice President": 1,
-  Treasurer: 2,
-  "PA Chief": 3,
-  "Lighting Chief": 3,
-  "Web Secretary": 4,
+  Official: 0,
+  President: 1,
+  "Vice President": 2,
+  Treasurer: 3,
+  "PA Chief": 4,
+  "Lighting Chief": 4,
+  "Web Secretary": 5,
 };
 
 export default function MembersPage() {
@@ -224,12 +226,18 @@ export default function MembersPage() {
         if (member.positions.length === 0) return Number.POSITIVE_INFINITY;
         let rank = Number.POSITIVE_INFINITY;
         member.positions.forEach((position) => {
+          if (position === "Official") return;
           const value = positionPriority[position];
           if (value !== undefined && value < rank) {
             rank = value;
           }
         });
         return Number.isFinite(rank) ? rank : 99;
+      };
+      const getTopRank = (member: Member) => {
+        if (member.positions.includes("Official")) return 0;
+        if (member.leaderRoles.includes("Administrator")) return 1;
+        return 2;
       };
       const getRoleRank = (member: Member) => {
         let rank = Number.POSITIVE_INFINITY;
@@ -247,6 +255,9 @@ export default function MembersPage() {
       };
 
       const sorted = [...list].sort((a, b) => {
+        const topA = getTopRank(a);
+        const topB = getTopRank(b);
+        if (topA !== topB) return topA - topB;
         const positionA = getPositionRank(a);
         const positionB = getPositionRank(b);
         if (positionA !== positionB) return positionA - positionB;
@@ -317,12 +328,25 @@ export default function MembersPage() {
               ) : (
                 <div className="grid lg:grid-cols-2 gap-4 md:gap-6 max-w-5xl mx-auto">
                   {members.map((member, index) => {
-                    const leaderLabel =
-                      member.leaderRoles.length > 0 ? member.leaderRoles.join(" / ") : null;
-                    const roleLabel = leaderLabel ?? member.crew ?? "User";
+                    const isOfficialRole = member.positions.includes("Official");
+                    const isAdministratorRole = member.leaderRoles.includes("Administrator");
+                    const showAdminBadge = isAdministratorRole && !isOfficialRole;
+                    const hasPositionBadge = member.positions.some(
+                      (value) => value !== "Official"
+                    );
+                    const leaderLabel = member.leaderRoles
+                      .filter((role) => {
+                        if (role === "Administrator") return false;
+                        if (!hasPositionBadge) return true;
+                        return role !== "Supervisor" && role !== "PA Leader" && role !== "Lighting Leader";
+                      })
+                      .join(" / ");
+                    const roleLabel = leaderLabel || member.crew || "User";
+                    const showRoleBadge =
+                      roleLabel !== "User" || (!isAdministratorRole && !isOfficialRole);
                     const positionLabel =
                       member.positions.length > 0
-                        ? [...member.positions]
+                        ? [...member.positions].filter((value) => value !== "Official")
                             .sort(
                               (a, b) =>
                                 (positionPriority[a] ?? 99) - (positionPriority[b] ?? 99)
@@ -360,14 +384,32 @@ export default function MembersPage() {
                                 {String(index + 1).padStart(2, "0")}
                               </span>
                               <h3 className="font-bold text-base md:text-lg truncate">{member.name}</h3>
+                              {isOfficialRole && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs border-primary/40 bg-primary/15 text-primary shadow-sm"
+                                >
+                                  Official
+                                </Badge>
+                              )}
+                              {showAdminBadge && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs border-[#aee6ff]/40 bg-[#aee6ff]/10 text-[#aee6ff]"
+                                >
+                                  Administrator
+                                </Badge>
+                              )}
                               {positionLabel && (
                                 <Badge variant="secondary" className="text-xs">
                                   {positionLabel}
                                 </Badge>
                               )}
-                              <Badge variant="outline" className="text-xs bg-transparent">
-                                {roleLabel}
-                              </Badge>
+                              {showRoleBadge && (
+                                <Badge variant="outline" className="text-xs bg-transparent">
+                                  {roleLabel}
+                                </Badge>
+                              )}
                             </div>
                             <p className="text-xs text-muted-foreground truncate">
                               本名: {member.realName ?? "未設定"}

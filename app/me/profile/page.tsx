@@ -48,6 +48,7 @@ type BandItem = {
 };
 
 const positionLabels: Record<string, string> = {
+  Official: "Official",
   President: "部長",
   "Vice President": "副部長",
   Treasurer: "会計",
@@ -57,12 +58,13 @@ const positionLabels: Record<string, string> = {
 };
 
 const positionPriority: Record<string, number> = {
-  President: 0,
-  "Vice President": 1,
-  Treasurer: 2,
-  "PA Chief": 3,
-  "Lighting Chief": 3,
-  "Web Secretary": 4,
+  Official: 0,
+  President: 1,
+  "Vice President": 2,
+  Treasurer: 3,
+  "PA Chief": 4,
+  "Lighting Chief": 4,
+  "Web Secretary": 5,
 };
 
 export default function ProfilePage() {
@@ -194,15 +196,35 @@ export default function ProfilePage() {
 
   const partLabel = profile?.part && profile.part !== "none" ? profile.part : "未設定";
   const crewLabel = profile?.crew ?? "User";
-  const leaderLabel = leaderRoles.length > 0 ? leaderRoles.join(" / ") : null;
-  const positionLabel =
+  const isOfficialRole = positions.includes("Official");
+  const hasPositionBadge = positions.some((value) => value !== "Official");
+  const leaderLabel = leaderRoles
+    .filter((role) => {
+      if (role === "Administrator") return false;
+      if (!hasPositionBadge) return true;
+      return role !== "Supervisor" && role !== "PA Leader" && role !== "Lighting Leader";
+    })
+    .join(" / ");
+  const positionBadgeLabel =
+    positions.length > 0
+      ? [...positions]
+          .filter((value) => value !== "Official")
+          .sort((a, b) => (positionPriority[a] ?? 99) - (positionPriority[b] ?? 99))
+          .map((value) => positionLabels[value] ?? value)
+          .join(" / ")
+      : null;
+  const positionDetailLabel =
     positions.length > 0
       ? [...positions]
           .sort((a, b) => (positionPriority[a] ?? 99) - (positionPriority[b] ?? 99))
           .map((value) => positionLabels[value] ?? value)
           .join(" / ")
       : null;
-  const roleBadge = leaderLabel ?? crewLabel;
+  const roleBadge = leaderLabel || crewLabel;
+  const isAdministratorRole = leaderRoles.includes("Administrator");
+  const showAdminBadge = isAdministratorRole && !isOfficialRole;
+  const showRoleBadge =
+    roleBadge !== "User" || (!isAdministratorRole && !isOfficialRole);
   const realNameLabel = profile?.real_name?.trim() || "未設定";
   const studentIdLabel = studentId?.trim() || "未設定";
   const joinDate = profile?.created_at ? profile.created_at.split("T")[0] : "-";
@@ -255,10 +277,28 @@ export default function ProfilePage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2 md:gap-3 mb-2">
                       <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold">{displayName}</h1>
-                      {positionLabel && <Badge variant="secondary">{positionLabel}</Badge>}
-                      <Badge variant="outline" className="bg-transparent">
-                        {roleBadge}
-                      </Badge>
+                      {isOfficialRole && (
+                        <Badge
+                          variant="outline"
+                          className="border-primary/40 bg-primary/15 text-primary shadow-sm"
+                        >
+                          Official
+                        </Badge>
+                      )}
+                      {showAdminBadge && (
+                        <Badge
+                          variant="outline"
+                          className="border-[#aee6ff]/40 bg-[#aee6ff]/10 text-[#aee6ff]"
+                        >
+                          Administrator
+                        </Badge>
+                      )}
+                      {positionBadgeLabel && <Badge variant="secondary">{positionBadgeLabel}</Badge>}
+                      {showRoleBadge && (
+                        <Badge variant="outline" className="bg-transparent">
+                          {roleBadge}
+                        </Badge>
+                      )}
                     </div>
                     <div className="flex flex-wrap items-center gap-3 md:gap-4 text-muted-foreground text-sm md:text-base">
                       <div className="flex items-center gap-2">
@@ -381,7 +421,7 @@ export default function ProfilePage() {
                       <div>
                         <p className="text-xs text-muted-foreground">役職</p>
                         <p className="font-medium text-sm md:text-base">
-                          {positionLabel ?? "未設定"}
+                          {positionDetailLabel ?? "未設定"}
                         </p>
                       </div>
                     </div>

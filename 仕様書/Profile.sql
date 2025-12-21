@@ -184,6 +184,7 @@ do $$
 begin
   if not exists (select 1 from pg_type where typname = 'position_role') then
     create type position_role as enum (
+      'Official',
       'President',
       'Vice President',
       'Treasurer',
@@ -191,6 +192,13 @@ begin
       'Lighting Chief',
       'Web Secretary'
     );
+  end if;
+end $$;
+
+do $$
+begin
+  if exists (select 1 from pg_type where typname = 'position_role') then
+    execute 'alter type position_role add value if not exists ''Official''';
   end if;
 end $$;
 

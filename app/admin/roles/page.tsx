@@ -48,6 +48,7 @@ const leaderOptions = ["Administrator", "Supervisor", "PA Leader", "Lighting Lea
 const leaderPriority = ["Administrator", "Supervisor", "PA Leader", "Lighting Leader", "Part Leader"];
 
 const positionOptions = [
+  { value: "Official", label: "Official" },
   { value: "President", label: "部長" },
   { value: "Vice President", label: "副部長" },
   { value: "Treasurer", label: "会計" },
@@ -55,7 +56,13 @@ const positionOptions = [
   { value: "Lighting Chief", label: "照明長" },
   { value: "Web Secretary", label: "Web幹事" },
 ];
-const uniquePositions = ["President", "Vice President", "Treasurer", "Web Secretary"] as const;
+const uniquePositions = [
+  "Official",
+  "President",
+  "Vice President",
+  "Treasurer",
+  "Web Secretary",
+] as const;
 type UniquePosition = (typeof uniquePositions)[number];
 
 const crewOptions = ["User", "PA", "Lighting"];
@@ -106,6 +113,7 @@ export default function AdminRolesPage() {
   const [positions, setPositions] = useState<string[]>([]);
   const [positionsLoading, setPositionsLoading] = useState(false);
   const [positionHolders, setPositionHolders] = useState<Record<UniquePosition, string | null>>({
+    Official: null,
     President: null,
     "Vice President": null,
     Treasurer: null,
@@ -190,10 +198,6 @@ export default function AdminRolesPage() {
     }
     return required;
   }, [roleFlags]);
-  const visiblePositionOptions = useMemo(
-    () => positionOptions.filter((option) => allowedPositions.has(option.value)),
-    [allowedPositions]
-  );
 
   useEffect(() => {
     if (!selectedProfile) {
@@ -347,6 +351,7 @@ export default function AdminRolesPage() {
       if (error) {
         console.error(error);
         setPositionHolders({
+          Official: null,
           President: null,
           "Vice President": null,
           Treasurer: null,
@@ -354,6 +359,7 @@ export default function AdminRolesPage() {
         });
       } else {
         const next: Record<UniquePosition, string | null> = {
+          Official: null,
           President: null,
           "Vice President": null,
           Treasurer: null,
@@ -889,7 +895,13 @@ export default function AdminRolesPage() {
                             </div>
                             <div className="flex items-center gap-2 text-xs text-muted-foreground">
                               <BadgeCheck className="w-4 h-4 text-primary" />
-                              <span>{p.leader}</span>
+                              <span
+                                className={
+                                  p.leader === "Administrator" ? "text-[#aee6ff]" : undefined
+                                }
+                              >
+                                {p.leader}
+                              </span>
                             </div>
                           </button>
                         ))
@@ -988,33 +1000,36 @@ export default function AdminRolesPage() {
                               <span className="text-xs text-muted-foreground">読み込み中...</span>
                             )}
                           </div>
-                          {visiblePositionOptions.length === 0 ? (
-                            <p className="text-xs text-muted-foreground">
-                              Supervisor / PA Leader / Lighting Leader を選択すると役職を設定できます。
-                            </p>
-                          ) : (
-                            <div className="grid sm:grid-cols-2 gap-2">
-                              {visiblePositionOptions.map((option) => {
-                                const isAuto = autoPositions.has(option.value);
-                                const checked = isAuto || positions.includes(option.value);
-                                return (
-                                  <label key={option.value} className="flex items-center gap-2 text-sm">
-                                    <input
-                                      type={isAuto ? "radio" : "checkbox"}
-                                      className="h-4 w-4 accent-primary"
-                                      checked={checked}
-                                      onChange={() => togglePosition(option.value)}
-                                      disabled={positionsLoading || isAuto}
-                                    />
-                                    <span className={isAuto ? "text-muted-foreground" : undefined}>
-                                      {option.label}
-                                      {isAuto ? "（自動）" : ""}
-                                    </span>
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          )}
+                          <div className="grid sm:grid-cols-2 gap-2">
+                            {positionOptions.map((option) => {
+                              const isAuto = autoPositions.has(option.value);
+                              const isAllowed = allowedPositions.has(option.value);
+                              const checked = isAuto || positions.includes(option.value);
+                              const disabled = positionsLoading || isAuto || !isAllowed;
+                              return (
+                                <label key={option.value} className="flex items-center gap-2 text-sm">
+                                  <input
+                                    type={isAuto ? "radio" : "checkbox"}
+                                    className="h-4 w-4 accent-primary"
+                                    checked={checked}
+                                    onChange={() => togglePosition(option.value)}
+                                    disabled={disabled}
+                                  />
+                                  <span
+                                    className={
+                                      disabled ? "text-muted-foreground" : undefined
+                                    }
+                                  >
+                                    {option.label}
+                                    {isAuto ? "（自動）" : ""}
+                                  </span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            権限が無い役職や、他ユーザーが設定済みの役職は選択できません。
+                          </p>
                         </div>
 
                         <label className="space-y-1 block text-sm">

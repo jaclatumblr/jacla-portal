@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils";
 type ProfileRow = {
   id: string;
   display_name: string | null;
+  real_name: string | null;
   email: string | null;
   leader: string;
   crew: string;
@@ -91,6 +92,8 @@ export default function AdminRolesPage() {
   const [primaryPart, setPrimaryPart] = useState("");
   const [subParts, setSubParts] = useState<string[]>([]);
   const [partsLoading, setPartsLoading] = useState(false);
+  const [studentId, setStudentId] = useState<string | null>(null);
+  const [studentIdLoading, setStudentIdLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -113,7 +116,7 @@ export default function AdminRolesPage() {
     if (!q) return profiles;
     return profiles.filter((p) => {
       const emailText = viewerIsAdministrator ? p.email ?? "" : "";
-      const text = `${p.display_name ?? ""} ${emailText}`.toLowerCase();
+      const text = `${p.display_name ?? ""} ${p.real_name ?? ""} ${emailText}`.toLowerCase();
       return text.includes(q);
     });
   }, [profiles, search, viewerIsAdministrator]);
@@ -133,6 +136,8 @@ export default function AdminRolesPage() {
       setLeadersLoading(false);
       setPrimaryPart("");
       setSubParts([]);
+      setStudentId(null);
+      setStudentIdLoading(false);
       return;
     }
     setForm({
@@ -141,6 +146,31 @@ export default function AdminRolesPage() {
     });
     setPrimaryPart(selectedProfile.part && selectedProfile.part !== "none" ? selectedProfile.part : "");
   }, [selectedProfile]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    let cancelled = false;
+    (async () => {
+      setStudentIdLoading(true);
+      const { data, error } = await supabase
+        .from("profile_private")
+        .select("student_id")
+        .eq("profile_id", selectedId)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error) {
+        console.error(error);
+        setStudentId(null);
+      } else {
+        setStudentId((data as { student_id?: string } | null)?.student_id ?? null);
+      }
+      setStudentIdLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -225,7 +255,7 @@ export default function AdminRolesPage() {
       setError(null);
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, display_name, email, leader, crew, part, muted, avatar_url")
+        .select("id, display_name, real_name, email, leader, crew, part, muted, avatar_url")
         .order("display_name", { ascending: true });
       if (cancelled) return;
       if (error) {
@@ -568,6 +598,9 @@ export default function AdminRolesPage() {
                                 <p className="font-medium text-sm text-foreground truncate">
                                   {p.display_name ?? "名前未登録"}
                                 </p>
+                                <p className="text-xs text-muted-foreground truncate">
+                                  本名: {p.real_name ?? "未設定"}
+                                </p>
                                 {viewerIsAdministrator && (
                                   <p className="text-xs text-muted-foreground truncate">
                                     {p.email ?? "メール未登録"}
@@ -619,11 +652,18 @@ export default function AdminRolesPage() {
                             <p className="text-sm font-semibold text-foreground truncate">
                               {selectedProfile.display_name ?? "名前未登録"}
                             </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              本名: {selectedProfile.real_name ?? "未設定"}
+                            </p>
                             {viewerIsAdministrator && (
                               <p className="text-xs text-muted-foreground truncate">
                                 {selectedProfile.email ?? "メール未登録"}
                               </p>
                             )}
+                            <p className="text-xs text-muted-foreground truncate">
+                              学籍番号:{" "}
+                              {studentIdLoading ? "読み込み中..." : studentId ?? "未登録"}
+                            </p>
                             {selectedProfile.id === userId && (
                               <p className="text-xs text-primary">※自分自身の権限を編集中</p>
                             )}

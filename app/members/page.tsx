@@ -11,11 +11,14 @@ import { AuthGuard } from "@/lib/AuthGuard";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsAdministrator } from "@/lib/useIsAdministrator";
+import { useCanViewStudentId } from "@/lib/useCanViewStudentId";
 
 type Member = {
   id: string;
   name: string;
+  realName: string | null;
   email: string | null;
+  studentId: string | null;
   discord: string | null;
   part: string | null;
   crew: string | null;
@@ -27,6 +30,7 @@ type Member = {
 type ProfileRow = {
   id: string;
   display_name: string | null;
+  real_name: string | null;
   email?: string | null;
   part: string | null;
   crew: string | null;
@@ -34,6 +38,11 @@ type ProfileRow = {
   discord: string | null;
   discord_username: string | null;
   avatar_url?: string | null;
+};
+
+type ProfilePrivateRow = {
+  profile_id: string;
+  student_id: string;
 };
 
 type BandMemberRow = {
@@ -49,12 +58,13 @@ type LeaderRow = {
 export default function MembersPage() {
   const { session, loading: authLoading } = useAuth();
   const { isAdministrator, loading: adminLoading } = useIsAdministrator();
+  const { canViewStudentId, loading: studentAccessLoading } = useCanViewStudentId();
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (authLoading || adminLoading || !session) return;
+    if (authLoading || adminLoading || studentAccessLoading || !session) return;
     let cancelled = false;
     (async () => {
       setLoading(true);
@@ -64,12 +74,12 @@ export default function MembersPage() {
         ? supabase
             .from("profiles")
             .select(
-              "id, display_name, email, part, crew, leader, discord, discord_username, avatar_url"
+              "id, display_name, real_name, email, part, crew, leader, discord, discord_username, avatar_url"
             )
             .order("display_name", { ascending: true })
         : supabase
             .from("profiles")
-            .select("id, display_name, part, crew, leader, discord, discord_username, avatar_url")
+            .select("id, display_name, real_name, part, crew, leader, discord, discord_username, avatar_url")
             .order("display_name", { ascending: true });
 
       const [profilesRes, bandsRes, leadersRes] = await Promise.all([
@@ -120,6 +130,23 @@ export default function MembersPage() {
         });
       }
 
+      const studentMap = new Map<string, string>();
+      if (canViewStudentId) {
+        const { data: privateData, error: privateError } = await supabase
+          .from("profile_private")
+          .select("profile_id, student_id");
+        if (privateError) {
+          console.error(privateError);
+          setError((prev) => prev ?? "学籍番号の取得に失敗しました。");
+        } else {
+          (privateData ?? []).forEach((row) => {
+            const entry = row as ProfilePrivateRow;
+            if (!entry.profile_id) return;
+            studentMap.set(entry.profile_id, entry.student_id);
+          });
+        }
+      }
+
       const list = (profilesRes.data ?? []).map((row) => {
         const profile = row as ProfileRow;
         const leaderFallback =
@@ -128,7 +155,9 @@ export default function MembersPage() {
         return {
           id: profile.id,
           name: profile.display_name ?? "名前未登録",
+          realName: profile.real_name ?? null,
           email: isAdministrator ? profile.email ?? null : null,
+          studentId: canViewStudentId ? studentMap.get(profile.id) ?? null : null,
           part: profile.part && profile.part !== "none" ? profile.part : null,
           crew: profile.crew ?? null,
           leaderRoles,
@@ -145,7 +174,7 @@ export default function MembersPage() {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, adminLoading, isAdministrator, session]);
+  }, [authLoading, adminLoading, studentAccessLoading, isAdministrator, canViewStudentId, session]);
 
   return (
     <AuthGuard>
@@ -236,6 +265,14 @@ export default function MembersPage() {
                                 {roleLabel}
                               </Badge>
                             </div>
+                            <p className="text-xs text-muted-foreground truncate">
+                              本名: {member.realName ?? "未設定"}
+                            </p>
+                            {canViewStudentId && (
+                              <p className="text-xs text-muted-foreground truncate">
+                                学籍番号: {member.studentId ?? "未登録"}
+                              </p>
+                            )}
                             {isAdministrator && (
                               <p className="text-xs text-muted-foreground truncate">
                                 {member.email ?? "メール未登録"}

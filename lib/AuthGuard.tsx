@@ -26,14 +26,15 @@ export function AuthGuard({ children }: { children: ReactNode }) {
     (async () => {
       const { data: profileData, error: profileError } = await supabase
         .from("profiles")
-        .select("display_name, part, leader")
+        .select("display_name, real_name, part, leader")
         .eq("id", session.user.id)
         .maybeSingle();
 
-      const { data: leadersData, error: leadersError } = await supabase
-        .from("profile_leaders")
-        .select("leader")
-        .eq("profile_id", session.user.id);
+      const [{ data: leadersData, error: leadersError }, { data: privateData, error: privateError }] =
+        await Promise.all([
+          supabase.from("profile_leaders").select("leader").eq("profile_id", session.user.id),
+          supabase.from("profile_private").select("student_id").eq("profile_id", session.user.id).maybeSingle(),
+        ]);
 
       if (cancelled) return;
       const leaders = (leadersData ?? [])
@@ -43,11 +44,16 @@ export function AuthGuard({ children }: { children: ReactNode }) {
         leaders.includes("Administrator") ||
         (!leadersError && leaders.length === 0 && profileData?.leader === "Administrator") ||
         (leadersError && profileData?.leader === "Administrator");
+      const studentIdValue =
+        !privateError && privateData ? (privateData as { student_id?: string }).student_id ?? "" : "";
       const needsOnboarding =
         !!profileError ||
         !profileData ||
         !profileData.display_name ||
         profileData.display_name.trim().length === 0 ||
+        !profileData.real_name ||
+        profileData.real_name.trim().length === 0 ||
+        studentIdValue.trim().length === 0 ||
         (!isAdmin && (!profileData.part || profileData.part === "none"));
 
       if (needsOnboarding) {

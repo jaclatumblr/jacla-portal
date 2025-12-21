@@ -45,6 +45,7 @@ const partOptions = [
 
 type ProfileRow = {
   display_name: string | null;
+  real_name: string | null;
   crew: string | null;
   part: string | null;
   leader: string | null;
@@ -54,6 +55,10 @@ type ProfileRow = {
 type ProfilePartRow = {
   part: string;
   is_primary: boolean;
+};
+
+type ProfilePrivateRow = {
+  student_id: string | null;
 };
 
 export default function OnboardingClient() {
@@ -68,6 +73,8 @@ export default function OnboardingClient() {
   const [done, setDone] = useState(false);
 
   const [displayName, setDisplayName] = useState("");
+  const [realName, setRealName] = useState("");
+  const [studentId, setStudentId] = useState("");
   const [discordUsername, setDiscordUsername] = useState("");
   const [crew, setCrew] = useState("User");
   const [part, setPart] = useState("");
@@ -93,7 +100,7 @@ export default function OnboardingClient() {
 
       const { data, error } = await supabase
         .from("profiles")
-        .select("display_name, crew, part, leader, discord_username")
+        .select("display_name, real_name, crew, part, leader, discord_username")
         .eq("id", session.user.id)
         .maybeSingle();
 
@@ -113,7 +120,7 @@ export default function OnboardingClient() {
             display_name: session.user.user_metadata.full_name ?? session.user.email ?? "",
             avatar_url: avatarCandidate,
           })
-          .select("display_name, crew, part, leader, discord_username")
+          .select("display_name, real_name, crew, part, leader, discord_username")
           .maybeSingle();
 
         if (insertError) {
@@ -125,7 +132,7 @@ export default function OnboardingClient() {
         profile = inserted as ProfileRow;
       }
 
-      const [partsRes, leadersRes] = await Promise.all([
+      const [partsRes, leadersRes, privateRes] = await Promise.all([
         supabase
           .from("profile_parts")
           .select("part, is_primary")
@@ -134,6 +141,11 @@ export default function OnboardingClient() {
           .from("profile_leaders")
           .select("leader")
           .eq("profile_id", session.user.id),
+        supabase
+          .from("profile_private")
+          .select("student_id")
+          .eq("profile_id", session.user.id)
+          .maybeSingle(),
       ]);
 
       if (partsRes.error) {
@@ -141,6 +153,9 @@ export default function OnboardingClient() {
       }
       if (leadersRes.error) {
         console.error(leadersRes.error);
+      }
+      if (privateRes.error) {
+        console.error(privateRes.error);
       }
 
       const parts = (partsRes.data ?? []) as ProfilePartRow[];
@@ -166,6 +181,10 @@ export default function OnboardingClient() {
       const allowedCrew = crewOptions;
 
       setDisplayName(profile.display_name ?? "");
+      setRealName(profile.real_name ?? "");
+      setStudentId(
+        privateRes.data ? ((privateRes.data as ProfilePrivateRow).student_id ?? "") : ""
+      );
       setDiscordUsername(profile.discord_username ?? "");
       setCrew(currentCrew);
       setPart(primaryPart ?? "");
@@ -194,6 +213,14 @@ export default function OnboardingClient() {
       setError("表示名を入力してください。");
       return;
     }
+    if (!realName.trim()) {
+      setError("本名を入力してください。");
+      return;
+    }
+    if (!studentId.trim()) {
+      setError("学籍番号を入力してください。");
+      return;
+    }
     if (!isAdminLeader && !part) {
       setError("メイン楽器を選択してください。");
       return;
@@ -207,12 +234,14 @@ export default function OnboardingClient() {
       session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture || null;
     const updates: {
       display_name: string;
+      real_name: string;
       discord_username: string | null;
       part: string;
       crew?: string;
       avatar_url?: string | null;
     } = {
       display_name: displayName.trim(),
+      real_name: realName.trim(),
       discord_username: discordUsername.trim() || null,
       part: partValue,
     };
@@ -228,6 +257,23 @@ export default function OnboardingClient() {
     if (profileRes.error) {
       console.error(profileRes.error);
       setError("保存に失敗しました。時間をおいて再度お試しください。");
+      setSaving(false);
+      return;
+    }
+
+    const privateRes = await supabase
+      .from("profile_private")
+      .upsert(
+        {
+          profile_id: session.user.id,
+          student_id: studentId.trim(),
+        },
+        { onConflict: "profile_id" }
+      );
+
+    if (privateRes.error) {
+      console.error(privateRes.error);
+      setError("学籍番号の保存に失敗しました。");
       setSaving(false);
       return;
     }
@@ -333,7 +379,9 @@ export default function OnboardingClient() {
               <Card className="bg-card/60 border-border max-w-3xl">
                 <CardHeader>
                   <CardTitle className="text-xl">基本情報</CardTitle>
-                  <CardDescription>必須: 表示名/メイン楽器。サブ楽器も選択できます。</CardDescription>
+                  <CardDescription>
+                    必須: 表示名/本名/学籍番号/メイン楽器。サブ楽器も選択できます。
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   {loading ? (
@@ -350,6 +398,26 @@ export default function OnboardingClient() {
                           value={displayName}
                           onChange={(e) => setDisplayName(e.target.value)}
                           placeholder="例: 山田 太郎"
+                        />
+                      </label>
+
+                      <label className="space-y-1 block text-sm">
+                        <span className="text-foreground">本名</span>
+                        <Input
+                          required
+                          value={realName}
+                          onChange={(e) => setRealName(e.target.value)}
+                          placeholder="例: 山田 太郎"
+                        />
+                      </label>
+
+                      <label className="space-y-1 block text-sm">
+                        <span className="text-foreground">学籍番号</span>
+                        <Input
+                          required
+                          value={studentId}
+                          onChange={(e) => setStudentId(e.target.value)}
+                          placeholder="例: 24A1234"
                         />
                       </label>
 

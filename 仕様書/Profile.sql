@@ -188,7 +188,34 @@ alter table public.profiles
   add column if not exists crew   crew_role   not null default 'User',
   add column if not exists part   part_role   not null default 'none',
   add column if not exists muted  boolean     not null default false,
-  add column if not exists avatar_url text;
+  add column if not exists avatar_url text,
+  add column if not exists real_name text;
+
+
+-- =========================================================
+-- 2-1. profile_private テーブル（学籍番号を分離）
+-- =========================================================
+create table if not exists public.profile_private (
+  profile_id uuid primary key references public.profiles(id) on delete cascade,
+  student_id text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create or replace function public.profile_private_set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_profile_private_set_updated_at on public.profile_private;
+create trigger trg_profile_private_set_updated_at
+before update on public.profile_private
+for each row execute function public.profile_private_set_updated_at();
 
 
 -- =========================================================
@@ -344,6 +371,38 @@ for update
 to authenticated
 using ( public.is_lighting_leader(auth.uid()) )
 with check ( public.is_lighting_leader(auth.uid()) );
+
+
+-- 5-7) 学籍番号（profile_private）
+alter table public.profile_private enable row level security;
+
+drop policy if exists "profile_private_select_self_or_privileged" on public.profile_private;
+drop policy if exists "profile_private_insert_self" on public.profile_private;
+drop policy if exists "profile_private_update_self" on public.profile_private;
+
+create policy "profile_private_select_self_or_privileged"
+on public.profile_private
+for select
+to authenticated
+using (
+  profile_id = auth.uid()
+  or public.is_admin_or_supervisor(auth.uid())
+  or public.is_pa_leader(auth.uid())
+  or public.is_lighting_leader(auth.uid())
+);
+
+create policy "profile_private_insert_self"
+on public.profile_private
+for insert
+to authenticated
+with check (profile_id = auth.uid());
+
+create policy "profile_private_update_self"
+on public.profile_private
+for update
+to authenticated
+using (profile_id = auth.uid())
+with check (profile_id = auth.uid());
 
 
 -- =========================================================

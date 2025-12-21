@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Calendar, Edit, MessageCircle, Music, RefreshCw, Users } from "lucide-react";
+import { Calendar, Edit, IdCard, MessageCircle, Music, RefreshCw, User, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -15,6 +15,7 @@ import { supabase } from "@/lib/supabaseClient";
 
 type ProfileData = {
   display_name?: string | null;
+  real_name?: string | null;
   email?: string | null;
   part?: string | null;
   crew?: string | null;
@@ -41,6 +42,7 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [leaderRoles, setLeaderRoles] = useState<string[]>([]);
   const [bands, setBands] = useState<BandItem[]>([]);
+  const [studentId, setStudentId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,7 +53,7 @@ export default function ProfilePage() {
       setLoading(true);
       setError(null);
 
-      const [profileRes, bandRes, leadersRes] = await Promise.all([
+      const [profileRes, bandRes, leadersRes, privateRes] = await Promise.all([
         supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle(),
         supabase
           .from("band_members")
@@ -61,6 +63,11 @@ export default function ProfilePage() {
           .from("profile_leaders")
           .select("leader")
           .eq("profile_id", session.user.id),
+        supabase
+          .from("profile_private")
+          .select("student_id")
+          .eq("profile_id", session.user.id)
+          .maybeSingle(),
       ]);
 
       if (cancelled) return;
@@ -91,6 +98,13 @@ export default function ProfilePage() {
         } else {
           setLeaderRoles(roles);
         }
+      }
+
+      if (privateRes.error) {
+        console.error(privateRes.error);
+      } else {
+        const value = (privateRes.data as { student_id?: string } | null)?.student_id ?? null;
+        setStudentId(value);
       }
 
       if (bandRes.error) {
@@ -139,6 +153,8 @@ export default function ProfilePage() {
   const crewLabel = profile?.crew ?? "User";
   const leaderLabel = leaderRoles.length > 0 ? leaderRoles.join(" / ") : null;
   const roleBadge = leaderLabel ?? crewLabel;
+  const realNameLabel = profile?.real_name?.trim() || "未設定";
+  const studentIdLabel = studentId?.trim() || "未設定";
   const joinDate = profile?.created_at ? profile.created_at.split("T")[0] : "-";
   const discordValue =
     profile?.discord_username ||
@@ -249,6 +265,30 @@ export default function ProfilePage() {
                             discordLabel
                           )}
                         </p>
+                      </div>
+                    </div>
+
+                    <Separator className="bg-border" />
+
+                    <div className="flex items-center gap-3 md:gap-4">
+                      <div className="w-10 h-10 rounded-lg bg-secondary/10 flex items-center justify-center shrink-0">
+                        <User className="w-5 h-5 text-secondary" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs text-muted-foreground">本名</p>
+                        <p className="font-medium text-sm md:text-base truncate">{realNameLabel}</p>
+                      </div>
+                    </div>
+
+                    <Separator className="bg-border" />
+
+                    <div className="flex items-center gap-3 md:gap-4">
+                      <div className="w-10 h-10 rounded-lg bg-secondary/10 flex items-center justify-center shrink-0">
+                        <IdCard className="w-5 h-5 text-secondary" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs text-muted-foreground">学籍番号</p>
+                        <p className="font-medium text-sm md:text-base truncate">{studentIdLabel}</p>
                       </div>
                     </div>
 

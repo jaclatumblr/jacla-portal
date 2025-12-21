@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CheckCircle2, Loader2, PencilLine } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, PencilLine } from "lucide-react";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { useAuth } from "@/contexts/AuthContext";
@@ -71,6 +71,8 @@ export default function OnboardingClient() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const [displayName, setDisplayName] = useState("");
   const [realName, setRealName] = useState("");
@@ -353,6 +355,41 @@ export default function OnboardingClient() {
     router.replace(next);
   };
 
+  const handleDeleteAccount = async () => {
+    if (!session) return;
+    const confirmed = window.confirm("アカウントを削除します。よろしいですか？");
+    if (!confirmed) return;
+    const confirmedTwice = window.confirm("この操作は取り消せません。本当に削除しますか？");
+    if (!confirmedTwice) return;
+
+    setDeleting(true);
+    setDeleteError(null);
+
+    try {
+      const res = await fetch("/api/account/delete", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setDeleteError(data?.error ?? "アカウントの削除に失敗しました。");
+        setDeleting(false);
+        return;
+      }
+
+      await supabase.auth.signOut();
+      router.replace("/login");
+    } catch (err) {
+      console.error(err);
+      setDeleteError("アカウントの削除に失敗しました。");
+      setDeleting(false);
+    }
+  };
+
   return (
     <AuthGuard>
       <div className="flex min-h-screen bg-background">
@@ -514,6 +551,32 @@ export default function OnboardingClient() {
                       </Button>
                     </form>
                   )}
+                </CardContent>
+              </Card>
+
+              <Card className="bg-card/60 border-destructive/40 max-w-3xl mt-8">
+                <CardHeader>
+                  <CardTitle className="text-xl text-destructive">アカウント削除</CardTitle>
+                  <CardDescription>
+                    この操作は取り消せません。削除するとログインできなくなります。
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {deleteError && (
+                    <p className="text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-lg p-3">
+                      {deleteError}
+                    </p>
+                  )}
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={handleDeleteAccount}
+                    disabled={deleting}
+                    className="gap-2"
+                  >
+                    {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />}
+                    アカウントを削除
+                  </Button>
                 </CardContent>
               </Card>
             </div>

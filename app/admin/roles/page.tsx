@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   AlertCircle,
+  AlertTriangle,
   ArrowLeft,
   BadgeCheck,
   CheckCircle2,
@@ -82,6 +84,7 @@ export default function AdminRolesPage() {
   const { isAdministrator: viewerIsAdministrator } = useIsAdministrator();
   const { session } = useAuth();
   const userId = session?.user.id;
+  const router = useRouter();
 
   const [profiles, setProfiles] = useState<ProfileRow[]>([]);
   const [search, setSearch] = useState("");
@@ -96,6 +99,7 @@ export default function AdminRolesPage() {
   const [studentIdLoading, setStudentIdLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ id: number; message: string } | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
@@ -465,6 +469,56 @@ export default function AdminRolesPage() {
     setSaving(false);
   };
 
+  const handleDeleteAccount = async () => {
+    if (!selectedId || !selectedProfile || !session?.access_token) return;
+    const isSelf = selectedId === userId;
+    const displayName = selectedProfile.display_name ?? "このユーザー";
+    const confirmed = window.confirm(
+      isSelf
+        ? "アカウントを削除します。よろしいですか？"
+        : `${displayName} のアカウントを削除します。よろしいですか？`
+    );
+    if (!confirmed) return;
+    if (!isSelf) {
+      const confirmedTwice = window.confirm("この操作は取り消せません。本当に削除しますか？");
+      if (!confirmedTwice) return;
+    }
+
+    setDeleting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/account/delete", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ targetUserId: selectedId }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setError(data?.error ?? "アカウントの削除に失敗しました。");
+        setDeleting(false);
+        return;
+      }
+
+      if (isSelf) {
+        await supabase.auth.signOut();
+        router.replace("/login");
+        return;
+      }
+
+      setProfiles((prev) => prev.filter((p) => p.id !== selectedId));
+      setSelectedId(null);
+      setToast({ id: Date.now(), message: "アカウントを削除しました。" });
+      setDeleting(false);
+    } catch (err) {
+      console.error(err);
+      setError("アカウントの削除に失敗しました。");
+      setDeleting(false);
+    }
+  };
+
   if (adminLoading) {
     return (
       <AuthGuard>
@@ -784,6 +838,20 @@ export default function AdminRolesPage() {
                               <SwitchCamera className="w-4 h-4" />
                             )}
                             保存する
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            onClick={handleDeleteAccount}
+                            disabled={deleting || saving || leadersLoading}
+                            className="gap-2"
+                          >
+                            {deleting ? (
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <AlertTriangle className="w-4 h-4" />
+                            )}
+                            アカウント削除
                           </Button>
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             <CheckCircle2 className="w-4 h-4 text-primary" />

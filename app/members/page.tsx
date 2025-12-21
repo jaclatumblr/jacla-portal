@@ -23,6 +23,7 @@ type Member = {
   part: string | null;
   crew: string | null;
   leaderRoles: string[];
+  positions: string[];
   bands: string[];
   avatarUrl: string | null;
 };
@@ -55,6 +56,29 @@ type LeaderRow = {
   leader: string;
 };
 
+type PositionRow = {
+  profile_id: string;
+  position: string;
+};
+
+const positionLabels: Record<string, string> = {
+  President: "部長",
+  "Vice President": "副部長",
+  Treasurer: "会計",
+  "PA Chief": "PA長",
+  "Lighting Chief": "照明長",
+  "Web Secretary": "Web幹事",
+};
+
+const positionPriority: Record<string, number> = {
+  President: 0,
+  "Vice President": 1,
+  Treasurer: 2,
+  "PA Chief": 3,
+  "Lighting Chief": 3,
+  "Web Secretary": 4,
+};
+
 export default function MembersPage() {
   const { session, loading: authLoading } = useAuth();
   const { isAdministrator, loading: adminLoading } = useIsAdministrator();
@@ -82,10 +106,11 @@ export default function MembersPage() {
             .select("id, display_name, real_name, part, crew, leader, discord, discord_username, avatar_url")
             .order("display_name", { ascending: true });
 
-      const [profilesRes, bandsRes, leadersRes] = await Promise.all([
+      const [profilesRes, bandsRes, leadersRes, positionsRes] = await Promise.all([
         profilesPromise,
         supabase.from("band_members").select("user_id, bands(id, name)"),
         supabase.from("profile_leaders").select("profile_id, leader"),
+        supabase.from("profile_positions").select("profile_id, position"),
       ]);
 
       if (cancelled) return;
@@ -130,6 +155,20 @@ export default function MembersPage() {
         });
       }
 
+      const positionMap = new Map<string, Set<string>>();
+      if (positionsRes.error) {
+        console.error(positionsRes.error);
+        setError((prev) => prev ?? "役職情報の取得に失敗しました。");
+      } else {
+        (positionsRes.data ?? []).forEach((row) => {
+          const positionRow = row as PositionRow;
+          if (!positionRow.profile_id || !positionRow.position) return;
+          const current = positionMap.get(positionRow.profile_id) ?? new Set<string>();
+          current.add(positionRow.position);
+          positionMap.set(positionRow.profile_id, current);
+        });
+      }
+
       const studentMap = new Map<string, string>();
       if (canViewStudentId) {
         const { data: privateData, error: privateError } = await supabase
@@ -152,6 +191,7 @@ export default function MembersPage() {
         const leaderFallback =
           profile.leader && profile.leader !== "none" ? [profile.leader] : [];
         const leaderRoles = Array.from(leaderMap.get(profile.id) ?? leaderFallback);
+        const positions = Array.from(positionMap.get(profile.id) ?? []);
         return {
           id: profile.id,
           name: profile.display_name ?? "名前未登録",
@@ -161,13 +201,62 @@ export default function MembersPage() {
           part: profile.part && profile.part !== "none" ? profile.part : null,
           crew: profile.crew ?? null,
           leaderRoles,
+          positions,
           discord: profile.discord_username ?? profile.discord ?? null,
           bands: Array.from(bandMap.get(profile.id) ?? []),
           avatarUrl: profile.avatar_url ?? null,
         } satisfies Member;
       });
 
-      setMembers(list);
+      const leaderPriority: Record<string, number> = {
+        Administrator: 0,
+        Supervisor: 1,
+        "PA Leader": 2,
+        "Lighting Leader": 3,
+        "Part Leader": 4,
+      };
+      const crewPriority: Record<string, number> = {
+        PA: 5,
+        Lighting: 6,
+        User: 7,
+      };
+      const getPositionRank = (member: Member) => {
+        if (member.positions.length === 0) return Number.POSITIVE_INFINITY;
+        let rank = Number.POSITIVE_INFINITY;
+        member.positions.forEach((position) => {
+          const value = positionPriority[position];
+          if (value !== undefined && value < rank) {
+            rank = value;
+          }
+        });
+        return Number.isFinite(rank) ? rank : 99;
+      };
+      const getRoleRank = (member: Member) => {
+        let rank = Number.POSITIVE_INFINITY;
+        member.leaderRoles.forEach((role) => {
+          const value = leaderPriority[role];
+          if (value !== undefined && value < rank) {
+            rank = value;
+          }
+        });
+        if (!Number.isFinite(rank)) {
+          const crewValue = member.crew ? crewPriority[member.crew] : undefined;
+          rank = crewValue ?? 99;
+        }
+        return rank;
+      };
+
+      const sorted = [...list].sort((a, b) => {
+        const positionA = getPositionRank(a);
+        const positionB = getPositionRank(b);
+        if (positionA !== positionB) return positionA - positionB;
+        const roleA = getRoleRank(a);
+        const roleB = getRoleRank(b);
+        if (roleA !== roleB) return roleA - roleB;
+        return a.name.localeCompare(b.name, "ja");
+      });
+
+      setMembers(sorted);
       setLoading(false);
     })();
 
@@ -231,6 +320,16 @@ export default function MembersPage() {
                     const leaderLabel =
                       member.leaderRoles.length > 0 ? member.leaderRoles.join(" / ") : null;
                     const roleLabel = leaderLabel ?? member.crew ?? "User";
+                    const positionLabel =
+                      member.positions.length > 0
+                        ? [...member.positions]
+                            .sort(
+                              (a, b) =>
+                                (positionPriority[a] ?? 99) - (positionPriority[b] ?? 99)
+                            )
+                            .map((value) => positionLabels[value] ?? value)
+                            .join(" / ")
+                        : null;
                     const partLabel = member.part ?? "未設定";
                     const discordLabel = member.discord ?? "未連携";
                     const discordUrl = member.discord
@@ -261,7 +360,12 @@ export default function MembersPage() {
                                 {String(index + 1).padStart(2, "0")}
                               </span>
                               <h3 className="font-bold text-base md:text-lg truncate">{member.name}</h3>
-                              <Badge variant="secondary" className="text-xs">
+                              {positionLabel && (
+                                <Badge variant="secondary" className="text-xs">
+                                  {positionLabel}
+                                </Badge>
+                              )}
+                              <Badge variant="outline" className="text-xs bg-transparent">
                                 {roleLabel}
                               </Badge>
                             </div>

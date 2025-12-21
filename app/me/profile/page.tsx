@@ -3,7 +3,17 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Calendar, Edit, IdCard, MessageCircle, Music, RefreshCw, User, Users } from "lucide-react";
+import {
+  BadgeCheck,
+  Calendar,
+  Edit,
+  IdCard,
+  MessageCircle,
+  Music,
+  RefreshCw,
+  User,
+  Users,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -37,10 +47,29 @@ type BandItem = {
   role: string;
 };
 
+const positionLabels: Record<string, string> = {
+  President: "部長",
+  "Vice President": "副部長",
+  Treasurer: "会計",
+  "PA Chief": "PA長",
+  "Lighting Chief": "照明長",
+  "Web Secretary": "Web幹事",
+};
+
+const positionPriority: Record<string, number> = {
+  President: 0,
+  "Vice President": 1,
+  Treasurer: 2,
+  "PA Chief": 3,
+  "Lighting Chief": 3,
+  "Web Secretary": 4,
+};
+
 export default function ProfilePage() {
   const { session } = useAuth();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [leaderRoles, setLeaderRoles] = useState<string[]>([]);
+  const [positions, setPositions] = useState<string[]>([]);
   const [bands, setBands] = useState<BandItem[]>([]);
   const [studentId, setStudentId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -53,7 +82,7 @@ export default function ProfilePage() {
       setLoading(true);
       setError(null);
 
-      const [profileRes, bandRes, leadersRes, privateRes] = await Promise.all([
+      const [profileRes, bandRes, leadersRes, privateRes, positionsRes] = await Promise.all([
         supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle(),
         supabase
           .from("band_members")
@@ -68,6 +97,10 @@ export default function ProfilePage() {
           .select("student_id")
           .eq("profile_id", session.user.id)
           .maybeSingle(),
+        supabase
+          .from("profile_positions")
+          .select("position")
+          .eq("profile_id", session.user.id),
       ]);
 
       if (cancelled) return;
@@ -98,6 +131,16 @@ export default function ProfilePage() {
         } else {
           setLeaderRoles(roles);
         }
+      }
+
+      if (positionsRes.error) {
+        console.error(positionsRes.error);
+        setPositions([]);
+      } else {
+        const values = (positionsRes.data ?? [])
+          .map((row) => (row as { position?: string }).position)
+          .filter((value) => value) as string[];
+        setPositions(values);
       }
 
       if (privateRes.error) {
@@ -152,6 +195,13 @@ export default function ProfilePage() {
   const partLabel = profile?.part && profile.part !== "none" ? profile.part : "未設定";
   const crewLabel = profile?.crew ?? "User";
   const leaderLabel = leaderRoles.length > 0 ? leaderRoles.join(" / ") : null;
+  const positionLabel =
+    positions.length > 0
+      ? [...positions]
+          .sort((a, b) => (positionPriority[a] ?? 99) - (positionPriority[b] ?? 99))
+          .map((value) => positionLabels[value] ?? value)
+          .join(" / ")
+      : null;
   const roleBadge = leaderLabel ?? crewLabel;
   const realNameLabel = profile?.real_name?.trim() || "未設定";
   const studentIdLabel = studentId?.trim() || "未設定";
@@ -205,7 +255,10 @@ export default function ProfilePage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2 md:gap-3 mb-2">
                       <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold">{displayName}</h1>
-                      <Badge variant="secondary">{roleBadge}</Badge>
+                      {positionLabel && <Badge variant="secondary">{positionLabel}</Badge>}
+                      <Badge variant="outline" className="bg-transparent">
+                        {roleBadge}
+                      </Badge>
                     </div>
                     <div className="flex flex-wrap items-center gap-3 md:gap-4 text-muted-foreground text-sm md:text-base">
                       <div className="flex items-center gap-2">
@@ -322,11 +375,25 @@ export default function ProfilePage() {
                     <Separator className="bg-border" />
 
                     <div className="flex items-center gap-3 md:gap-4">
+                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                        <BadgeCheck className="w-5 h-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">役職</p>
+                        <p className="font-medium text-sm md:text-base">
+                          {positionLabel ?? "未設定"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <Separator className="bg-border" />
+
+                    <div className="flex items-center gap-3 md:gap-4">
                       <div className="w-10 h-10 rounded-lg bg-secondary/20 flex items-center justify-center shrink-0">
                         <Users className="w-5 h-5 text-secondary" />
                       </div>
                       <div>
-                        <p className="text-xs text-muted-foreground">役職</p>
+                        <p className="text-xs text-muted-foreground">権限</p>
                         <p className="font-medium text-sm md:text-base">{leaderLabel ?? "未設定"}</p>
                       </div>
                     </div>

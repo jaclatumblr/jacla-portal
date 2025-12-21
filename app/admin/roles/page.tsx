@@ -47,6 +47,15 @@ type ProfilePartRow = {
 const leaderOptions = ["Administrator", "Supervisor", "PA Leader", "Lighting Leader", "Part Leader"];
 const leaderPriority = ["Administrator", "Supervisor", "PA Leader", "Lighting Leader", "Part Leader"];
 
+const positionOptions = [
+  { value: "President", label: "部長" },
+  { value: "Vice President", label: "副部長" },
+  { value: "Treasurer", label: "会計" },
+  { value: "PA Chief", label: "PA長" },
+  { value: "Lighting Chief", label: "照明長" },
+  { value: "Web Secretary", label: "Web幹事" },
+];
+
 const crewOptions = ["User", "PA", "Lighting"];
 
 const partOptions = [
@@ -92,6 +101,8 @@ export default function AdminRolesPage() {
   const [form, setForm] = useState({ crew: "User", muted: false });
   const [leaderRoles, setLeaderRoles] = useState<string[]>([]);
   const [leadersLoading, setLeadersLoading] = useState(false);
+  const [positions, setPositions] = useState<string[]>([]);
+  const [positionsLoading, setPositionsLoading] = useState(false);
   const [primaryPart, setPrimaryPart] = useState("");
   const [subParts, setSubParts] = useState<string[]>([]);
   const [partsLoading, setPartsLoading] = useState(false);
@@ -132,12 +143,41 @@ export default function AdminRolesPage() {
   const targetIsAdministrator = selectedProfile
     ? leaderRoles.includes("Administrator") || selectedProfile.leader === "Administrator"
     : false;
+  const allowedPositions = useMemo(() => {
+    const roleSet = new Set(leaderRoles);
+    const primaryLeader = selectedProfile?.leader ?? null;
+    const hasRole = (role: string) => roleSet.has(role) || primaryLeader === role;
+    const isAdministrator = hasRole("Administrator");
+    const isSupervisor = hasRole("Supervisor");
+    const isPaLeader = hasRole("PA Leader");
+    const isLightingLeader = hasRole("Lighting Leader");
+    const allowed = new Set<string>();
+    if (isAdministrator || isSupervisor) {
+      allowed.add("President");
+      allowed.add("Vice President");
+      allowed.add("Treasurer");
+      allowed.add("Web Secretary");
+    }
+    if (isPaLeader) {
+      allowed.add("PA Chief");
+    }
+    if (isLightingLeader) {
+      allowed.add("Lighting Chief");
+    }
+    return allowed;
+  }, [leaderRoles, selectedProfile?.leader]);
+  const visiblePositionOptions = useMemo(
+    () => positionOptions.filter((option) => allowedPositions.has(option.value)),
+    [allowedPositions]
+  );
 
   useEffect(() => {
     if (!selectedProfile) {
       setForm({ crew: "User", muted: false });
       setLeaderRoles([]);
       setLeadersLoading(false);
+      setPositions([]);
+      setPositionsLoading(false);
       setPrimaryPart("");
       setSubParts([]);
       setStudentId(null);
@@ -244,6 +284,38 @@ export default function AdminRolesPage() {
   }, [selectedId, selectedProfile?.leader]);
 
   useEffect(() => {
+    if (!selectedId) return;
+    let cancelled = false;
+    (async () => {
+      setPositionsLoading(true);
+      const { data, error } = await supabase
+        .from("profile_positions")
+        .select("position")
+        .eq("profile_id", selectedId);
+      if (cancelled) return;
+      if (error) {
+        console.error(error);
+        setPositions([]);
+      } else {
+        const values = (data ?? [])
+          .map((row) => (row as { position?: string }).position)
+          .filter((value) => value) as string[];
+        setPositions(values);
+      }
+      setPositionsLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (!selectedId || leadersLoading || positionsLoading) return;
+    setPositions((prev) => prev.filter((value) => allowedPositions.has(value)));
+  }, [allowedPositions, leadersLoading, positionsLoading, selectedId]);
+
+  useEffect(() => {
     if (!primaryPart) {
       setSubParts([]);
       return;
@@ -289,10 +361,20 @@ export default function AdminRolesPage() {
     );
   };
 
+  const togglePosition = (value: string) => {
+    setPositions((prev) =>
+      prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value]
+    );
+  };
+
   const handleSave = async () => {
     if (!selectedId || !selectedProfile) return;
     if (leadersLoading) {
       setError("ロール情報の読み込み中です。");
+      return;
+    }
+    if (positionsLoading) {
+      setError("役職情報の読み込み中です。");
       return;
     }
     if (!targetIsAdministrator && !primaryPart) {
@@ -382,6 +464,60 @@ export default function AdminRolesPage() {
       if (deleteError) {
         console.error(deleteError);
         setError("ロールの保存に失敗しました。");
+        setSaving(false);
+        return;
+      }
+    }
+
+    const desiredPositions = Array.from(
+      new Set(
+        positions.filter(
+          (position) => position && position !== "none" && allowedPositions.has(position)
+        )
+      )
+    );
+    const positionsSet = new Set(desiredPositions);
+    const { data: currentPositions, error: positionsError } = await supabase
+      .from("profile_positions")
+      .select("id, position")
+      .eq("profile_id", selectedId);
+    if (positionsError) {
+      console.error(positionsError);
+      setError("役職の保存に失敗しました。");
+      setSaving(false);
+      return;
+    }
+
+    if (desiredPositions.length > 0) {
+      const upsertRes = await supabase
+        .from("profile_positions")
+        .upsert(
+          desiredPositions.map((position) => ({
+            profile_id: selectedId,
+            position,
+          })),
+          { onConflict: "profile_id,position" }
+        );
+      if (upsertRes.error) {
+        console.error(upsertRes.error);
+        setError("役職の保存に失敗しました。");
+        setSaving(false);
+        return;
+      }
+    }
+
+    const positionDeleteIds =
+      (currentPositions ?? [])
+        .filter((row) => !positionsSet.has(row.position))
+        .map((row) => row.id) ?? [];
+    if (positionDeleteIds.length > 0) {
+      const { error: deleteError } = await supabase
+        .from("profile_positions")
+        .delete()
+        .in("id", positionDeleteIds);
+      if (deleteError) {
+        console.error(deleteError);
+        setError("役職の保存に失敗しました。");
         setSaving(false);
         return;
       }
@@ -759,6 +895,38 @@ export default function AdminRolesPage() {
                           </p>
                         </div>
 
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-foreground">役職</span>
+                            {positionsLoading && (
+                              <span className="text-xs text-muted-foreground">読み込み中...</span>
+                            )}
+                          </div>
+                          {visiblePositionOptions.length === 0 ? (
+                            <p className="text-xs text-muted-foreground">
+                              Supervisor / PA Leader / Lighting Leader を選択すると役職を設定できます。
+                            </p>
+                          ) : (
+                            <div className="grid sm:grid-cols-2 gap-2">
+                              {visiblePositionOptions.map((option) => {
+                                const checked = positions.includes(option.value);
+                                return (
+                                  <label key={option.value} className="flex items-center gap-2 text-sm">
+                                    <input
+                                      type="checkbox"
+                                      className="h-4 w-4 accent-primary"
+                                      checked={checked}
+                                      onChange={() => togglePosition(option.value)}
+                                      disabled={positionsLoading}
+                                    />
+                                    <span>{option.label}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+
                         <label className="space-y-1 block text-sm">
                           <span className="text-foreground">crew ロール</span>
                           <select
@@ -834,7 +1002,11 @@ export default function AdminRolesPage() {
                         )}
 
                         <div className="flex flex-wrap items-center gap-3">
-                          <Button onClick={handleSave} disabled={saving || leadersLoading} className="gap-2">
+                          <Button
+                            onClick={handleSave}
+                            disabled={saving || leadersLoading || positionsLoading}
+                            className="gap-2"
+                          >
                             {saving ? (
                               <RefreshCw className="w-4 h-4 animate-spin" />
                             ) : (
@@ -846,7 +1018,7 @@ export default function AdminRolesPage() {
                             type="button"
                             variant="destructive"
                             onClick={handleDeleteAccount}
-                            disabled={deleting || saving || leadersLoading}
+                            disabled={deleting || saving || leadersLoading || positionsLoading}
                             className="gap-2"
                           >
                             {deleting ? (

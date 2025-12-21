@@ -179,6 +179,21 @@ begin
   end if;
 end $$;
 
+-- ---- position_role (役職) ----
+do $$
+begin
+  if not exists (select 1 from pg_type where typname = 'position_role') then
+    create type position_role as enum (
+      'President',
+      'Vice President',
+      'Treasurer',
+      'PA Chief',
+      'Lighting Chief',
+      'Web Secretary'
+    );
+  end if;
+end $$;
+
 
 -- =========================================================
 -- 2. profiles テーブルにカラム追加（無ければ追加）
@@ -216,6 +231,19 @@ drop trigger if exists trg_profile_private_set_updated_at on public.profile_priv
 create trigger trg_profile_private_set_updated_at
 before update on public.profile_private
 for each row execute function public.profile_private_set_updated_at();
+
+-- =========================================================
+-- 2-2. profile_positions テーブル（複数役職）
+-- =========================================================
+create table if not exists public.profile_positions (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles(id) on delete cascade,
+  position position_role not null,
+  created_at timestamptz not null default now()
+);
+
+create unique index if not exists uq_profile_positions_profile_position
+  on public.profile_positions(profile_id, position);
 
 
 -- =========================================================
@@ -403,6 +431,25 @@ for update
 to authenticated
 using (profile_id = auth.uid())
 with check (profile_id = auth.uid());
+
+-- 5-8) 役職（profile_positions）
+alter table public.profile_positions enable row level security;
+
+drop policy if exists "profile_positions_select_all_authenticated" on public.profile_positions;
+drop policy if exists "profile_positions_write_admin" on public.profile_positions;
+
+create policy "profile_positions_select_all_authenticated"
+on public.profile_positions
+for select
+to authenticated
+using (true);
+
+create policy "profile_positions_write_admin"
+on public.profile_positions
+for all
+to authenticated
+using (public.is_admin_or_supervisor(auth.uid()))
+with check (public.is_admin_or_supervisor(auth.uid()));
 
 
 -- =========================================================

@@ -198,13 +198,12 @@ export default function ProfilePage() {
   const crewLabel = profile?.crew ?? "User";
   const isOfficialRole = positions.includes("Official");
   const hasPositionBadge = positions.some((value) => value !== "Official");
-  const leaderLabel = leaderRoles
-    .filter((role) => {
-      if (role === "Administrator") return false;
-      if (!hasPositionBadge) return true;
-      return role !== "Supervisor" && role !== "PA Leader" && role !== "Lighting Leader";
-    })
-    .join(" / ");
+  const leaderDisplayRoles = leaderRoles.filter((role) => {
+    if (role === "Administrator") return false;
+    if (!hasPositionBadge) return true;
+    return role !== "Supervisor" && role !== "PA Leader" && role !== "Lighting Leader";
+  });
+  const leaderLabel = leaderDisplayRoles.join(" / ");
   const positionBadgeLabel =
     positions.length > 0
       ? [...positions]
@@ -220,7 +219,12 @@ export default function ProfilePage() {
           .map((value) => positionLabels[value] ?? value)
           .join(" / ")
       : null;
-  const roleBadge = leaderLabel || crewLabel;
+  const hideCrewByLeader =
+    leaderDisplayRoles.includes("PA Leader") || leaderDisplayRoles.includes("Lighting Leader");
+  const roleSegments: string[] = [];
+  if (leaderLabel) roleSegments.push(leaderLabel);
+  if (crewLabel !== "User" && !hideCrewByLeader) roleSegments.push(crewLabel);
+  const roleBadge = roleSegments.length > 0 ? roleSegments.join(" / ") : "User";
   const isAdministratorRole = leaderRoles.includes("Administrator");
   const showAdminBadge = isAdministratorRole && !isOfficialRole;
   const showRoleBadge =

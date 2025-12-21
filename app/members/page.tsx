@@ -334,14 +334,20 @@ export default function MembersPage() {
                     const hasPositionBadge = member.positions.some(
                       (value) => value !== "Official"
                     );
-                    const leaderLabel = member.leaderRoles
-                      .filter((role) => {
-                        if (role === "Administrator") return false;
-                        if (!hasPositionBadge) return true;
-                        return role !== "Supervisor" && role !== "PA Leader" && role !== "Lighting Leader";
-                      })
-                      .join(" / ");
-                    const roleLabel = leaderLabel || member.crew || "User";
+                    const leaderDisplayRoles = member.leaderRoles.filter((role) => {
+                      if (role === "Administrator") return false;
+                      if (!hasPositionBadge) return true;
+                      return role !== "Supervisor" && role !== "PA Leader" && role !== "Lighting Leader";
+                    });
+                    const leaderLabel = leaderDisplayRoles.join(" / ");
+                    const crewLabel = member.crew ?? "User";
+                    const hideCrewByLeader =
+                      leaderDisplayRoles.includes("PA Leader") ||
+                      leaderDisplayRoles.includes("Lighting Leader");
+                    const roleSegments: string[] = [];
+                    if (leaderLabel) roleSegments.push(leaderLabel);
+                    if (crewLabel !== "User" && !hideCrewByLeader) roleSegments.push(crewLabel);
+                    const roleLabel = roleSegments.length > 0 ? roleSegments.join(" / ") : "User";
                     const showRoleBadge =
                       roleLabel !== "User" || (!isAdministratorRole && !isOfficialRole);
                     const positionLabel =

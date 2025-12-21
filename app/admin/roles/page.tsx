@@ -55,6 +55,8 @@ const positionOptions = [
   { value: "Lighting Chief", label: "照明長" },
   { value: "Web Secretary", label: "Web幹事" },
 ];
+const uniquePositions = ["President", "Vice President", "Treasurer", "Web Secretary"] as const;
+type UniquePosition = (typeof uniquePositions)[number];
 
 const crewOptions = ["User", "PA", "Lighting"];
 
@@ -103,6 +105,12 @@ export default function AdminRolesPage() {
   const [leadersLoading, setLeadersLoading] = useState(false);
   const [positions, setPositions] = useState<string[]>([]);
   const [positionsLoading, setPositionsLoading] = useState(false);
+  const [positionHolders, setPositionHolders] = useState<Record<UniquePosition, string | null>>({
+    President: null,
+    "Vice President": null,
+    Treasurer: null,
+    "Web Secretary": null,
+  });
   const [primaryPart, setPrimaryPart] = useState("");
   const [subParts, setSubParts] = useState<string[]>([]);
   const [partsLoading, setPartsLoading] = useState(false);
@@ -143,29 +151,45 @@ export default function AdminRolesPage() {
   const targetIsAdministrator = selectedProfile
     ? leaderRoles.includes("Administrator") || selectedProfile.leader === "Administrator"
     : false;
-  const allowedPositions = useMemo(() => {
+  const roleFlags = useMemo(() => {
     const roleSet = new Set(leaderRoles);
     const primaryLeader = selectedProfile?.leader ?? null;
     const hasRole = (role: string) => roleSet.has(role) || primaryLeader === role;
-    const isAdministrator = hasRole("Administrator");
-    const isSupervisor = hasRole("Supervisor");
-    const isPaLeader = hasRole("PA Leader");
-    const isLightingLeader = hasRole("Lighting Leader");
+    return {
+      isAdministrator: hasRole("Administrator"),
+      isSupervisor: hasRole("Supervisor"),
+      isPaLeader: hasRole("PA Leader"),
+      isLightingLeader: hasRole("Lighting Leader"),
+    };
+  }, [leaderRoles, selectedProfile?.leader]);
+  const allowedPositions = useMemo(() => {
     const allowed = new Set<string>();
-    if (isAdministrator || isSupervisor) {
-      allowed.add("President");
-      allowed.add("Vice President");
-      allowed.add("Treasurer");
-      allowed.add("Web Secretary");
+    if (roleFlags.isAdministrator || roleFlags.isSupervisor) {
+      uniquePositions.forEach((position) => {
+        const holder = positionHolders[position];
+        if (!holder || holder === selectedId) {
+          allowed.add(position);
+        }
+      });
     }
-    if (isPaLeader) {
+    if (roleFlags.isPaLeader) {
       allowed.add("PA Chief");
     }
-    if (isLightingLeader) {
+    if (roleFlags.isLightingLeader) {
       allowed.add("Lighting Chief");
     }
     return allowed;
-  }, [leaderRoles, selectedProfile?.leader]);
+  }, [roleFlags, positionHolders, selectedId]);
+  const autoPositions = useMemo(() => {
+    const required = new Set<string>();
+    if (roleFlags.isPaLeader) {
+      required.add("PA Chief");
+    }
+    if (roleFlags.isLightingLeader) {
+      required.add("Lighting Chief");
+    }
+    return required;
+  }, [roleFlags]);
   const visiblePositionOptions = useMemo(
     () => positionOptions.filter((option) => allowedPositions.has(option.value)),
     [allowedPositions]
@@ -311,9 +335,60 @@ export default function AdminRolesPage() {
   }, [selectedId]);
 
   useEffect(() => {
+    if (adminLoading || !isAdmin) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from("profile_positions")
+        .select("profile_id, position, created_at")
+        .in("position", [...uniquePositions])
+        .order("created_at", { ascending: true });
+      if (cancelled) return;
+      if (error) {
+        console.error(error);
+        setPositionHolders({
+          President: null,
+          "Vice President": null,
+          Treasurer: null,
+          "Web Secretary": null,
+        });
+      } else {
+        const next: Record<UniquePosition, string | null> = {
+          President: null,
+          "Vice President": null,
+          Treasurer: null,
+          "Web Secretary": null,
+        };
+        (data ?? []).forEach((row) => {
+          const entry = row as { profile_id?: string; position?: string };
+          const position = entry.position as UniquePosition | undefined;
+          if (!position || !uniquePositions.includes(position)) return;
+          if (!next[position]) {
+            next[position] = entry.profile_id ?? null;
+          }
+        });
+        setPositionHolders(next);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [adminLoading, isAdmin]);
+
+  useEffect(() => {
     if (!selectedId || leadersLoading || positionsLoading) return;
-    setPositions((prev) => prev.filter((value) => allowedPositions.has(value)));
-  }, [allowedPositions, leadersLoading, positionsLoading, selectedId]);
+    setPositions((prev) => {
+      const next = new Set(prev);
+      ["PA Chief", "Lighting Chief"].forEach((value) => {
+        if (!autoPositions.has(value)) {
+          next.delete(value);
+        }
+      });
+      autoPositions.forEach((value) => next.add(value));
+      return Array.from(next).filter((value) => allowedPositions.has(value));
+    });
+  }, [allowedPositions, autoPositions, leadersLoading, positionsLoading, selectedId]);
 
   useEffect(() => {
     if (!primaryPart) {
@@ -522,6 +597,17 @@ export default function AdminRolesPage() {
         return;
       }
     }
+    setPositionHolders((prev) => {
+      const next = { ...prev };
+      uniquePositions.forEach((position) => {
+        if (desiredPositions.includes(position)) {
+          next[position] = selectedId;
+        } else if (next[position] === selectedId) {
+          next[position] = null;
+        }
+      });
+      return next;
+    });
 
     if (!primaryPart) {
       const { error: deleteError } = await supabase
@@ -910,6 +996,7 @@ export default function AdminRolesPage() {
                             <div className="grid sm:grid-cols-2 gap-2">
                               {visiblePositionOptions.map((option) => {
                                 const checked = positions.includes(option.value);
+                                const isAuto = autoPositions.has(option.value);
                                 return (
                                   <label key={option.value} className="flex items-center gap-2 text-sm">
                                     <input
@@ -917,9 +1004,12 @@ export default function AdminRolesPage() {
                                       className="h-4 w-4 accent-primary"
                                       checked={checked}
                                       onChange={() => togglePosition(option.value)}
-                                      disabled={positionsLoading}
+                                      disabled={positionsLoading || isAuto}
                                     />
-                                    <span>{option.label}</span>
+                                    <span className={isAuto ? "text-muted-foreground" : undefined}>
+                                      {option.label}
+                                      {isAuto ? "（自動）" : ""}
+                                    </span>
                                   </label>
                                 );
                               })}

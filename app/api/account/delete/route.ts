@@ -1,26 +1,29 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
-
-const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: { persistSession: false },
-});
-const authClient = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: { persistSession: false },
-});
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const adminLeaders = new Set(["Administrator", "Supervisor"]);
 
 export async function POST(request: Request) {
-  if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
+  const url = supabaseUrl ?? "";
+  const anonKey = supabaseAnonKey ?? "";
+  const serviceKey = supabaseServiceKey ?? "";
+  if (!url || !anonKey || !serviceKey) {
     return NextResponse.json(
       { error: "Server configuration missing (Supabase keys)." },
       { status: 500 }
     );
   }
+
+  const adminClient = createClient(url, serviceKey, {
+    auth: { persistSession: false },
+  });
+  const authClient = createClient(url, anonKey, {
+    auth: { persistSession: false },
+  });
 
   const authHeader = request.headers.get("authorization") ?? "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";

@@ -62,11 +62,34 @@ type ProfilePrivateRow = {
   enrollment_year: number | null;
 };
 
-export default function OnboardingClient() {
+type OnboardingClientMode = "onboarding" | "edit";
+
+type OnboardingClientProps = {
+  mode?: OnboardingClientMode;
+  defaultNext?: string;
+};
+
+export default function OnboardingClient({
+  mode = "onboarding",
+  defaultNext,
+}: OnboardingClientProps) {
   const { session } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") || "/";
+  const next = searchParams.get("next") || defaultNext || "/";
+  const isEdit = mode === "edit";
+  const showSideNav = isEdit;
+  const pageTitle = isEdit ? "プロフィール編集" : "プロフィール入力";
+  const pageDescription = isEdit
+    ? "プロフィール情報を更新できます。"
+    : "初回ログイン時に必須項目を入力してください。あとで部員設定から編集できます。";
+  const baseDescription = isEdit
+    ? "表示名/本名/学籍番号/入学年度/メイン楽器を編集できます。サブ楽器も選択できます。"
+    : "必須: 表示名/本名/学籍番号/入学年度/メイン楽器。サブ楽器も選択できます。";
+  const submitLabel = isEdit ? "保存する" : "保存して進む";
+  const doneMessage = isEdit
+    ? "保存しました。プロフィールに戻ります。"
+    : "保存しました。次の画面に移動します。";
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -413,9 +436,9 @@ export default function OnboardingClient() {
   return (
     <AuthGuard>
       <div className="flex min-h-screen bg-background">
-        <SideNav />
+        {showSideNav && <SideNav />}
 
-        <main className="flex-1 md:ml-20">
+        <main className={`flex-1 ${showSideNav ? "md:ml-20" : ""}`}>
           <section className="relative py-12 md:py-16 overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-secondary/5 to-transparent" />
             <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
@@ -423,9 +446,9 @@ export default function OnboardingClient() {
             <div className="relative z-10 container mx-auto px-4 sm:px-6">
               <div className="max-w-4xl">
                 <span className="text-xs text-primary tracking-[0.3em] font-mono">PROFILE</span>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-3 mb-3">プロフィール入力</h1>
+                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-3 mb-3">{pageTitle}</h1>
                 <p className="text-muted-foreground text-sm md:text-base">
-                  初回ログイン時に必須項目を入力してください。あとで部員設定から編集できます。
+                  {pageDescription}
                 </p>
               </div>
             </div>
@@ -436,9 +459,7 @@ export default function OnboardingClient() {
               <Card className="bg-card/60 border-border max-w-3xl">
                 <CardHeader>
                   <CardTitle className="text-xl">基本情報</CardTitle>
-                  <CardDescription>
-                    必須: 表示名/本名/学籍番号/入学年度/メイン楽器。サブ楽器も選択できます。
-                  </CardDescription>
+                  <CardDescription>{baseDescription}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {loading ? (
@@ -576,44 +597,50 @@ export default function OnboardingClient() {
                       {done && !error && (
                         <p className="text-sm text-emerald-500 flex items-center gap-2">
                           <CheckCircle2 className="w-4 h-4" />
-                          保存しました。ホームに移動します。
+                          {doneMessage}
                         </p>
                       )}
 
                       <Button type="submit" disabled={saving} className="gap-2">
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <PencilLine className="w-4 h-4" />}
-                        保存して進む
+                        {submitLabel}
                       </Button>
                     </form>
                   )}
                 </CardContent>
               </Card>
 
-              <Card className="bg-card/60 border-destructive/40 max-w-3xl mt-8">
-                <CardHeader>
-                  <CardTitle className="text-xl text-destructive">アカウント削除</CardTitle>
-                  <CardDescription>
-                    この操作は取り消せません。削除するとログインできなくなります。
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {deleteError && (
-                    <p className="text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-lg p-3">
-                      {deleteError}
-                    </p>
-                  )}
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    onClick={handleDeleteAccount}
-                    disabled={deleting}
-                    className="gap-2"
-                  >
-                    {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />}
-                    アカウントを削除
-                  </Button>
-                </CardContent>
-              </Card>
+              {isEdit && (
+                <Card className="bg-card/60 border-destructive/40 max-w-3xl mt-8">
+                  <CardHeader>
+                    <CardTitle className="text-xl text-destructive">アカウント削除</CardTitle>
+                    <CardDescription>
+                      この操作は取り消せません。削除するとログインできなくなります。
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {deleteError && (
+                      <p className="text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-lg p-3">
+                        {deleteError}
+                      </p>
+                    )}
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      onClick={handleDeleteAccount}
+                      disabled={deleting}
+                      className="gap-2"
+                    >
+                      {deleting ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <AlertTriangle className="w-4 h-4" />
+                      )}
+                      アカウントを削除
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </section>
         </main>

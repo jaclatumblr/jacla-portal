@@ -254,7 +254,7 @@ export default function ProfilePage() {
     session?.user.user_metadata?.picture ||
     "";
 
-  const editHref = `/onboarding?next=${encodeURIComponent("/me/profile")}`;
+  const editHref = "/me/profile/edit";
 
   const loadingBlock = (
     <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -345,7 +345,7 @@ export default function ProfilePage() {
 
               <div className="grid lg:grid-cols-2 gap-4 md:gap-6 max-w-4xl mx-auto mb-8 md:mb-12">
                 <div className="p-4 md:p-6 bg-card/50 border border-border rounded-lg">
-                  <h3 className="text-lg font-bold mb-4 md:mb-6">連絡先</h3>
+                  <h3 className="text-lg font-bold mb-4 md:mb-6">登録情報</h3>
                   <div className="space-y-4">
                     <div className="flex items-center gap-3 md:gap-4">
                       <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">

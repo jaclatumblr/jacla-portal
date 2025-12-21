@@ -18,6 +18,7 @@ const exactTitles: Record<string, string> = {
   "/admin/events": "イベント管理",
   "/me": "マイページ",
   "/me/profile": "プロフィール",
+  "/me/profile/edit": "プロフィール編集",
   "/me/tasks": "タスク",
   "/me/bands": "マイバンド",
   "/terms": "利用規約",

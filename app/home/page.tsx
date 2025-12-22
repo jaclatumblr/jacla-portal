@@ -27,6 +27,13 @@ type EventSummary = {
   status: string;
 };
 
+type AnnouncementSummary = {
+  id: string;
+  title: string;
+  date: string;
+  isNew: boolean;
+};
+
 const myTasks = [
   {
     id: 1,
@@ -56,11 +63,6 @@ const myTasks = [
 
 const todayShifts = [{ event: "練習日", role: "PA担当", time: "14:00 - 18:00" }];
 
-const recentAnnouncements = [
-  { id: 1, title: "春ライブのレパートリー提出締切について", date: "2025-01-15", isNew: true },
-  { id: 2, title: "新入部員歓迎会のお知らせ", date: "2025-01-12", isNew: false },
-];
-
 function statusVariant(status: string) {
   if (status === "募集中") return "default";
   if (status === "準備中") return "secondary";
@@ -71,6 +73,8 @@ export default function DashboardPage() {
   const { session } = useAuth();
   const [upcomingEvents, setUpcomingEvents] = useState<EventSummary[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
+  const [recentAnnouncements, setRecentAnnouncements] = useState<AnnouncementSummary[]>([]);
+  const [announcementsLoading, setAnnouncementsLoading] = useState(true);
 
   const userLabel = useMemo(() => {
     const meta = session?.user.user_metadata as Record<string, unknown> | undefined;
@@ -99,6 +103,53 @@ export default function DashboardPage() {
         setUpcomingEvents((data ?? []) as EventSummary[]);
       }
       setEventsLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      setAnnouncementsLoading(true);
+      const { data, error } = await supabase
+        .from("announcements")
+        .select("id, title, published_at, created_at, is_pinned")
+        .eq("is_published", true)
+        .order("is_pinned", { ascending: false })
+        .order("published_at", { ascending: false })
+        .limit(2);
+
+      if (cancelled) return;
+
+      if (error) {
+        console.error(error);
+        setRecentAnnouncements([]);
+      } else {
+        const now = Date.now();
+        const mapped = (data ?? []).map((row) => {
+          const entry = row as {
+            id: string;
+            title: string;
+            published_at?: string | null;
+            created_at?: string | null;
+          };
+          const dateValue = entry.published_at ?? entry.created_at;
+          const isNew =
+            dateValue ? now - new Date(dateValue).getTime() < 1000 * 60 * 60 * 24 * 7 : false;
+          return {
+            id: entry.id,
+            title: entry.title,
+            date: dateValue ? new Date(dateValue).toLocaleDateString("ja-JP") : "",
+            isNew,
+          };
+        });
+        setRecentAnnouncements(mapped);
+      }
+      setAnnouncementsLoading(false);
     })();
 
     return () => {
@@ -179,7 +230,7 @@ export default function DashboardPage() {
                             />
                             <div className="min-w-0">
                               <p className="font-medium text-sm truncate">{task.title}</p>
-                              <p className="text-xs text-muted-foreground">締切: {task.deadline}</p>
+                              <p className="text-xs text-muted-foreground">??: {task.deadline}</p>
                             </div>
                           </div>
                           <Badge variant={task.urgent ? "destructive" : "outline"} className="shrink-0 text-xs">
@@ -250,25 +301,31 @@ export default function DashboardPage() {
                       </Link>
                     </div>
                     <div className="space-y-3">
-                      {recentAnnouncements.map((announcement) => (
-                        <Link
-                          key={announcement.id}
-                          href={`/announcements/${announcement.id}`}
-                          className="block group"
-                        >
-                          <div className="flex items-start gap-2">
-                            {announcement.isNew && (
-                              <Badge className="bg-red-500 text-white text-xs shrink-0">NEW</Badge>
-                            )}
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium group-hover:text-primary transition-colors line-clamp-2">
-                                {announcement.title}
-                              </p>
-                              <p className="text-xs text-muted-foreground mt-1">{announcement.date}</p>
+                      {announcementsLoading ? (
+                        <div className="text-sm text-muted-foreground">読み込み中...</div>
+                      ) : recentAnnouncements.length === 0 ? (
+                        <div className="text-sm text-muted-foreground">お知らせがありません。</div>
+                      ) : (
+                        recentAnnouncements.map((announcement) => (
+                          <Link
+                            key={announcement.id}
+                            href={`/announcements/${announcement.id}`}
+                            className="block group"
+                          >
+                            <div className="flex items-start gap-2">
+                              {announcement.isNew && (
+                                <Badge className="bg-red-500 text-white text-xs shrink-0">NEW</Badge>
+                              )}
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium group-hover:text-primary transition-colors line-clamp-2">
+                                  {announcement.title}
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-1">{announcement.date}</p>
+                              </div>
                             </div>
-                          </div>
-                        </Link>
-                      ))}
+                          </Link>
+                        ))
+                      )}
                     </div>
                   </div>
 

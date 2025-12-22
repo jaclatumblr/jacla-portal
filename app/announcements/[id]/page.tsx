@@ -1,72 +1,69 @@
+"use client";
+
 import Link from "next/link";
-import { ArrowLeft, Calendar, Pin, User } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useParams } from "next/navigation";
+import { ArrowLeft, Calendar, Link as LinkIcon, Pin, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
+import { supabase } from "@/lib/supabaseClient";
 
 type Announcement = {
-  id: number;
+  id: string;
   title: string;
   content: string;
-  date: string;
   category: string;
-  isPinned: boolean;
-  author: string;
+  is_pinned: boolean;
+  published_at: string | null;
+  created_at: string;
+  image_url: string | null;
+  attachment_url: string | null;
+  profiles?: { display_name: string | null } | null;
 };
 
-const announcementsData: Record<string, Announcement> = {
-  "1": {
-    id: 1,
-    title: "春ライブのレパートリー提出締切について",
-    content:
-      "春ライブ2025のレパートリー提出締切は3月1日です。\n\n提出方法\n- イベントページから「レパートリー提出」を選択\n- バンド情報と演奏曲を入力\n- メンバー全員の確認後、提出ボタンを押下\n\n注意事項\n- 締切後の変更は原則不可です\n- 曲数は最大4曲まで\n- オリジナル曲の場合、譜面データの添付をお願いします\n\n不明点があれば運営までお問い合わせください。",
-    date: "2025-01-15",
-    category: "締切",
-    isPinned: true,
-    author: "運営チーム",
-  },
-  "2": {
-    id: 2,
-    title: "新入部員歓迎会のお知らせ",
-    content:
-      "4月5日（土）18:00より新入部員歓迎会を開催します。\n\n概要\n- 日時: 2025年4月5日（土）18:00〜21:00\n- 場所: 大学ホール\n- 参加費: 無料\n\n内容\n- 部活動紹介\n- 先輩バンドによるライブ演奏\n- 新入生との交流企画\n- 軽食・ドリンクあり\n\n参加希望者は部長まで連絡ください。",
-    date: "2025-01-12",
-    category: "イベント",
-    isPinned: true,
-    author: "部長",
-  },
-  "3": {
-    id: 3,
-    title: "PA機材メンテナンス完了",
-    content:
-      "SM58マイク5本のメンテナンスが完了しました。\n\n貸出を希望する場合は、PA担当まで申請してください。",
-    date: "2025-01-10",
-    category: "機材",
-    isPinned: false,
-    author: "PA担当",
-  },
-  "4": {
-    id: 4,
-    title: "練習スタジオ利用時間変更",
-    content: "2月1日より練習スタジオの利用時間が9:00〜21:00に変更になります。",
-    date: "2025-01-08",
-    category: "お知らせ",
-    isPinned: false,
-    author: "運営チーム",
-  },
-  "5": {
-    id: 5,
-    title: "部費納入のお願い",
-    content: "今月末までに部費の納入をお願いします。未納の方は会計担当まで連絡ください。",
-    date: "2025-01-05",
-    category: "事務",
-    isPinned: false,
-    author: "会計",
-  },
-};
+const formatDate = (value: string | null) =>
+  value ? new Date(value).toLocaleDateString("ja-JP") : "";
 
-export default function AnnouncementDetailPage({ params }: { params: { id: string } }) {
-  const announcement = announcementsData[params.id];
+export default function AnnouncementDetailPage() {
+  const params = useParams();
+  const id = typeof params?.id === "string" ? params.id : Array.isArray(params?.id) ? params.id[0] : "";
+
+  const [announcement, setAnnouncement] = useState<Announcement | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const dateValue = useMemo(() => {
+    if (!announcement) return null;
+    return announcement.published_at ?? announcement.created_at;
+  }, [announcement]);
+
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+
+    (async () => {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("announcements")
+        .select(
+          "id, title, content, category, is_pinned, published_at, created_at, image_url, attachment_url, profiles:author_id(display_name)"
+        )
+        .eq("id", id)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error || !data) {
+        if (error) console.error(error);
+        setAnnouncement(null);
+      } else {
+        setAnnouncement(data as Announcement);
+      }
+      setLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
 
   return (
     <AuthGuard>
@@ -87,14 +84,16 @@ export default function AnnouncementDetailPage({ params }: { params: { id: strin
                   <span className="text-sm">お知らせ一覧に戻る</span>
                 </Link>
 
-                {!announcement ? (
+                {loading ? (
+                  <p className="text-sm text-muted-foreground">読み込み中...</p>
+                ) : !announcement ? (
                   <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4">
-                    お知らせが見つかりません
+                    お知らせが見つかりません。
                   </h1>
                 ) : (
                   <>
                     <div className="flex items-center gap-3 mb-4 flex-wrap">
-                      {announcement.isPinned && <Pin className="w-4 h-4 text-primary" />}
+                      {announcement.is_pinned && <Pin className="w-4 h-4 text-primary" />}
                       <Badge variant="default">{announcement.category}</Badge>
                     </div>
 
@@ -105,11 +104,11 @@ export default function AnnouncementDetailPage({ params }: { params: { id: strin
                     <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                       <div className="flex items-center gap-2">
                         <Calendar className="w-4 h-4" />
-                        <span>{announcement.date}</span>
+                        <span>{formatDate(dateValue)}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <User className="w-4 h-4" />
-                        <span>{announcement.author}</span>
+                        <span>{announcement.profiles?.display_name ?? "未設定"}</span>
                       </div>
                     </div>
                   </>
@@ -121,11 +120,32 @@ export default function AnnouncementDetailPage({ params }: { params: { id: strin
           {announcement && (
             <section className="py-8 md:py-12">
               <div className="container mx-auto px-4 sm:px-6">
-                <div className="max-w-3xl mx-auto">
+                <div className="max-w-3xl mx-auto space-y-6">
+                  {announcement.image_url && (
+                    <img
+                      src={announcement.image_url}
+                      alt={announcement.title}
+                      className="w-full max-h-[360px] object-cover rounded-lg border border-border"
+                    />
+                  )}
                   <div className="p-6 md:p-8 bg-card/50 border border-border rounded-lg">
                     <div className="text-sm md:text-base text-muted-foreground whitespace-pre-wrap leading-relaxed">
                       {announcement.content}
                     </div>
+
+                    {announcement.attachment_url && (
+                      <div className="mt-6">
+                        <a
+                          href={announcement.attachment_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
+                        >
+                          <LinkIcon className="w-4 h-4" />
+                          添付リンクを開く
+                        </a>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -136,4 +156,3 @@ export default function AnnouncementDetailPage({ params }: { params: { id: strin
     </AuthGuard>
   );
 }
-

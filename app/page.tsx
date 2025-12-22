@@ -1,5 +1,8 @@
-﻿import Image from "next/image";
+"use client";
+
+import Image from "next/image";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import {
   ArrowRight,
   Bell,
@@ -13,37 +16,70 @@ import {
 } from "lucide-react";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { SideNav } from "@/components/SideNav";
+import { supabase } from "@/lib/supabaseClient";
 
-const announcements = [
-  {
-    id: 1,
-    title: "春ライブのレパートリー提出締切について",
-    content:
-      "春ライブのレパートリー提出締切は1月20日です。まだ提出していないバンドは早めに提出してください。",
-    date: "2025/01/15",
-    isPinned: true,
-    category: "重要",
-  },
-  {
-    id: 2,
-    title: "機材庫の利用ルール変更",
-    content:
-      "機材庫の利用時間が変更になりました。詳細は機材管理ページをご確認ください。",
-    date: "2025/01/12",
-    isPinned: false,
-    category: "お知らせ",
-  },
-  {
-    id: 3,
-    title: "新入部員歓迎会のお知らせ",
-    content: "4月に新入部員歓迎会を開催予定です。詳細は追って連絡します。",
-    date: "2025/01/10",
-    isPinned: false,
-    category: "イベント",
-  },
-];
+type AnnouncementSummary = {
+  id: string;
+  title: string;
+  content: string;
+  date: string;
+  category: string;
+  isPinned: boolean;
+};
 
 export default function HomePage() {
+  const [announcements, setAnnouncements] = useState<AnnouncementSummary[]>([]);
+  const [announcementsLoading, setAnnouncementsLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      setAnnouncementsLoading(true);
+      const { data, error } = await supabase
+        .from("announcements")
+        .select("id, title, content, category, is_pinned, published_at, created_at")
+        .eq("is_published", true)
+        .order("is_pinned", { ascending: false })
+        .order("published_at", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(3);
+
+      if (cancelled) return;
+
+      if (error) {
+        console.error(error);
+        setAnnouncements([]);
+      } else {
+        const mapped = (data ?? []).map((row) => {
+          const entry = row as {
+            id: string;
+            title: string;
+            content: string;
+            category: string;
+            is_pinned?: boolean | null;
+            published_at?: string | null;
+            created_at?: string | null;
+          };
+          const dateValue = entry.published_at ?? entry.created_at;
+          return {
+            id: entry.id,
+            title: entry.title,
+            content: entry.content,
+            category: entry.category,
+            isPinned: Boolean(entry.is_pinned),
+            date: dateValue ? new Date(dateValue).toLocaleDateString("ja-JP") : "",
+          };
+        });
+        setAnnouncements(mapped);
+      }
+      setAnnouncementsLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <AuthGuard>
       <div className="flex min-h-screen">
@@ -302,46 +338,46 @@ export default function HomePage() {
               </div>
 
               <div className="grid gap-4 md:gap-6 max-w-4xl">
-                {announcements.map((announcement) => (
-                  <div
-                    key={announcement.id}
-                    className={`group relative p-4 md:p-6 bg-card border rounded-lg transition-all duration-300 hover:border-primary/30 ${
-                      announcement.isPinned ? "border-primary/50" : "border-border"
-                    }`}
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
-                      <div className="flex items-center gap-2 shrink-0">
-                        {announcement.isPinned && (
-                          <Pin className="w-4 h-4 text-primary" />
-                        )}
-                        <span
-                          className={`text-xs px-2 py-1 rounded ${
-                            announcement.category === "重要"
-                              ? "bg-destructive/10 text-destructive"
-                              : announcement.category === "イベント"
-                                ? "bg-secondary/10 text-secondary"
-                                : "bg-muted text-muted-foreground"
-                          }`}
-                        >
-                          {announcement.category}
-                        </span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 mb-2">
-                          <h3 className="font-bold text-foreground">
-                            {announcement.title}
-                          </h3>
-                          <span className="text-xs text-muted-foreground font-mono">
-                            {announcement.date}
-                          </span>
+                {announcementsLoading ? (
+                  <div className="text-sm text-muted-foreground">読み込み中...</div>
+                ) : announcements.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">お知らせがありません。</div>
+                ) : (
+                  announcements.map((announcement) => {
+                    const tone =
+                      announcement.category === "重要"
+                        ? "bg-destructive/10 text-destructive"
+                        : announcement.category === "イベント"
+                          ? "bg-secondary/10 text-secondary"
+                          : announcement.category === "締切"
+                            ? "bg-orange-500/10 text-orange-500"
+                            : "bg-muted text-muted-foreground";
+                    return (
+                      <div
+                        key={announcement.id}
+                        className={`group relative p-4 md:p-6 bg-card border rounded-lg transition-all duration-300 hover:border-primary/30 ${
+                          announcement.isPinned ? "border-primary/50" : "border-border"
+                        }`}
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
+                          <div className="flex items-center gap-2 shrink-0">
+                            {announcement.isPinned && (
+                              <Pin className="w-4 h-4 text-primary" />
+                            )}
+                            <span className={`text-xs px-2 py-1 rounded ${tone}`}>{announcement.category}</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 mb-2">
+                              <h3 className="font-bold text-foreground">{announcement.title}</h3>
+                              <span className="text-xs text-muted-foreground font-mono">{announcement.date}</span>
+                            </div>
+                            <p className="text-sm text-muted-foreground line-clamp-2">{announcement.content}</p>
+                          </div>
                         </div>
-                        <p className="text-sm text-muted-foreground line-clamp-2">
-                          {announcement.content}
-                        </p>
                       </div>
-                    </div>
-                  </div>
-                ))}
+                    );
+                  })
+                )}
               </div>
             </div>
           </section>

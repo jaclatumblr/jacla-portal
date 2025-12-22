@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
-import { useIsAdmin } from "@/lib/useIsAdmin";
+import { useRoleFlags } from "@/lib/useRoleFlags";
 import { useIsAdministrator } from "@/lib/useIsAdministrator";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
@@ -98,11 +98,17 @@ const partOptions = [
 ];
 
 export default function AdminRolesPage() {
-  const { isAdmin, loading: adminLoading } = useIsAdmin();
+  const {
+    isAdmin,
+    canAccessAdmin,
+    loading: roleLoading,
+  } = useRoleFlags();
   const { isAdministrator: viewerIsAdministrator } = useIsAdministrator();
   const { session } = useAuth();
   const userId = session?.user.id;
   const router = useRouter();
+  const canEditFullRoles = isAdmin;
+  const isCrewOnlyEditor = canAccessAdmin && !isAdmin;
 
   const [profiles, setProfiles] = useState<ProfileRow[]>([]);
   const [search, setSearch] = useState("");
@@ -339,7 +345,7 @@ export default function AdminRolesPage() {
   }, [selectedId]);
 
   useEffect(() => {
-    if (adminLoading || !isAdmin) return;
+    if (roleLoading || !canAccessAdmin) return;
     let cancelled = false;
     (async () => {
       const { data, error } = await supabase
@@ -380,7 +386,7 @@ export default function AdminRolesPage() {
     return () => {
       cancelled = true;
     };
-  }, [adminLoading, isAdmin]);
+  }, [roleLoading, canAccessAdmin]);
 
   useEffect(() => {
     if (!selectedId || leadersLoading || positionsLoading) return;
@@ -405,7 +411,7 @@ export default function AdminRolesPage() {
   }, [primaryPart]);
 
   useEffect(() => {
-    if (adminLoading || !isAdmin) return;
+    if (roleLoading || !canAccessAdmin) return;
     let cancelled = false;
     (async () => {
       setLoading(true);
@@ -427,15 +433,17 @@ export default function AdminRolesPage() {
     return () => {
       cancelled = true;
     };
-  }, [adminLoading, isAdmin]);
+  }, [roleLoading, canAccessAdmin]);
 
   const toggleSubPart = (value: string) => {
+    if (!canEditFullRoles) return;
     setSubParts((prev) =>
       prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value]
     );
   };
 
   const toggleLeaderRole = (value: string) => {
+    if (!canEditFullRoles) return;
     if (value === "Administrator") return;
     setLeaderRoles((prev) =>
       prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value]
@@ -443,6 +451,7 @@ export default function AdminRolesPage() {
   };
 
   const togglePosition = (value: string) => {
+    if (!canEditFullRoles) return;
     setPositions((prev) =>
       prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value]
     );
@@ -450,6 +459,38 @@ export default function AdminRolesPage() {
 
   const handleSave = async () => {
     if (!selectedId || !selectedProfile) return;
+    if (!canEditFullRoles) {
+      setSaving(true);
+      setError(null);
+      setToast(null);
+
+      const profileRes = await supabase
+        .from("profiles")
+        .update({ crew: form.crew })
+        .eq("id", selectedId)
+        .select()
+        .maybeSingle();
+
+      if (profileRes.error) {
+        console.error(profileRes.error);
+        setError("更新に失敗しました。");
+        setSaving(false);
+        return;
+      }
+
+      if (profileRes.data) {
+        const updated = profileRes.data as ProfileRow;
+        setProfiles((prev) =>
+          prev.map((p) =>
+            p.id === selectedId ? { ...updated, leader: selectedProfile.leader } : p
+          )
+        );
+      }
+
+      setToast({ id: Date.now(), message: "保存しました。" });
+      setSaving(false);
+      return;
+    }
     if (leadersLoading) {
       setError("ロール情報の読み込み中です。");
       return;
@@ -750,7 +791,7 @@ export default function AdminRolesPage() {
     }
   };
 
-  if (adminLoading) {
+  if (roleLoading) {
     return (
       <AuthGuard>
         <div className="min-h-screen flex items-center justify-center bg-background">
@@ -760,7 +801,7 @@ export default function AdminRolesPage() {
     );
   }
 
-  if (!isAdmin) {
+  if (!canAccessAdmin) {
     return (
       <AuthGuard>
         <div className="min-h-screen flex items-center justify-center bg-background px-6">
@@ -811,7 +852,7 @@ export default function AdminRolesPage() {
                 <span className="text-xs text-primary tracking-[0.3em] font-mono">ADMIN</span>
                 <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-3 mb-3">ユーザー管理</h1>
                 <p className="text-muted-foreground text-sm md:text-base">
-                  Administrator / Supervisor がユーザーのロールと楽器情報を更新できます。
+                  Administrator / Supervisor は全権限、PA/照明長は crew のみ編集できます。
                 </p>
               </div>
             </div>
@@ -844,6 +885,11 @@ export default function AdminRolesPage() {
                     </Badge>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    {isCrewOnlyEditor && (
+                      <p className="text-xs text-muted-foreground">
+                        PA/照明長は crew のみ編集できます。
+                      </p>
+                    )}
                     <Input
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
@@ -918,7 +964,9 @@ export default function AdminRolesPage() {
                       </div>
                       <div>
                         <CardTitle className="text-lg">権限と楽器を編集</CardTitle>
-                        <CardDescription>Administrator / Supervisor だけが更新できます。</CardDescription>
+                        <CardDescription>
+                          Administrator / Supervisor は全権限、PA/照明長は crew のみ編集できます。
+                        </CardDescription>
                       </div>
                     </div>
                   </CardHeader>
@@ -979,7 +1027,7 @@ export default function AdminRolesPage() {
                                     className="h-4 w-4 accent-primary"
                                     checked={checked}
                                     onChange={() => toggleLeaderRole(value)}
-                                    disabled={leadersLoading || isAdminRole}
+                                    disabled={leadersLoading || isAdminRole || !canEditFullRoles}
                                   />
                                   <span className={isAdminRole ? "text-muted-foreground" : undefined}>
                                     {value}
@@ -1005,7 +1053,7 @@ export default function AdminRolesPage() {
                               const isAuto = autoPositions.has(option.value);
                               const isAllowed = allowedPositions.has(option.value);
                               const checked = isAuto || positions.includes(option.value);
-                              const disabled = positionsLoading || isAuto || !isAllowed;
+                              const disabled = positionsLoading || isAuto || !isAllowed || !canEditFullRoles;
                               return (
                                 <label key={option.value} className="flex items-center gap-2 text-sm">
                                   <input
@@ -1052,6 +1100,7 @@ export default function AdminRolesPage() {
                           <select
                             value={primaryPart}
                             onChange={(e) => setPrimaryPart(e.target.value)}
+                            disabled={!canEditFullRoles}
                             className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-colors"
                           >
                             <option value="">選択してください</option>
@@ -1080,7 +1129,7 @@ export default function AdminRolesPage() {
                                     className="h-4 w-4 accent-primary"
                                     checked={subParts.includes(value)}
                                     onChange={() => toggleSubPart(value)}
-                                    disabled={!primaryPart || partsLoading}
+                                    disabled={!primaryPart || partsLoading || !canEditFullRoles}
                                   />
                                   <span>{value}</span>
                                 </label>
@@ -1094,7 +1143,7 @@ export default function AdminRolesPage() {
                             className="h-4 w-4 accent-primary"
                             checked={form.muted}
                             onChange={(e) => setForm((prev) => ({ ...prev, muted: e.target.checked }))}
-                            disabled={targetIsAdministrator}
+                            disabled={targetIsAdministrator || !canEditFullRoles}
                           />
                           <span className={targetIsAdministrator ? "text-muted-foreground" : "text-foreground"}>
                             muted（本人から更新不可）
@@ -1109,7 +1158,7 @@ export default function AdminRolesPage() {
                         <div className="flex flex-wrap items-center gap-3">
                           <Button
                             onClick={handleSave}
-                            disabled={saving || leadersLoading || positionsLoading}
+                            disabled={saving || (canEditFullRoles && (leadersLoading || positionsLoading))}
                             className="gap-2"
                           >
                             {saving ? (
@@ -1119,20 +1168,22 @@ export default function AdminRolesPage() {
                             )}
                             保存する
                           </Button>
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            onClick={handleDeleteAccount}
-                            disabled={deleting || saving || leadersLoading || positionsLoading}
-                            className="gap-2"
-                          >
-                            {deleting ? (
-                              <RefreshCw className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <AlertTriangle className="w-4 h-4" />
-                            )}
-                            アカウント削除
-                          </Button>
+                          {isAdmin && (
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              onClick={handleDeleteAccount}
+                              disabled={deleting || saving || leadersLoading || positionsLoading}
+                              className="gap-2"
+                            >
+                              {deleting ? (
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <AlertTriangle className="w-4 h-4" />
+                              )}
+                              アカウント削除
+                            </Button>
+                          )}
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             <CheckCircle2 className="w-4 h-4 text-primary" />
                             更新は即時反映されます。

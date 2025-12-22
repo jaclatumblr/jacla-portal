@@ -3,13 +3,14 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AlertTriangle, CheckCircle2, Loader2, PencilLine } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Image as ImageIcon, Loader2, PencilLine } from "lucide-react";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 const crewOptions = ["User", "PA", "Lighting"];
@@ -43,8 +44,75 @@ const partOptions = [
   "etc",
 ];
 
+const avatarTypes = ["image/png", "image/jpeg", "image/webp"];
+const maxAvatarSizeMb = 2;
+const maxAvatarDimension = 512;
+const avatarOutputType = "image/webp";
+const avatarOutputQuality = 0.82;
+
+const loadAvatarImage = (file: File): Promise<HTMLImageElement | ImageBitmap> => {
+  if (typeof createImageBitmap === "function") {
+    return createImageBitmap(file);
+  }
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Failed to load image"));
+    };
+    img.src = url;
+  });
+};
+
+const compressAvatarImage = async (file: File): Promise<File> => {
+  const image = await loadAvatarImage(file);
+  const width = "naturalWidth" in image ? image.naturalWidth : image.width;
+  const height = "naturalHeight" in image ? image.naturalHeight : image.height;
+  const scale = Math.min(1, maxAvatarDimension / Math.max(width, height));
+  const targetWidth = Math.max(1, Math.round(width * scale));
+  const targetHeight = Math.max(1, Math.round(height * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    throw new Error("Canvas not supported");
+  }
+  ctx.drawImage(image as CanvasImageSource, 0, 0, targetWidth, targetHeight);
+  if ("close" in image) {
+    image.close();
+  }
+
+  const toBlob = (type: string) =>
+    new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, type, avatarOutputQuality);
+    });
+
+  let outputType = avatarOutputType;
+  let blob = await toBlob(outputType);
+  if (!blob) {
+    outputType = file.type;
+    blob = await toBlob(outputType);
+  }
+  if (!blob) {
+    throw new Error("Failed to encode image");
+  }
+
+  const baseName = file.name.replace(/\.[^.]+$/, "");
+  const extension =
+    outputType === "image/jpeg" ? "jpg" : outputType === "image/png" ? "png" : "webp";
+  return new File([blob], `${baseName || "avatar"}.${extension}`, { type: outputType });
+};
+
 type ProfileRow = {
   display_name: string | null;
+  avatar_url?: string | null;
   real_name: string | null;
   crew: string | null;
   part: string | null;
@@ -96,6 +164,11 @@ export default function OnboardingClient({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
   const [done, setDone] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -126,6 +199,15 @@ export default function OnboardingClient({
   }, [part]);
 
   useEffect(() => {
+    if (!avatarFile) return;
+    const url = URL.createObjectURL(avatarFile);
+    setAvatarPreview(url);
+    return () => {
+      URL.revokeObjectURL(url);
+    };
+  }, [avatarFile]);
+
+  useEffect(() => {
     if (!session) return;
     let cancelled = false;
     (async () => {
@@ -134,7 +216,7 @@ export default function OnboardingClient({
 
       const { data, error } = await supabase
         .from("profiles")
-        .select("display_name, real_name, crew, part, leader, discord_username, discord_id")
+        .select("display_name, real_name, crew, part, leader, discord_username, discord_id, avatar_url")
         .eq("id", session.user.id)
         .maybeSingle();
 
@@ -154,7 +236,7 @@ export default function OnboardingClient({
             display_name: session.user.user_metadata.full_name ?? session.user.email ?? "",
             avatar_url: avatarCandidate,
           })
-          .select("display_name, real_name, crew, part, leader, discord_username, discord_id")
+          .select("display_name, real_name, crew, part, leader, discord_username, discord_id, avatar_url")
           .maybeSingle();
 
         if (insertError) {
@@ -210,6 +292,15 @@ export default function OnboardingClient({
       const effectiveLeaders = leaderValues.length > 0 ? leaderValues : fallbackLeaders;
 
       const isAdmin = effectiveLeaders.includes("Administrator");
+      const avatarCandidate =
+        profile.avatar_url ??
+        session.user.user_metadata?.avatar_url ??
+        session.user.user_metadata?.picture ??
+        null;
+
+      setAvatarUrl(avatarCandidate);
+      setAvatarPreview(avatarCandidate);
+      setAvatarFile(null);
       const currentCrew = profile.crew ?? "User";
       const canEditCrewValue = true;
       const allowedCrew = crewOptions;
@@ -247,6 +338,31 @@ export default function OnboardingClient({
     setSubParts((prev) =>
       prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value]
     );
+  };
+
+  const handleAvatarChange = async (file: File | null) => {
+    setAvatarError(null);
+    if (!file) {
+      setAvatarFile(null);
+      return;
+    }
+    if (!avatarTypes.includes(file.type)) {
+      setAvatarError("PNG/JPG/WEBP の画像を選択してください。");
+      return;
+    }
+    try {
+      const compressed = await compressAvatarImage(file);
+      if (compressed.size > maxAvatarSizeMb * 1024 * 1024) {
+        setAvatarError(`画像サイズは ${maxAvatarSizeMb}MB 以下にしてください。`);
+        setAvatarFile(null);
+        return;
+      }
+      setAvatarFile(compressed);
+    } catch (compressionError) {
+      console.error(compressionError);
+      setAvatarError("画像の処理に失敗しました。");
+      setAvatarFile(null);
+    }
   };
 
   const handleDiscordConnect = async () => {
@@ -349,6 +465,31 @@ export default function OnboardingClient({
     const partValue = part || "none";
     const avatarCandidate =
       session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture || null;
+    let nextAvatarUrl = avatarUrl ?? avatarCandidate;
+
+    if (avatarFile) {
+      setAvatarUploading(true);
+      const fileExt = avatarFile.name.split(".").pop() ?? "png";
+      const safeName = avatarFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const path = `${session.user.id}/${Date.now()}-${safeName || `avatar.${fileExt}`}`;
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(path, avatarFile, { upsert: true });
+      if (uploadError) {
+        console.error(uploadError);
+        setError("画像のアップロードに失敗しました。");
+        setSaving(false);
+        setAvatarUploading(false);
+        return;
+      }
+      const { data: publicUrl } = supabase.storage.from("avatars").getPublicUrl(path);
+      nextAvatarUrl = publicUrl.publicUrl;
+      setAvatarUrl(nextAvatarUrl);
+      setAvatarPreview(nextAvatarUrl);
+      setAvatarFile(null);
+      setAvatarUploading(false);
+    }
+
     const updates: {
       display_name: string;
       real_name: string;
@@ -365,8 +506,8 @@ export default function OnboardingClient({
     if (canEditCrew) {
       updates.crew = crew;
     }
-    if (avatarCandidate) {
-      updates.avatar_url = avatarCandidate;
+    if (nextAvatarUrl) {
+      updates.avatar_url = nextAvatarUrl;
     }
 
     const profileRes = await supabase.from("profiles").update(updates).eq("id", session.user.id);
@@ -555,6 +696,39 @@ export default function OnboardingClient({
                           placeholder="例: 山田 太郎"
                         />
                       </label>
+
+                      <div className="space-y-2">
+                        <span className="text-foreground text-sm">アイコン (任意)</span>
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                          <Avatar className="h-16 w-16 border border-border">
+                            {avatarPreview && (
+                              <AvatarImage src={avatarPreview} alt={displayName || "avatar"} />
+                            )}
+                            <AvatarFallback className="bg-primary/10 text-primary text-lg font-bold">
+                              {(displayName || "?").trim().charAt(0)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="space-y-2">
+                            <label className="inline-flex items-center gap-2 px-3 py-2 border border-border rounded-md text-xs text-muted-foreground cursor-pointer hover:border-primary/60">
+                              <ImageIcon className="h-4 w-4" />
+                              画像を選択
+                              <input
+                                type="file"
+                                accept="image/png,image/jpeg,image/webp"
+                                onChange={(e) => handleAvatarChange(e.target.files?.[0] ?? null)}
+                                disabled={avatarUploading}
+                                className="hidden"
+                              />
+                            </label>
+                            <p className="text-xs text-muted-foreground">
+                              PNG/JPG/WEBP・{maxAvatarSizeMb}MBまで
+                            </p>
+                          </div>
+                        </div>
+                        {avatarError && (
+                          <p className="text-xs text-destructive">{avatarError}</p>
+                        )}
+                      </div>
 
                       <label className="space-y-1 block text-sm">
                         <span className="text-foreground">本名</span>

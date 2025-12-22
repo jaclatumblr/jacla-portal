@@ -22,7 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useTheme } from "next-themes";
 import { supabase } from "@/lib/supabaseClient";
-import { useIsAdmin } from "@/lib/useIsAdmin";
+import { useRoleFlags } from "@/lib/useRoleFlags";
 
 const navItems = [
   { id: "home", href: "/", label: "ホーム", icon: Home },
@@ -41,6 +41,7 @@ const utilityNavItems = bottomNavItems;
 
 export function SideNav() {
   const asideRef = useRef<HTMLElement | null>(null);
+  const bodyOverflowRef = useRef<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.sessionStorage.getItem("sidenavExpanded") === "1";
@@ -49,7 +50,7 @@ export function SideNav() {
   const pathname = usePathname();
   const router = useRouter();
   const { setTheme } = useTheme();
-  const { isAdmin } = useIsAdmin();
+  const { canAccessAdmin } = useRoleFlags();
 
   const updateExpanded = (value: boolean) => {
     setIsExpanded(value);
@@ -85,14 +86,20 @@ export function SideNav() {
   };
 
   useEffect(() => {
-    const original = document.body.style.overflow;
     if (isMobileMenuOpen) {
+      if (bodyOverflowRef.current === null) {
+        bodyOverflowRef.current = document.body.style.overflow;
+      }
       document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = original || "";
+    } else if (bodyOverflowRef.current !== null) {
+      document.body.style.overflow = bodyOverflowRef.current || "";
+      bodyOverflowRef.current = null;
     }
     return () => {
-      document.body.style.overflow = original || "";
+      if (bodyOverflowRef.current !== null) {
+        document.body.style.overflow = bodyOverflowRef.current || "";
+        bodyOverflowRef.current = null;
+      }
     };
   }, [isMobileMenuOpen]);
 
@@ -253,7 +260,7 @@ export function SideNav() {
             </button>
           </div>
 
-          {isAdmin && (
+          {canAccessAdmin && (
             <Link
               href="/admin"
               className={cn(
@@ -384,7 +391,7 @@ export function SideNav() {
                 );
               })}
 
-              {isAdmin && (
+              {canAccessAdmin && (
                 <Link
                   href="/admin"
                   onClick={() => setIsMobileMenuOpen(false)}

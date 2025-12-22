@@ -448,6 +448,7 @@ using (profile_id = auth.uid())
 with check (profile_id = auth.uid());
 
 -- 5-7-1) 入学年度は全員閲覧できるように RPC で提供
+drop function if exists public.get_profile_enrollment_years();
 create or replace function public.get_profile_enrollment_years()
 returns table (profile_id uuid, enrollment_year integer, birth_date date)
 language sql

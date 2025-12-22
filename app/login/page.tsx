@@ -1,16 +1,12 @@
 // app/login/page.tsx
 "use client";
 
-import type React from "react";
-
 import { Suspense, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight, Chrome, Loader2, Mail } from "lucide-react";
+import { Chrome, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/lib/supabaseClient";
 
 function getAuthCallbackUrl() {
@@ -20,10 +16,8 @@ function getAuthCallbackUrl() {
 function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
-  const [isSent, setIsSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const queryError = (() => {
     const value = searchParams.get("error");
@@ -54,29 +48,6 @@ function LoginPageContent() {
       cancelled = true;
     };
   }, [router]);
-
-  const handleEmailLogin = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setError(null);
-    setIsLoading(true);
-
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: getAuthCallbackUrl(),
-      },
-    });
-
-    if (error) {
-      console.error(error);
-      setError("メール送信に失敗しました。入力内容をご確認ください。");
-      setIsLoading(false);
-      return;
-    }
-
-    setIsLoading(false);
-    setIsSent(true);
-  };
 
   const handleGoogleLogin = async () => {
     setError(null);
@@ -178,97 +149,39 @@ function LoginPageContent() {
               </div>
             )}
 
-            {isSent ? (
-              <div className="p-6 bg-card/50 border border-border rounded-lg text-center">
-                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Mail className="w-8 h-8 text-primary" />
-                </div>
-                <h3 className="text-lg font-bold mb-2">メールを送信しました</h3>
-                <p className="text-muted-foreground text-sm mb-4">
-                  <span className="text-foreground font-medium">{email}</span>
-                  <br />
-                  に認証リンクを送信しました。
-                  <br />
-                  メールを確認してログインしてください。
-                </p>
-                <Button
-                  variant="outline"
-                  className="w-full bg-transparent"
-                  onClick={() => setIsSent(false)}
-                >
-                  別のメールアドレスを使用
-                </Button>
-              </div>
-            ) : (
-              <>
-                <Button
-                  variant="outline"
-                  className="w-full h-12 bg-card/50 border-border hover:bg-card hover:border-primary/50 transition-all"
-                  onClick={handleGoogleLogin}
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <>
-                      <Chrome className="w-5 h-5 mr-3" />
-                      Googleでログイン
-                    </>
-                  )}
-                </Button>
+            <>
+              <Button
+                variant="outline"
+                className="w-full h-12 bg-card/50 border-border hover:bg-card hover:border-primary/50 transition-all"
+                onClick={handleGoogleLogin}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <>
+                    <Chrome className="w-5 h-5 mr-3" />
+                    Googleでログイン
+                  </>
+                )}
+              </Button>
 
-                <div className="relative">
-                  <Separator className="bg-border" />
-                  <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-background px-4 text-xs text-muted-foreground">
-                    または
-                  </span>
-                </div>
+              <p className="text-xs text-muted-foreground text-center">
+                edu.teu.ac.jp のアカウントでログインしてください
+              </p>
 
-                <form onSubmit={handleEmailLogin} className="space-y-4">
-                  <div className="space-y-2">
-                    <label htmlFor="email" className="text-sm font-medium">
-                      メールアドレス
-                    </label>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="example@university.ac.jp"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                      className="h-12 bg-card/50 border-border focus:border-primary"
-                    />
-                  </div>
-
-                  <Button
-                    type="submit"
-                    className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90"
-                    disabled={isLoading || !email}
-                  >
-                    {isLoading ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <>
-                        メールリンクでログイン
-                        <ArrowRight className="w-4 h-4 ml-2" />
-                      </>
-                    )}
-                  </Button>
-                </form>
-
-                <p className="text-xs text-muted-foreground text-center">
-                  ログインすることで、
-                  <Link href="/terms" className="text-primary hover:underline">
-                    利用規約
-                  </Link>
-                  と
-                  <Link href="/privacy" className="text-primary hover:underline">
-                    プライバシーポリシー
-                  </Link>
-                  に同意したことになります。
-                </p>
-              </>
-            )}
+              <p className="text-xs text-muted-foreground text-center">
+                ログインすることで、
+                <Link href="/terms" className="text-primary hover:underline">
+                  利用規約
+                </Link>
+                と
+                <Link href="/privacy" className="text-primary hover:underline">
+                  プライバシーポリシー
+                </Link>
+                に同意したことになります。
+              </p>
+            </>
           </div>
 
           <div className="mt-12 pt-6 border-t border-border text-center">

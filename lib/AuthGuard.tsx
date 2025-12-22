@@ -6,6 +6,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useEffect } from "react";
 import type { ReactNode } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { emailPolicyMessage, isAllowedEmail } from "@/lib/authEmail";
 
 export function AuthGuard({ children }: { children: ReactNode }) {
   const { session, loading } = useAuth();
@@ -20,6 +21,23 @@ export function AuthGuard({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (loading || !session) return;
+    if (isAllowedEmail(session.user.email)) return;
+    let cancelled = false;
+
+    (async () => {
+      await supabase.auth.signOut();
+      if (cancelled) return;
+      router.replace(`/login?error=${encodeURIComponent(emailPolicyMessage)}`);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, session, router]);
+
+  useEffect(() => {
+    if (loading || !session) return;
+    if (!isAllowedEmail(session.user.email)) return;
     if (pathname === "/onboarding") return;
 
     let cancelled = false;

@@ -3,6 +3,7 @@
 import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { emailPolicyMessage, isAllowedEmail } from "@/lib/authEmail";
 
 function AuthCallbackContent() {
   const router = useRouter();
@@ -26,13 +27,24 @@ function AuthCallbackContent() {
       );
     }, 8000);
 
+    const handleSession = async (session: { user?: { email?: string | null } } | null) => {
+      if (!session) return;
+      const email = session.user?.email ?? null;
+      if (isAllowedEmail(email)) {
+        router.replace("/");
+        return;
+      }
+      await supabase.auth.signOut();
+      router.replace(`/login?error=${encodeURIComponent(emailPolicyMessage)}`);
+    };
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (cancelled) return;
       if (session) {
         window.clearTimeout(timeoutId);
-        router.replace("/");
+        void handleSession(session);
       }
     });
 
@@ -49,7 +61,7 @@ function AuthCallbackContent() {
 
       if (data.session) {
         window.clearTimeout(timeoutId);
-        router.replace("/");
+        await handleSession(data.session);
         return;
       }
 

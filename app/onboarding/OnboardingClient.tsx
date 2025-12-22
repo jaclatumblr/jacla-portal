@@ -61,6 +61,7 @@ type ProfilePartRow = {
 type ProfilePrivateRow = {
   student_id: string | null;
   enrollment_year: number | null;
+  birth_date: string | null;
 };
 
 type OnboardingClientMode = "onboarding" | "edit";
@@ -103,6 +104,7 @@ export default function OnboardingClient({
   const [realName, setRealName] = useState("");
   const [studentId, setStudentId] = useState("");
   const [enrollmentYear, setEnrollmentYear] = useState("");
+  const [birthDate, setBirthDate] = useState("");
   const [discordUsername, setDiscordUsername] = useState("");
   const [discordId, setDiscordId] = useState<string | null>(null);
   const [discordConnecting, setDiscordConnecting] = useState(false);
@@ -175,7 +177,7 @@ export default function OnboardingClient({
           .eq("profile_id", session.user.id),
         supabase
           .from("profile_private")
-          .select("student_id, enrollment_year")
+          .select("student_id, enrollment_year, birth_date")
           .eq("profile_id", session.user.id)
           .maybeSingle(),
       ]);
@@ -221,6 +223,9 @@ export default function OnboardingClient({
         privateRes.data
           ? String((privateRes.data as ProfilePrivateRow).enrollment_year ?? "")
           : ""
+      );
+      setBirthDate(
+        privateRes.data ? (privateRes.data as ProfilePrivateRow).birth_date ?? "" : ""
       );
       setDiscordUsername(profile.discord_username ?? "");
       setDiscordId(profile.discord_id ?? null);
@@ -320,12 +325,17 @@ export default function OnboardingClient({
       return;
     }
     const enrollmentYearValue = enrollmentYear.trim();
+    const birthDateValue = birthDate.trim();
     if (!enrollmentYearValue && !isAdminLeader) {
       setError("入学年度を入力してください。");
       return;
     }
     if (enrollmentYearValue && !/^\d{4}$/.test(enrollmentYearValue)) {
       setError("入学年度は西暦4桁で入力してください。");
+      return;
+    }
+    if (birthDateValue && !/^\d{4}-\d{2}-\d{2}$/.test(birthDateValue)) {
+      setError("誕生日はYYYY-MM-DD形式で入力してください。");
       return;
     }
     if (!isAdminLeader && !part) {
@@ -375,6 +385,7 @@ export default function OnboardingClient({
           profile_id: session.user.id,
           student_id: studentId.trim(),
           enrollment_year: enrollmentYearValue ? Number(enrollmentYearValue) : null,
+          birth_date: birthDateValue ? birthDateValue : null,
         },
         { onConflict: "profile_id" }
       );
@@ -583,6 +594,17 @@ export default function OnboardingClient({
                         />
                       </label>
 
+                      <label className="space-y-1 block text-sm">
+                        <span className="text-foreground">
+                          誕生日
+                          <span className="ml-2 text-xs text-muted-foreground">任意</span>
+                        </span>
+                        <Input
+                          type="date"
+                          value={birthDate}
+                          onChange={(e) => setBirthDate(e.target.value)}
+                        />
+                      </label>
                       {isEdit && (
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">

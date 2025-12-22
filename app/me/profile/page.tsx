@@ -76,6 +76,7 @@ export default function ProfilePage() {
   const [bands, setBands] = useState<BandItem[]>([]);
   const [studentId, setStudentId] = useState<string | null>(null);
   const [enrollmentYear, setEnrollmentYear] = useState<string | null>(null);
+  const [birthDate, setBirthDate] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -98,7 +99,7 @@ export default function ProfilePage() {
           .eq("profile_id", session.user.id),
         supabase
           .from("profile_private")
-          .select("student_id, enrollment_year")
+          .select("student_id, enrollment_year, birth_date")
           .eq("profile_id", session.user.id)
           .maybeSingle(),
         supabase
@@ -151,12 +152,13 @@ export default function ProfilePage() {
         console.error(privateRes.error);
       } else {
         const privateRow = privateRes.data as
-          | { student_id?: string | null; enrollment_year?: number | null }
+          | { student_id?: string | null; enrollment_year?: number | null; birth_date?: string | null }
           | null;
         setStudentId(privateRow?.student_id ?? null);
         setEnrollmentYear(
           privateRow?.enrollment_year != null ? String(privateRow.enrollment_year) : null
         );
+        setBirthDate(privateRow?.birth_date ?? null);
       }
 
       if (bandRes.error) {
@@ -239,6 +241,7 @@ export default function ProfilePage() {
   const realNameLabel = profile?.real_name?.trim() || "未設定";
   const studentIdLabel = studentId?.trim() || "未設定";
   const enrollmentYearLabel = enrollmentYear?.trim() || "未設定";
+  const birthDateLabel = birthDate?.trim() || "未設定";
   const joinDate = profile?.created_at ? profile.created_at.split("T")[0] : "-";
   const discordValue =
     profile?.discord_username ||
@@ -408,6 +411,20 @@ export default function ProfilePage() {
                         <p className="text-xs text-muted-foreground">入学年度</p>
                         <p className="font-medium text-sm md:text-base truncate">
                           {enrollmentYearLabel}
+                        </p>
+                      </div>
+                    </div>
+
+                    <Separator className="bg-border" />
+
+                    <div className="flex items-center gap-3 md:gap-4">
+                      <div className="w-10 h-10 rounded-lg bg-secondary/10 flex items-center justify-center shrink-0">
+                        <Calendar className="w-5 h-5 text-secondary" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs text-muted-foreground">誕生日</p>
+                        <p className="font-medium text-sm md:text-base truncate">
+                          {birthDateLabel}
                         </p>
                       </div>
                     </div>

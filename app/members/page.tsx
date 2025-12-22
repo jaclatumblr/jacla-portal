@@ -28,6 +28,7 @@ type Member = {
   bands: string[];
   avatarUrl: string | null;
   enrollmentYear: string | null;
+  birthDate: string | null;
 };
 
 type ProfileRow = {
@@ -52,6 +53,7 @@ type ProfilePrivateRow = {
 type EnrollmentYearRow = {
   profile_id: string;
   enrollment_year: number | null;
+  birth_date: string | null;
 };
 
 type BandMemberRow = {
@@ -181,6 +183,7 @@ export default function MembersPage() {
       }
 
       const enrollmentMap = new Map<string, string>();
+      const birthDateMap = new Map<string, string>();
       if (enrollmentRes.error) {
         console.error(enrollmentRes.error);
         setError((prev) => prev ?? "入学年度の取得に失敗しました。");
@@ -191,6 +194,10 @@ export default function MembersPage() {
           const yearValue = entry.enrollment_year != null ? String(entry.enrollment_year) : "";
           if (yearValue) {
             enrollmentMap.set(entry.profile_id, yearValue);
+          }
+          const birthValue = entry.birth_date ? String(entry.birth_date) : "";
+          if (birthValue) {
+            birthDateMap.set(entry.profile_id, birthValue);
           }
         });
       }
@@ -225,6 +232,7 @@ export default function MembersPage() {
           email: isAdministrator ? profile.email ?? null : null,
           studentId: canViewStudentId ? studentMap.get(profile.id) ?? null : null,
           enrollmentYear: enrollmentMap.get(profile.id) ?? null,
+          birthDate: birthDateMap.get(profile.id) ?? null,
           part: profile.part && profile.part !== "none" ? profile.part : null,
           crew: profile.crew ?? null,
           leaderRoles,
@@ -448,6 +456,9 @@ export default function MembersPage() {
                             </p>
                             <p className="text-xs text-muted-foreground truncate">
                               入学年度: {member.enrollmentYear ?? "未登録"}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              誕生日: {member.birthDate ?? "未登録"}
                             </p>
                             {canViewStudentId && (
                               <p className="text-xs text-muted-foreground truncate">

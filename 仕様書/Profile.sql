@@ -1,4 +1,4 @@
--- =========================================================
+﻿-- =========================================================
 -- Jacla Portal: profiles ロール設計
 -- =========================================================
 -- 目的：
@@ -223,12 +223,14 @@ create table if not exists public.profile_private (
   profile_id uuid primary key references public.profiles(id) on delete cascade,
   student_id text not null,
   enrollment_year integer,
+  birth_date date,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 alter table public.profile_private
-  add column if not exists enrollment_year integer;
+  add column if not exists enrollment_year integer,
+  add column if not exists birth_date date;
 
 create or replace function public.profile_private_set_updated_at()
 returns trigger
@@ -447,13 +449,13 @@ with check (profile_id = auth.uid());
 
 -- 5-7-1) 入学年度は全員閲覧できるように RPC で提供
 create or replace function public.get_profile_enrollment_years()
-returns table (profile_id uuid, enrollment_year integer)
+returns table (profile_id uuid, enrollment_year integer, birth_date date)
 language sql
 stable
 security definer
 set search_path = public
 as $$
-  select profile_id, enrollment_year from public.profile_private;
+  select profile_id, enrollment_year, birth_date from public.profile_private;
 $$;
 
 revoke execute on function public.get_profile_enrollment_years() from public;
@@ -626,3 +628,4 @@ begin
 end $$;
 
 commit;
+

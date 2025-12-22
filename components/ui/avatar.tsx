@@ -25,7 +25,7 @@ const AvatarImage = React.forwardRef<
     ref={ref}
     data-slot="avatar-image"
     alt={alt ?? ""}
-    className={cn("aspect-square h-full w-full", className)}
+    className={cn("aspect-square h-full w-full object-cover", className)}
     {...props}
   />
 ));

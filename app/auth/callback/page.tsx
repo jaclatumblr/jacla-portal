@@ -4,7 +4,7 @@ import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
-import { emailPolicyMessage, getUserEmail, isAllowedEmail } from "@/lib/authEmail";
+import { emailPolicyMessage, getUserEmail, isAllowedEmail, isGmailAddress } from "@/lib/authEmail";
 
 function AuthCallbackContent() {
   const router = useRouter();
@@ -28,12 +28,43 @@ function AuthCallbackContent() {
       );
     }, 8000);
 
+    const isAdminUser = async (userId: string) => {
+      const { data: leadersData, error: leadersError } = await supabase
+        .from("profile_leaders")
+        .select("leader")
+        .eq("profile_id", userId);
+      if (!leadersError) {
+        const leaders = (leadersData ?? [])
+          .map((row) => (row as { leader?: string }).leader)
+          .filter((role) => role && role !== "none") as string[];
+        if (leaders.includes("Administrator")) return true;
+      }
+
+      const { data: profileData, error: profileError } = await supabase
+        .from("profiles")
+        .select("leader")
+        .eq("id", userId)
+        .maybeSingle();
+      if (!profileError) {
+        return (profileData as { leader?: string } | null)?.leader === "Administrator";
+      }
+
+      return false;
+    };
+
     const handleSession = async (session: Session | null) => {
       if (!session) return;
       const email = getUserEmail(session.user ?? null);
       if (isAllowedEmail(email)) {
         router.replace("/");
         return;
+      }
+      if (isGmailAddress(email) && session.user?.id) {
+        const isAdmin = await isAdminUser(session.user.id);
+        if (isAdmin) {
+          router.replace("/");
+          return;
+        }
       }
       await supabase.auth.signOut();
       router.replace(`/login?error=${encodeURIComponent(emailPolicyMessage)}`);

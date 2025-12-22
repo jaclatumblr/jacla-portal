@@ -6,7 +6,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useEffect } from "react";
 import type { ReactNode } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { emailPolicyMessage, getUserEmail, isAllowedEmail } from "@/lib/authEmail";
+import { emailPolicyMessage, getUserEmail, isAllowedEmail, isGmailAddress } from "@/lib/authEmail";
 
 export function AuthGuard({ children }: { children: ReactNode }) {
   const { session, loading } = useAuth();
@@ -21,11 +21,39 @@ export function AuthGuard({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (loading || !session) return;
-    const email = getUserEmail(session.user ?? null);
-    if (isAllowedEmail(email)) return;
     let cancelled = false;
 
+    const isAdminUser = async (userId: string) => {
+      const { data: leadersData, error: leadersError } = await supabase
+        .from("profile_leaders")
+        .select("leader")
+        .eq("profile_id", userId);
+      if (!leadersError) {
+        const leaders = (leadersData ?? [])
+          .map((row) => (row as { leader?: string }).leader)
+          .filter((role) => role && role !== "none") as string[];
+        if (leaders.includes("Administrator")) return true;
+      }
+
+      const { data: profileData, error: profileError } = await supabase
+        .from("profiles")
+        .select("leader")
+        .eq("id", userId)
+        .maybeSingle();
+      if (!profileError) {
+        return (profileData as { leader?: string } | null)?.leader === "Administrator";
+      }
+
+      return false;
+    };
+
     (async () => {
+      const email = getUserEmail(session.user ?? null);
+      if (isAllowedEmail(email)) return;
+      if (isGmailAddress(email) && session.user?.id) {
+        const isAdmin = await isAdminUser(session.user.id);
+        if (isAdmin) return;
+      }
       await supabase.auth.signOut();
       if (cancelled) return;
       router.replace(`/login?error=${encodeURIComponent(emailPolicyMessage)}`);
@@ -39,7 +67,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (loading || !session) return;
     const email = getUserEmail(session.user ?? null);
-    if (!isAllowedEmail(email)) return;
+    if (!isAllowedEmail(email) && !isGmailAddress(email)) return;
     if (pathname === "/onboarding") return;
 
     let cancelled = false;

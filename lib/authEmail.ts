@@ -18,6 +18,15 @@ export function isAllowedEmail(email?: string | null): boolean {
   return adminAllowlist.includes(normalized);
 }
 
+export function isGmailAddress(email?: string | null): boolean {
+  if (!email) return false;
+  const normalized = email.trim().toLowerCase();
+  return (
+    normalized.endsWith("@gmail.com") ||
+    normalized.endsWith("@googlemail.com")
+  );
+}
+
 export function getUserEmail(user?: SupabaseUser): string | null {
   if (!user) return null;
   const direct = pickEmail(user.email);

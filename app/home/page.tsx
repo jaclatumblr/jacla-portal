@@ -291,6 +291,40 @@ export default function DashboardPage() {
 
                 <div className="space-y-4 md:space-y-6">
                   <div className="p-4 md:p-6 bg-card/50 border border-border rounded-lg">
+                    <h2 className="font-bold mb-4">クイックアクセス</h2>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Link
+                        href="/pa"
+                        className="flex flex-col items-center gap-2 p-3 rounded-lg border border-border hover:border-secondary/50 hover:bg-secondary/5 transition-all"
+                      >
+                        <Music className="w-5 h-5 text-secondary" />
+                        <span className="text-xs font-medium">PA</span>
+                      </Link>
+                      <Link
+                        href="/lighting"
+                        className="flex flex-col items-center gap-2 p-3 rounded-lg border border-border hover:border-accent/50 hover:bg-accent/5 transition-all"
+                      >
+                        <Lightbulb className="w-5 h-5 text-accent" />
+                        <span className="text-xs font-medium">照明</span>
+                      </Link>
+                      <Link
+                        href="/announcements"
+                        className="flex flex-col items-center gap-2 p-3 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/5 transition-all"
+                      >
+                        <Bell className="w-5 h-5 text-primary" />
+                        <span className="text-xs font-medium">お知らせ</span>
+                      </Link>
+                      <Link
+                        href="/members"
+                        className="flex flex-col items-center gap-2 p-3 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/5 transition-all"
+                      >
+                        <Users className="w-5 h-5 text-primary" />
+                        <span className="text-xs font-medium">部員一覧</span>
+                      </Link>
+                    </div>
+                  </div>
+
+                  <div className="p-4 md:p-6 bg-card/50 border border-border rounded-lg">
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-2">
                         <Bell className="w-5 h-5 text-primary" />
@@ -326,40 +360,6 @@ export default function DashboardPage() {
                           </Link>
                         ))
                       )}
-                    </div>
-                  </div>
-
-                  <div className="p-4 md:p-6 bg-card/50 border border-border rounded-lg">
-                    <h2 className="font-bold mb-4">クイックアクセス</h2>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Link
-                        href="/pa"
-                        className="flex flex-col items-center gap-2 p-3 rounded-lg border border-border hover:border-secondary/50 hover:bg-secondary/5 transition-all"
-                      >
-                        <Music className="w-5 h-5 text-secondary" />
-                        <span className="text-xs font-medium">PA</span>
-                      </Link>
-                      <Link
-                        href="/lighting"
-                        className="flex flex-col items-center gap-2 p-3 rounded-lg border border-border hover:border-accent/50 hover:bg-accent/5 transition-all"
-                      >
-                        <Lightbulb className="w-5 h-5 text-accent" />
-                        <span className="text-xs font-medium">照明</span>
-                      </Link>
-                      <Link
-                        href="/announcements"
-                        className="flex flex-col items-center gap-2 p-3 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/5 transition-all"
-                      >
-                        <Bell className="w-5 h-5 text-primary" />
-                        <span className="text-xs font-medium">お知らせ</span>
-                      </Link>
-                      <Link
-                        href="/members"
-                        className="flex flex-col items-center gap-2 p-3 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/5 transition-all"
-                      >
-                        <Users className="w-5 h-5 text-primary" />
-                        <span className="text-xs font-medium">部員一覧</span>
-                      </Link>
                     </div>
                   </div>
 

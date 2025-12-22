@@ -33,6 +33,7 @@ type ProfileData = {
   created_at?: string | null;
   discord?: string | null;
   discord_username?: string | null;
+  discord_id?: string | null;
   avatar_url?: string | null;
 };
 
@@ -244,9 +245,10 @@ export default function ProfilePage() {
     profile?.discord ||
     session?.user.user_metadata?.discord ||
     "";
+  const discordId = profile?.discord_id ?? null;
   const discordLabel = discordValue || "未設定";
-  const discordUrl = discordValue
-    ? `https://discord.com/users/${encodeURIComponent(discordValue)}`
+  const discordUrl = discordId
+    ? `https://discord.com/users/${encodeURIComponent(discordId)}`
     : null;
   const avatarUrl =
     profile?.avatar_url ||

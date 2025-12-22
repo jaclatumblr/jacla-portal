@@ -212,6 +212,7 @@ alter table public.profiles
   add column if not exists part   part_role   not null default 'none',
   add column if not exists muted  boolean     not null default false,
   add column if not exists avatar_url text,
+  add column if not exists discord_id text,
   add column if not exists real_name text;
 
 

@@ -50,6 +50,7 @@ type ProfileRow = {
   part: string | null;
   leader: string | null;
   discord_username: string | null;
+  discord_id?: string | null;
 };
 
 type ProfilePartRow = {
@@ -103,6 +104,10 @@ export default function OnboardingClient({
   const [studentId, setStudentId] = useState("");
   const [enrollmentYear, setEnrollmentYear] = useState("");
   const [discordUsername, setDiscordUsername] = useState("");
+  const [discordId, setDiscordId] = useState<string | null>(null);
+  const [discordConnecting, setDiscordConnecting] = useState(false);
+  const [discordDisconnecting, setDiscordDisconnecting] = useState(false);
+  const [discordError, setDiscordError] = useState<string | null>(null);
   const [crew, setCrew] = useState("User");
   const [part, setPart] = useState("");
   const [subParts, setSubParts] = useState<string[]>([]);
@@ -127,7 +132,7 @@ export default function OnboardingClient({
 
       const { data, error } = await supabase
         .from("profiles")
-        .select("display_name, real_name, crew, part, leader, discord_username")
+        .select("display_name, real_name, crew, part, leader, discord_username, discord_id")
         .eq("id", session.user.id)
         .maybeSingle();
 
@@ -147,7 +152,7 @@ export default function OnboardingClient({
             display_name: session.user.user_metadata.full_name ?? session.user.email ?? "",
             avatar_url: avatarCandidate,
           })
-          .select("display_name, real_name, crew, part, leader, discord_username")
+          .select("display_name, real_name, crew, part, leader, discord_username, discord_id")
           .maybeSingle();
 
         if (insertError) {
@@ -218,6 +223,7 @@ export default function OnboardingClient({
           : ""
       );
       setDiscordUsername(profile.discord_username ?? "");
+      setDiscordId(profile.discord_id ?? null);
       setCrew(currentCrew);
       setPart(primaryPart ?? "");
       setSubParts(subs);
@@ -236,6 +242,66 @@ export default function OnboardingClient({
     setSubParts((prev) =>
       prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value]
     );
+  };
+
+  const handleDiscordConnect = async () => {
+    if (!session) return;
+    setDiscordError(null);
+    setDiscordConnecting(true);
+    try {
+      const res = await fetch("/api/discord/connect", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ next }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setDiscordError(data?.error ?? "Discord連携に失敗しました。");
+        setDiscordConnecting(false);
+        return;
+      }
+      const data = (await res.json().catch(() => null)) as { url?: string } | null;
+      if (!data?.url) {
+        setDiscordError("Discord連携に失敗しました。");
+        setDiscordConnecting(false);
+        return;
+      }
+      window.location.href = data.url;
+    } catch (err) {
+      console.error(err);
+      setDiscordError("Discord連携に失敗しました。");
+      setDiscordConnecting(false);
+    }
+  };
+
+  const handleDiscordDisconnect = async () => {
+    if (!session) return;
+    setDiscordError(null);
+    setDiscordDisconnecting(true);
+    try {
+      const res = await fetch("/api/discord/disconnect", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setDiscordError(data?.error ?? "Discord連携の解除に失敗しました。");
+        setDiscordDisconnecting(false);
+        return;
+      }
+      setDiscordId(null);
+      setDiscordUsername("");
+      setDiscordDisconnecting(false);
+    } catch (err) {
+      console.error(err);
+      setDiscordError("Discord連携の解除に失敗しました。");
+      setDiscordDisconnecting(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -517,14 +583,61 @@ export default function OnboardingClient({
                         />
                       </label>
 
-                      <label className="space-y-1 block text-sm">
-                        <span className="text-foreground">Discordユーザー名</span>
-                        <Input
-                          value={discordUsername}
-                          onChange={(e) => setDiscordUsername(e.target.value)}
-                          placeholder="例: nia_8800"
-                        />
-                      </label>
+                      {isEdit && (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <span className="text-sm text-foreground">Discord連携</span>
+                              <p className="text-xs text-muted-foreground">
+                                Discordプロフィールへのリンクを有効にします。
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-lg border border-border bg-card/50 px-4 py-3">
+                            <div className="flex-1 text-sm">
+                              {discordId ? (
+                                <span>
+                                  連携中: {discordUsername || "Discordユーザー"}
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground">未連携</span>
+                              )}
+                            </div>
+                            {discordId ? (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                disabled={discordDisconnecting}
+                                onClick={handleDiscordDisconnect}
+                                className="w-full sm:w-auto"
+                              >
+                                {discordDisconnecting ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  "連携解除"
+                                )}
+                              </Button>
+                            ) : (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                disabled={discordConnecting}
+                                onClick={handleDiscordConnect}
+                                className="w-full sm:w-auto"
+                              >
+                                {discordConnecting ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  "Discordと連携"
+                                )}
+                              </Button>
+                            )}
+                          </div>
+                          {discordError && (
+                            <p className="text-sm text-destructive">{discordError}</p>
+                          )}
+                        </div>
+                      )}
 
                       <div className="grid md:grid-cols-2 gap-4">
                         <label className="space-y-1 block text-sm">

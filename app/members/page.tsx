@@ -19,7 +19,8 @@ type Member = {
   realName: string | null;
   email: string | null;
   studentId: string | null;
-  discord: string | null;
+  discordName: string | null;
+  discordId: string | null;
   part: string | null;
   crew: string | null;
   leaderRoles: string[];
@@ -39,6 +40,7 @@ type ProfileRow = {
   leader: string | null;
   discord: string | null;
   discord_username: string | null;
+  discord_id?: string | null;
   avatar_url?: string | null;
 };
 
@@ -106,12 +108,12 @@ export default function MembersPage() {
         ? supabase
             .from("profiles")
             .select(
-              "id, display_name, real_name, email, part, crew, leader, discord, discord_username, avatar_url"
+              "id, display_name, real_name, email, part, crew, leader, discord, discord_username, discord_id, avatar_url"
             )
             .order("display_name", { ascending: true })
         : supabase
             .from("profiles")
-            .select("id, display_name, real_name, part, crew, leader, discord, discord_username, avatar_url")
+            .select("id, display_name, real_name, part, crew, leader, discord, discord_username, discord_id, avatar_url")
             .order("display_name", { ascending: true });
 
       const [profilesRes, bandsRes, leadersRes, positionsRes, enrollmentRes] = await Promise.all([
@@ -227,7 +229,8 @@ export default function MembersPage() {
           crew: profile.crew ?? null,
           leaderRoles,
           positions,
-          discord: profile.discord_username ?? profile.discord ?? null,
+          discordName: profile.discord_username ?? profile.discord ?? null,
+          discordId: profile.discord_id ?? null,
           bands: Array.from(bandMap.get(profile.id) ?? []),
           avatarUrl: profile.avatar_url ?? null,
         } satisfies Member;
@@ -384,9 +387,9 @@ export default function MembersPage() {
                             .join(" / ")
                         : null;
                     const partLabel = member.part ?? "未設定";
-                    const discordLabel = member.discord ?? "未連携";
-                    const discordUrl = member.discord
-                      ? `https://discord.com/users/${encodeURIComponent(member.discord)}`
+                    const discordLabel = member.discordName ?? "未連携";
+                    const discordUrl = member.discordId
+                      ? `https://discord.com/users/${encodeURIComponent(member.discordId)}`
                       : null;
                     const bandLabels = member.bands.length > 0 ? member.bands : ["所属バンドなし"];
                     const initial = member.name.trim().charAt(0) || "?";

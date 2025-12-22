@@ -150,7 +150,75 @@ export default function HomePage() {
             <div className="hidden sm:block absolute bottom-8 right-8 w-16 h-16 border-r-2 border-b-2 border-primary/30" />
           </section>
 
-          <section id="features" className="min-h-screen py-16 md:py-24 relative">
+          <section
+            id="announcements"
+            className="py-16 md:py-24 relative bg-card/30"
+          >
+            <div className="relative z-10 container mx-auto px-4 sm:px-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 md:mb-12 gap-4">
+                <div>
+                  <span className="text-xs text-primary tracking-[0.3em] font-mono">
+                    ANNOUNCEMENTS
+                  </span>
+                  <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-4">
+                    お知らせ
+                  </h2>
+                </div>
+                <Link
+                  href="/announcements"
+                  className="flex items-center gap-2 text-primary hover:text-primary/80 transition-colors text-sm font-medium"
+                >
+                  すべて見る
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              </div>
+
+              <div className="grid gap-4 md:gap-6 max-w-4xl">
+                {announcementsLoading ? (
+                  <div className="text-sm text-muted-foreground">読み込み中...</div>
+                ) : announcements.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">お知らせがありません。</div>
+                ) : (
+                  announcements.map((announcement) => {
+                    const tone =
+                      announcement.category === "重要"
+                        ? "bg-destructive/10 text-destructive"
+                        : announcement.category === "イベント"
+                          ? "bg-secondary/10 text-secondary"
+                          : announcement.category === "締切"
+                            ? "bg-orange-500/10 text-orange-500"
+                            : "bg-muted text-muted-foreground";
+                    return (
+                      <div
+                        key={announcement.id}
+                        className={`group relative p-4 md:p-6 bg-card border rounded-lg transition-all duration-300 hover:border-primary/30 ${
+                          announcement.isPinned ? "border-primary/50" : "border-border"
+                        }`}
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
+                          <div className="flex items-center gap-2 shrink-0">
+                            {announcement.isPinned && (
+                              <Pin className="w-4 h-4 text-primary" />
+                            )}
+                            <span className={`text-xs px-2 py-1 rounded ${tone}`}>{announcement.category}</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 mb-2">
+                              <h3 className="font-bold text-foreground">{announcement.title}</h3>
+                              <span className="text-xs text-muted-foreground font-mono">{announcement.date}</span>
+                            </div>
+                            <p className="text-sm text-muted-foreground line-clamp-2">{announcement.content}</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </section>
+
+<section id="features" className="min-h-screen py-16 md:py-24 relative">
             <div className="absolute inset-0 bg-gradient-to-b from-background via-card/50 to-background" />
 
             <div className="relative z-10 container mx-auto px-4 sm:px-6">
@@ -310,74 +378,6 @@ export default function HomePage() {
                     </div>
                   </div>
                 </Link>
-              </div>
-            </div>
-          </section>
-
-          <section
-            id="announcements"
-            className="py-16 md:py-24 relative bg-card/30"
-          >
-            <div className="relative z-10 container mx-auto px-4 sm:px-6">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 md:mb-12 gap-4">
-                <div>
-                  <span className="text-xs text-primary tracking-[0.3em] font-mono">
-                    ANNOUNCEMENTS
-                  </span>
-                  <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-4">
-                    お知らせ
-                  </h2>
-                </div>
-                <Link
-                  href="/announcements"
-                  className="flex items-center gap-2 text-primary hover:text-primary/80 transition-colors text-sm font-medium"
-                >
-                  すべて見る
-                  <ArrowRight className="w-4 h-4" />
-                </Link>
-              </div>
-
-              <div className="grid gap-4 md:gap-6 max-w-4xl">
-                {announcementsLoading ? (
-                  <div className="text-sm text-muted-foreground">読み込み中...</div>
-                ) : announcements.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">お知らせがありません。</div>
-                ) : (
-                  announcements.map((announcement) => {
-                    const tone =
-                      announcement.category === "重要"
-                        ? "bg-destructive/10 text-destructive"
-                        : announcement.category === "イベント"
-                          ? "bg-secondary/10 text-secondary"
-                          : announcement.category === "締切"
-                            ? "bg-orange-500/10 text-orange-500"
-                            : "bg-muted text-muted-foreground";
-                    return (
-                      <div
-                        key={announcement.id}
-                        className={`group relative p-4 md:p-6 bg-card border rounded-lg transition-all duration-300 hover:border-primary/30 ${
-                          announcement.isPinned ? "border-primary/50" : "border-border"
-                        }`}
-                      >
-                        <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
-                          <div className="flex items-center gap-2 shrink-0">
-                            {announcement.isPinned && (
-                              <Pin className="w-4 h-4 text-primary" />
-                            )}
-                            <span className={`text-xs px-2 py-1 rounded ${tone}`}>{announcement.category}</span>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 mb-2">
-                              <h3 className="font-bold text-foreground">{announcement.title}</h3>
-                              <span className="text-xs text-muted-foreground font-mono">{announcement.date}</span>
-                            </div>
-                            <p className="text-sm text-muted-foreground line-clamp-2">{announcement.content}</p>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
               </div>
             </div>
           </section>

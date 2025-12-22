@@ -3,7 +3,7 @@
 import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { emailPolicyMessage, isAllowedEmail } from "@/lib/authEmail";
+import { emailPolicyMessage, getUserEmail, isAllowedEmail } from "@/lib/authEmail";
 
 function AuthCallbackContent() {
   const router = useRouter();
@@ -27,9 +27,9 @@ function AuthCallbackContent() {
       );
     }, 8000);
 
-    const handleSession = async (session: { user?: { email?: string | null } } | null) => {
+    const handleSession = async (session: { user?: Record<string, unknown> } | null) => {
       if (!session) return;
-      const email = session.user?.email ?? null;
+      const email = getUserEmail(session.user ?? null);
       if (isAllowedEmail(email)) {
         router.replace("/");
         return;

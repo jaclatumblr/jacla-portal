@@ -6,7 +6,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useEffect } from "react";
 import type { ReactNode } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { emailPolicyMessage, isAllowedEmail } from "@/lib/authEmail";
+import { emailPolicyMessage, getUserEmail, isAllowedEmail } from "@/lib/authEmail";
 
 export function AuthGuard({ children }: { children: ReactNode }) {
   const { session, loading } = useAuth();
@@ -21,7 +21,8 @@ export function AuthGuard({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (loading || !session) return;
-    if (isAllowedEmail(session.user.email)) return;
+    const email = getUserEmail(session.user ?? null);
+    if (isAllowedEmail(email)) return;
     let cancelled = false;
 
     (async () => {
@@ -37,7 +38,8 @@ export function AuthGuard({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (loading || !session) return;
-    if (!isAllowedEmail(session.user.email)) return;
+    const email = getUserEmail(session.user ?? null);
+    if (!isAllowedEmail(email)) return;
     if (pathname === "/onboarding") return;
 
     let cancelled = false;

@@ -9,6 +9,10 @@ import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { supabase } from "@/lib/supabaseClient";
 
+type AnnouncementAuthor = {
+  display_name: string | null;
+};
+
 type Announcement = {
   id: string;
   title: string;
@@ -19,7 +23,18 @@ type Announcement = {
   created_at: string;
   image_url: string | null;
   attachment_url: string | null;
-  profiles?: { display_name: string | null } | null;
+  profiles?: AnnouncementAuthor | null;
+};
+
+type AnnouncementResponse = Omit<Announcement, "profiles"> & {
+  profiles?: AnnouncementAuthor[] | AnnouncementAuthor | null;
+};
+
+const normalizeAnnouncement = (row: AnnouncementResponse): Announcement => {
+  const profileValue = Array.isArray(row.profiles)
+    ? row.profiles[0] ?? null
+    : row.profiles ?? null;
+  return { ...row, profiles: profileValue };
 };
 
 const formatDate = (value: string | null) =>
@@ -55,7 +70,7 @@ export default function AnnouncementDetailPage() {
         if (error) console.error(error);
         setAnnouncement(null);
       } else {
-        setAnnouncement(data as Announcement);
+        setAnnouncement(normalizeAnnouncement(data as AnnouncementResponse));
       }
       setLoading(false);
     })();

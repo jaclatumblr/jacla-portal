@@ -1,4 +1,4 @@
-// app/login/page.tsx
+﻿// app/login/page.tsx
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
@@ -139,7 +139,7 @@ function LoginPageContent() {
               </span>
               <h2 className="text-2xl sm:text-3xl font-bold mt-2">ログイン</h2>
               <p className="text-muted-foreground mt-2">
-                部員アカウントでログインしてください
+                大学アカウントでログインしてください
               </p>
             </div>
 
@@ -183,14 +183,6 @@ function LoginPageContent() {
               </p>
             </>
           </div>
-
-          <div className="mt-12 pt-6 border-t border-border text-center">
-            <p className="text-xs text-muted-foreground">
-              アカウントをお持ちでない場合は
-              <br className="sm:hidden" />
-              <span className="text-foreground">運営にお問い合わせください</span>
-            </p>
-          </div>
         </div>
       </div>
 
@@ -198,9 +190,7 @@ function LoginPageContent() {
         <div className="absolute inset-0 z-40 flex items-center justify-center bg-background/80 backdrop-blur-sm">
           <div className="flex items-center gap-3 px-4 py-3 rounded-lg border border-border bg-card shadow-lg">
             <Loader2 className="w-5 h-5 animate-spin text-primary" />
-            <span className="text-sm text-foreground">
-              ログイン処理中です…
-            </span>
+            <span className="text-sm text-foreground">ログイン処理中です…</span>
           </div>
         </div>
       )}

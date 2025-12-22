@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
 import { emailPolicyMessage, getUserEmail, isAllowedEmail } from "@/lib/authEmail";
 
@@ -27,7 +28,7 @@ function AuthCallbackContent() {
       );
     }, 8000);
 
-    const handleSession = async (session: { user?: Record<string, unknown> } | null) => {
+    const handleSession = async (session: Session | null) => {
       if (!session) return;
       const email = getUserEmail(session.user ?? null);
       if (isAllowedEmail(email)) {

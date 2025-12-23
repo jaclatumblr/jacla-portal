@@ -79,6 +79,15 @@ export default function ProfilePage() {
   const [birthDate, setBirthDate] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showDiscordFallback, setShowDiscordFallback] = useState(false);
+
+  const getDiscordAppUrl = (id: string) => {
+    const encoded = encodeURIComponent(id);
+    if (typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent)) {
+      return `intent://discord.com/users/${encoded}#Intent;scheme=https;package=com.discord;end`;
+    }
+    return `discord://-/users/${encoded}`;
+  };
 
   useEffect(() => {
     if (!session) return;
@@ -250,8 +259,11 @@ export default function ProfilePage() {
     "";
   const discordId = profile?.discord_id ?? null;
   const discordLabel = discordValue || "未設定";
-  const discordUrl = discordId
-    ? `https://discord.com/users/${encodeURIComponent(discordId)}`
+  const discordLinks = discordId
+    ? {
+        app: getDiscordAppUrl(discordId),
+        web: `https://discord.com/users/${encodeURIComponent(discordId)}`,
+      }
     : null;
   const avatarUrl =
     profile?.avatar_url ||
@@ -361,15 +373,29 @@ export default function ProfilePage() {
                         <p className="font-medium text-sm md:text-base truncate">
                           {loading ? (
                             "..."
-                          ) : discordUrl ? (
-                            <a
-                              href={discordUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-primary hover:underline"
-                            >
-                              {discordLabel}
-                            </a>
+                          ) : discordLinks ? (
+                            <div className="space-y-1">
+                              <a
+                                href={discordLinks.app}
+                                onClick={() => setShowDiscordFallback(true)}
+                                className="text-primary hover:underline"
+                              >
+                                {discordLabel}
+                              </a>
+                              {showDiscordFallback && (
+                                <div className="text-xs text-muted-foreground">
+                                  開かない場合は
+                                  <a
+                                    href={discordLinks.web}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="ml-1 text-primary hover:underline"
+                                  >
+                                    Web版
+                                  </a>
+                                </div>
+                              )}
+                            </div>
                           ) : (
                             discordLabel
                           )}

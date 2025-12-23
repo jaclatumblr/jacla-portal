@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AlertTriangle, CheckCircle2, Image as ImageIcon, Loader2, PencilLine } from "lucide-react";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
@@ -145,6 +145,7 @@ export default function OnboardingClient({
 }: OnboardingClientProps) {
   const { session } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") || defaultNext || "/";
   const isEdit = mode === "edit";
@@ -370,13 +371,14 @@ export default function OnboardingClient({
     setDiscordError(null);
     setDiscordConnecting(true);
     try {
+      const connectNext = isEdit ? pathname : next;
       const res = await fetch("/api/discord/connect", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ next }),
+        body: JSON.stringify({ next: connectNext }),
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => null)) as { error?: string } | null;

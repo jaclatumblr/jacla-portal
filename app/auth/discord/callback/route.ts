@@ -95,6 +95,7 @@ export async function GET(request: Request) {
     .update({
       discord_id: discordUser.id,
       discord_username: username,
+      discord: username,
     })
     .eq("id", payload.sub);
   if (error) {

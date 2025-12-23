@@ -98,6 +98,15 @@ export default function MembersPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [discordFallbackFor, setDiscordFallbackFor] = useState<string | null>(null);
+
+  const getDiscordAppUrl = (id: string) => {
+    const encoded = encodeURIComponent(id);
+    if (typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent)) {
+      return `intent://discord.com/users/${encoded}#Intent;scheme=https;package=com.discord;end`;
+    }
+    return `discord://-/users/${encoded}`;
+  };
 
   useEffect(() => {
     if (authLoading || adminLoading || studentAccessLoading || !session) return;
@@ -396,8 +405,11 @@ export default function MembersPage() {
                         : null;
                     const partLabel = member.part ?? "未設定";
                     const discordLabel = member.discordName ?? "未連携";
-                    const discordUrl = member.discordId
-                      ? `https://discord.com/users/${encodeURIComponent(member.discordId)}`
+                    const discordLinks = member.discordId
+                      ? {
+                          app: getDiscordAppUrl(member.discordId),
+                          web: `https://discord.com/users/${encodeURIComponent(member.discordId)}`,
+                        }
                       : null;
                     const bandLabels = member.bands.length > 0 ? member.bands : ["所属バンドなし"];
                     const initial = member.name.trim().charAt(0) || "?";
@@ -479,18 +491,32 @@ export default function MembersPage() {
                             <div className="space-y-1 mb-3 md:mb-4 text-xs md:text-sm">
                               <div className="flex items-center gap-2 text-muted-foreground">
                                 <MessageCircle className="w-4 h-4 shrink-0" />
-                                {discordUrl ? (
-                                  <a
-                                    href={discordUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="truncate text-primary hover:underline"
-                                  >
-                                    Discord: {discordLabel}
-                                  </a>
-                                ) : (
-                                  <span className="truncate">Discord: {discordLabel}</span>
-                                )}
+                                <div className="min-w-0">
+                                  {discordLinks ? (
+                                    <a
+                                      href={discordLinks.app}
+                                      onClick={() => setDiscordFallbackFor(member.id)}
+                                      className="truncate text-primary hover:underline"
+                                    >
+                                      Discord: {discordLabel}
+                                    </a>
+                                  ) : (
+                                    <span className="truncate">Discord: {discordLabel}</span>
+                                  )}
+                                  {discordLinks && discordFallbackFor === member.id && (
+                                    <div className="text-xs text-muted-foreground">
+                                      開かない場合は
+                                      <a
+                                        href={discordLinks.web}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="ml-1 text-primary hover:underline"
+                                      >
+                                        Web版
+                                      </a>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </div>
 

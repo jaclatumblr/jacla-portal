@@ -24,6 +24,8 @@ import { cn } from "@/lib/utils";
 import { useTheme } from "next-themes";
 import { supabase } from "@/lib/supabaseClient";
 import { useRoleFlags } from "@/lib/useRoleFlags";
+import { useAuth } from "@/contexts/AuthContext";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const navItems = [
   { id: "home", href: "/", label: "ホーム", icon: Home },
@@ -49,10 +51,23 @@ export function SideNav() {
     return window.sessionStorage.getItem("sidenavExpanded") === "1";
   });
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const pathname = usePathname();
   const router = useRouter();
   const { setTheme } = useTheme();
   const { canAccessAdmin } = useRoleFlags();
+  const { session } = useAuth();
+
+  const avatarUrl =
+    session?.user.user_metadata?.avatar_url ||
+    session?.user.user_metadata?.picture ||
+    null;
+  const accountLabel =
+    session?.user.user_metadata?.full_name ||
+    session?.user.user_metadata?.name ||
+    session?.user.email ||
+    "アカウント";
 
   const updateExpanded = (value: boolean) => {
     setIsExpanded(value);
@@ -69,6 +84,7 @@ export function SideNav() {
   // ルートが変わったらモバイルメニューだけ閉じる
   useEffect(() => {
     setIsMobileMenuOpen(false);
+    setIsAccountMenuOpen(false);
   }, [pathname]);
 
   useEffect(() => {
@@ -105,16 +121,92 @@ export function SideNav() {
     };
   }, [isMobileMenuOpen]);
 
+  useEffect(() => {
+    if (!isAccountMenuOpen) return;
+    const handleClick = (event: MouseEvent) => {
+      if (!accountMenuRef.current?.contains(event.target as Node)) {
+        setIsAccountMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+    };
+  }, [isAccountMenuOpen]);
+
   return (
     <>
-      {/* モバイル用ハンバーガーボタン */}
-      <button
-        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-        className="md:hidden fixed top-4 left-4 z-[60] p-3 bg-card/90 backdrop-blur-xl border border-border rounded-lg text-foreground hover:bg-muted transition-all"
-        aria-label="メニューを開く"
-      >
-        {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-      </button>
+      {/* モバイル用トップバー */}
+      <div className="md:hidden fixed top-0 left-0 right-0 z-[60] flex items-center justify-between px-4 h-14 bg-card/95 backdrop-blur-xl border-b border-border">
+        <Link
+          href="/"
+          className="flex items-center gap-2 hover:opacity-90 transition-opacity"
+          aria-label="ホームへ戻る"
+        >
+          <Image
+            src="/images/e3-83-ad-e3-82-b42-20-281-29.png"
+            alt="jacla logo"
+            width={36}
+            height={22}
+            className="object-contain"
+          />
+        </Link>
+        <div className="relative flex items-center gap-2" ref={accountMenuRef}>
+          <button
+            type="button"
+            onClick={() => setIsAccountMenuOpen((prev) => !prev)}
+            className="p-1 rounded-full border border-border bg-card/90 hover:bg-muted transition-all"
+            aria-label="アカウントメニューを開く"
+            aria-haspopup="menu"
+            aria-expanded={isAccountMenuOpen}
+          >
+            <Avatar className="h-8 w-8">
+              {avatarUrl ? (
+                <AvatarImage src={avatarUrl} alt={accountLabel} />
+              ) : (
+                <AvatarFallback className="bg-muted text-foreground">
+                  <User className="h-4 w-4" />
+                </AvatarFallback>
+              )}
+            </Avatar>
+          </button>
+          {isAccountMenuOpen && (
+            <div
+              role="menu"
+              className="absolute right-0 top-11 w-44 rounded-lg border border-border bg-card/95 backdrop-blur-xl shadow-lg overflow-hidden"
+            >
+              <Link
+                href="/me/profile"
+                onClick={() => setIsAccountMenuOpen(false)}
+                className="block px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+              >
+                プロフィール
+              </Link>
+              <Link
+                href="/me/profile/edit"
+                onClick={() => setIsAccountMenuOpen(false)}
+                className="block px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+              >
+                プロフィール編集
+              </Link>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="w-full text-left px-4 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors"
+              >
+                ログアウト
+              </button>
+            </div>
+          )}
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="p-2.5 bg-card/90 backdrop-blur-xl border border-border rounded-lg text-foreground hover:bg-muted transition-all"
+            aria-label="メニューを開く"
+          >
+            {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        </div>
+      </div>
 
       {/* モバイル用オーバーレイ */}
       {isMobileMenuOpen && (

@@ -9,6 +9,7 @@ type RoleFlagsResult = {
   isSupervisor: boolean;
   isPaLeader: boolean;
   isLightingLeader: boolean;
+  isPartLeader: boolean;
   isAdmin: boolean;
   canAccessAdmin: boolean;
   loading: boolean;
@@ -25,6 +26,7 @@ export function useRoleFlags(): RoleFlagsResult {
     isSupervisor: false,
     isPaLeader: false,
     isLightingLeader: false,
+    isPartLeader: false,
     isAdmin: false,
     canAccessAdmin: false,
   }));
@@ -75,6 +77,7 @@ export function useRoleFlags(): RoleFlagsResult {
       const isSupervisor = leaders.includes("Supervisor");
       const isPaLeader = leaders.includes("PA Leader");
       const isLightingLeader = leaders.includes("Lighting Leader");
+      const isPartLeader = leaders.includes("Part Leader");
       const isAdmin = isAdministrator || isSupervisor;
       const canAccessAdmin = isAdmin || isPaLeader || isLightingLeader;
 
@@ -83,6 +86,7 @@ export function useRoleFlags(): RoleFlagsResult {
         isSupervisor,
         isPaLeader,
         isLightingLeader,
+        isPartLeader,
         isAdmin,
         canAccessAdmin,
       });

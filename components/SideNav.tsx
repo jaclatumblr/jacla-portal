@@ -6,6 +6,7 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Calendar,
+  ClipboardList,
   Music,
   Lightbulb,
   Users,
@@ -29,6 +30,7 @@ const navItems = [
   { id: "events", href: "/events", label: "イベント", icon: Calendar },
   { id: "pa", href: "/pa", label: "PA", icon: Music },
   { id: "lighting", href: "/lighting", label: "照明", icon: Lightbulb },
+  { id: "maintenance", href: "/maintenance", label: "備品管理", icon: ClipboardList },
   { id: "announcements", href: "/announcements", label: "お知らせ", icon: Bell },
   { id: "members", href: "/members", label: "部員一覧", icon: Users },
 ];

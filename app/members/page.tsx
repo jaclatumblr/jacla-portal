@@ -105,7 +105,7 @@ export default function MembersPage() {
     if (typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent)) {
       return `intent://discord.com/users/${encoded}#Intent;scheme=https;package=com.discord;end`;
     }
-    return `discord://-/users/${encoded}`;
+    return `discord://discord.com/users/${encoded}`;
   };
 
   useEffect(() => {

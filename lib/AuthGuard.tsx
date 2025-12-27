@@ -89,6 +89,14 @@ export function AuthGuard({ children }: { children: ReactNode }) {
         ]);
 
       if (cancelled) return;
+      if (profileError || leadersError || privateError) {
+        console.error("Onboarding check skipped due to load error", {
+          profileError,
+          leadersError,
+          privateError,
+        });
+        return;
+      }
       const leaders = (leadersData ?? [])
         .map((row) => (row as { leader?: string }).leader)
         .filter((role) => role && role !== "none") as string[];

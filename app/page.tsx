@@ -88,7 +88,7 @@ export default function HomePage() {
         <main className="flex-1 md:ml-20">
           <section
             id="home"
-            className="relative min-h-screen flex items-center justify-center overflow-hidden px-4 sm:px-6 pb-28 sm:pb-32 pt-16 sm:pt-20"
+            className="relative min-h-[calc(100svh-var(--mobile-topbar-height,0px))] md:min-h-screen flex items-center justify-center overflow-hidden px-4 sm:px-6"
           >
             <div className="absolute inset-0 bg-gradient-to-br from-background via-background to-primary/10" />
             <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
@@ -105,11 +105,11 @@ export default function HomePage() {
               />
             </div>
 
-            <div className="relative z-10 text-center px-4 sm:px-6">
+            <div className="relative z-10 text-center py-16 sm:py-20 md:py-24">
               <div className="mb-6 md:mb-8">
                 <Image
                   src="/images/e3-83-ad-e3-82-b42-20-281-29.png"
-                  alt="jacla logo"
+                  alt="Jacla logo"
                   width={200}
                   height={120}
                   className="mx-auto object-contain w-32 sm:w-40 md:w-[200px]"
@@ -118,7 +118,7 @@ export default function HomePage() {
               </div>
               <h1 className="text-4xl sm:text-5xl md:text-7xl font-bold tracking-tight mb-4">
                 <span className="text-foreground">総合音楽部</span>
-                <span className="block text-primary mt-2">jacla</span>
+                <span className="block text-primary mt-2">Jacla</span>
               </h1>
               <p className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-xl mx-auto leading-relaxed mb-6 md:mb-8">
                 部員専用ポータルサイト
@@ -139,7 +139,12 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="pointer-events-none absolute bottom-6 sm:bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 animate-bounce">
+            <div
+              className="pointer-events-none absolute left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 animate-bounce"
+              style={{
+                bottom: "calc(env(safe-area-inset-bottom) + clamp(1.25rem, 4vh, 2.5rem))",
+              }}
+            >
               <span className="text-xs text-muted-foreground tracking-widest">
                 SCROLL
               </span>
@@ -388,18 +393,18 @@ export default function HomePage() {
                 <div className="flex items-center gap-4">
                   <Image
                     src="/images/e3-83-ad-e3-82-b42-20-281-29.png"
-                    alt="jacla logo"
+                    alt="Jacla logo"
                     width={60}
                     height={36}
                     className="object-contain w-12 md:w-[60px]"
                   />
                   <div>
-                    <p className="text-sm font-medium">総合音楽部 jacla</p>
+                    <p className="text-sm font-medium">総合音楽部 Jacla</p>
                     <p className="text-xs text-muted-foreground">部員ポータル</p>
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground text-center md:text-right">
-                  ©Tokyo University of Technology - 総合音楽部 jacla. All rights reserved.
+                  ©Tokyo University of Technology - 総合音楽部 Jacla. All rights reserved.
                 </p>
               </div>
             </div>

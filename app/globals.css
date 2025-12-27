@@ -5,14 +5,14 @@
 :root {
   --background: oklch(0.965 0.01 280);
   --foreground: oklch(0.2 0.02 280);
-  --card: oklch(0.98 0.005 300);
+  --card: oklch(0.98 0.0/*  */05 300);
   --card-foreground: oklch(0.22 0.02 280);
   --popover: oklch(0.98 0.005 300);
   --popover-foreground: oklch(0.22 0.02 280);
-  /* Magenta pink primary from jacla logo */
+  /* Magenta pink primary from Jacla logo */
   --primary: oklch(0.63 0.23 330);
   --primary-foreground: oklch(0.99 0.01 300);
-  /* Gold accent from jacla logo */
+  /* Gold accent from Jacla logo */
   --secondary: oklch(0.82 0.1 80);
   --secondary-foreground: oklch(0.28 0.04 80);
   --muted: oklch(0.93 0.012 280);
@@ -35,10 +35,10 @@
   --card-foreground: oklch(0.97 0.005 300);
   --popover: oklch(0.15 0.02 280);
   --popover-foreground: oklch(0.97 0.005 300);
-  /* Magenta pink primary from jacla logo */
+  /* Magenta pink primary from Jacla logo */
   --primary: oklch(0.7 0.28 330);
   --primary-foreground: oklch(0.1 0.02 300);
-  /* Gold accent from jacla logo */
+  /* Gold accent from Jacla logo */
   --secondary: oklch(0.75 0.14 80);
   --secondary-foreground: oklch(0.15 0.05 80);
   --muted: oklch(0.2 0.02 280);
@@ -133,6 +133,19 @@ html {
   }
   .space-y-6 > :not([hidden]) ~ :not([hidden]) {
     margin-top: 1rem;
+  }
+}
+
+@media (max-width: 768px) {
+  body[data-mobile-topbar="1"] {
+    --mobile-topbar-height: calc(3.5rem + env(safe-area-inset-top));
+    scroll-padding-top: var(--mobile-topbar-height);
+  }
+  body[data-mobile-topbar="1"] main {
+    padding-top: var(--mobile-topbar-height);
+  }
+  body[data-mobile-topbar="1"] .min-h-screen {
+    min-height: calc(100svh - var(--mobile-topbar-height));
   }
 }
 

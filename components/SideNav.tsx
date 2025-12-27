@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -53,6 +53,7 @@ export function SideNav() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
+  const topbarRef = useRef<HTMLDivElement | null>(null);
   const pathname = usePathname();
   const router = useRouter();
   const { setTheme } = useTheme();
@@ -121,6 +122,33 @@ export function SideNav() {
     };
   }, [isMobileMenuOpen]);
 
+  useLayoutEffect(() => {
+    document.body.dataset.mobileTopbar = "1";
+    const el = topbarRef.current;
+    const updateTopbarHeight = () => {
+      if (!el) return;
+      const height = el.getBoundingClientRect().height;
+      document.body.style.setProperty("--mobile-topbar-height", `${height}px`);
+    };
+    updateTopbarHeight();
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined" && el) {
+      resizeObserver = new ResizeObserver(() => updateTopbarHeight());
+      resizeObserver.observe(el);
+    } else {
+      window.addEventListener("resize", updateTopbarHeight);
+    }
+    return () => {
+      delete document.body.dataset.mobileTopbar;
+      document.body.style.removeProperty("--mobile-topbar-height");
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      } else {
+        window.removeEventListener("resize", updateTopbarHeight);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (!isAccountMenuOpen) return;
     const handleClick = (event: MouseEvent) => {
@@ -137,7 +165,10 @@ export function SideNav() {
   return (
     <>
       {/* モバイル用トップバー */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-[60] flex items-center justify-between px-4 h-14 bg-card/95 backdrop-blur-xl border-b border-border">
+      <div
+        ref={topbarRef}
+        className="md:hidden fixed top-0 left-0 right-0 z-[60] flex items-center justify-between px-4 min-h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] bg-card/95 backdrop-blur-xl border-b border-border"
+      >
         <Link
           href="/"
           className="flex items-center gap-2 hover:opacity-90 transition-opacity"
@@ -145,7 +176,7 @@ export function SideNav() {
         >
           <Image
             src="/images/e3-83-ad-e3-82-b42-20-281-29.png"
-            alt="jacla logo"
+            alt="Jacla logo"
             width={36}
             height={22}
             className="object-contain"
@@ -233,7 +264,7 @@ export function SideNav() {
             <div className="w-12 h-12 flex items-center justify-center shrink-0">
               <Image
                 src="/images/e3-83-ad-e3-82-b42-20-281-29.png"
-                alt="jacla logo"
+                alt="Jacla logo"
                 width={40}
                 height={24}
                 className="object-contain"
@@ -245,7 +276,7 @@ export function SideNav() {
                 isExpanded ? "opacity-100 w-auto" : "opacity-0 w-0"
               )}
             >
-              <p className="text-sm font-bold text-foreground whitespace-nowrap">jacla</p>
+              <p className="text-sm font-bold text-foreground whitespace-nowrap">Jacla</p>
               <p className="text-xs text-muted-foreground whitespace-nowrap">総合音楽部</p>
             </div>
           </Link>
@@ -417,17 +448,20 @@ export function SideNav() {
           isMobileMenuOpen ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none"
         )}
       >
-        <div className="p-6 pt-12 flex items-center justify-center">
+        <div
+          className="p-6 flex items-center justify-center"
+          style={{ paddingTop: "calc(var(--mobile-topbar-height, 0px) + 1.5rem)" }}
+        >
           <Link href="/" onClick={() => setIsMobileMenuOpen(false)} className="flex flex-col items-center gap-2">
             <Image
               src="/images/e3-83-ad-e3-82-b42-20-281-29.png"
-              alt="jacla logo"
+              alt="Jacla logo"
               width={80}
               height={48}
               className="object-contain"
             />
             <div className="text-center">
-              <p className="text-lg font-bold text-foreground">jacla</p>
+              <p className="text-lg font-bold text-foreground">Jacla</p>
               <p className="text-xs text-muted-foreground">総合音楽部</p>
             </div>
           </Link>

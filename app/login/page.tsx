@@ -95,7 +95,7 @@ function LoginPageContent() {
           <div className="mb-8">
             <Image
               src="/images/e3-83-ad-e3-82-b42-20-281-29.png"
-              alt="jacla logo"
+              alt="Jacla logo"
               width={120}
               height={72}
               className="object-contain"
@@ -104,7 +104,7 @@ function LoginPageContent() {
           </div>
           <h1 className="text-4xl xl:text-5xl font-bold mb-4">
             <span className="text-foreground">総合音楽部</span>
-            <span className="block text-primary mt-2">jacla</span>
+            <span className="block text-primary mt-2">Jacla</span>
           </h1>
           <p className="text-muted-foreground text-lg max-w-md leading-relaxed">
             部員専用ポータルサイトへようこそ。イベント管理、レパートリー提出、PA/照明機材の管理など、サークル活動をサポートします。
@@ -120,7 +120,7 @@ function LoginPageContent() {
           <div className="lg:hidden text-center mb-8">
             <Image
               src="/images/e3-83-ad-e3-82-b42-20-281-29.png"
-              alt="jacla logo"
+              alt="Jacla logo"
               width={80}
               height={48}
               className="mx-auto object-contain mb-4"
@@ -128,7 +128,7 @@ function LoginPageContent() {
             />
             <h1 className="text-2xl font-bold">
               <span className="text-foreground">総合音楽部 </span>
-              <span className="text-primary">jacla</span>
+              <span className="text-primary">Jacla</span>
             </h1>
           </div>
 

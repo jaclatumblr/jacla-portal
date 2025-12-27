@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -136,6 +136,7 @@ export default function AdminRolesPage() {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ id: number; message: string } | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
+  const detailRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!toast) return;
@@ -150,13 +151,39 @@ export default function AdminRolesPage() {
 
   const filteredProfiles = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return profiles;
-    return profiles.filter((p) => {
-      const emailText = viewerIsAdministrator ? p.email ?? "" : "";
-      const text = `${p.display_name ?? ""} ${p.real_name ?? ""} ${emailText}`.toLowerCase();
-      return text.includes(q);
+    const rankForProfile = (profile: ProfileRow) => {
+      if (positionHolders.Official && profile.id === positionHolders.Official) {
+        return 0;
+      }
+      switch (profile.leader) {
+        case "Administrator":
+          return 1;
+        case "Supervisor":
+          return 2;
+        case "PA Leader":
+        case "Lighting Leader":
+          return 3;
+        case "Part Leader":
+          return 4;
+        default:
+          return 5;
+      }
+    };
+    const candidates = q
+      ? profiles.filter((p) => {
+          const emailText = viewerIsAdministrator ? p.email ?? "" : "";
+          const text = `${p.display_name ?? ""} ${p.real_name ?? ""} ${emailText}`.toLowerCase();
+          return text.includes(q);
+        })
+      : profiles;
+    return [...candidates].sort((a, b) => {
+      const rankDiff = rankForProfile(a) - rankForProfile(b);
+      if (rankDiff !== 0) return rankDiff;
+      const nameA = a.display_name ?? a.real_name ?? "";
+      const nameB = b.display_name ?? b.real_name ?? "";
+      return nameA.localeCompare(nameB, "ja");
     });
-  }, [profiles, search, viewerIsAdministrator]);
+  }, [profiles, search, viewerIsAdministrator, positionHolders.Official]);
 
   const selectedProfile = useMemo(
     () => profiles.find((p) => p.id === selectedId) ?? null,
@@ -224,6 +251,20 @@ export default function AdminRolesPage() {
     });
     setPrimaryPart(selectedProfile.part && selectedProfile.part !== "none" ? selectedProfile.part : "");
   }, [selectedProfile]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    const el = detailRef.current;
+    if (!el) return;
+    const paddingTop = Number.parseFloat(
+      getComputedStyle(document.body).scrollPaddingTop || "0"
+    );
+    const rect = el.getBoundingClientRect();
+    const viewportThreshold = window.innerHeight * 0.6;
+    if (rect.top < paddingTop + 16 || rect.top > viewportThreshold) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [selectedId]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -895,7 +936,7 @@ export default function AdminRolesPage() {
                       onChange={(e) => setSearch(e.target.value)}
                       placeholder="名前やメールで検索"
                     />
-                    <div className="rounded-lg border border-border divide-y divide-border bg-card/50 max-h-[520px] overflow-y-auto no-scrollbar">
+                    <div className="rounded-lg border border-border divide-y divide-border bg-card/50 max-h-[60vh] md:max-h-[520px] overflow-y-auto">
                       {loading ? (
                         <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
                           <RefreshCw className="w-4 h-4 animate-spin" />
@@ -956,7 +997,7 @@ export default function AdminRolesPage() {
                   </CardContent>
                 </Card>
 
-                <Card className="bg-card/60 border-border">
+                <Card ref={detailRef} className="bg-card/60 border-border">
                   <CardHeader>
                     <div className="flex items-start gap-3">
                       <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">

@@ -1,5 +1,5 @@
-export const siteTitle = "jacla Portal";
-export const titleTemplate = "%s | jacla Portal";
+export const siteTitle = "Jacla Portal";
+export const titleTemplate = "%s | Jacla Portal";
 
 const exactTitles: Record<string, string> = {
   "/": "ホーム",

@@ -1,0 +1,133 @@
+import { NextResponse } from "next/server";
+
+type MetadataResponse = {
+  title: string | null;
+  artist: string | null;
+  source: string | null;
+};
+
+const providers = [
+  {
+    name: "youtube",
+    test: (host: string) => host.includes("youtube.com") || host === "youtu.be",
+    build: (url: string) =>
+      `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(url)}`,
+  },
+  {
+    name: "spotify",
+    test: (host: string) => host.includes("open.spotify.com"),
+    build: (url: string) =>
+      `https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`,
+  },
+  {
+    name: "apple-music",
+    test: (host: string) => host.includes("music.apple.com"),
+    build: (url: string) =>
+      `https://music.apple.com/oembed?url=${encodeURIComponent(url)}`,
+  },
+];
+
+const privateHostPatterns = [
+  /^localhost$/i,
+  /\.local$/i,
+  /^127\./,
+  /^10\./,
+  /^0\./,
+  /^192\.168\./,
+  /^172\.(1[6-9]|2\d|3[0-1])\./,
+  /^::1$/,
+];
+
+const isPrivateHost = (host: string) =>
+  privateHostPatterns.some((pattern) => pattern.test(host));
+
+const parseMeta = (html: string, property: string) => {
+  const escaped = property.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(
+    `<meta[^>]+(?:property|name)=["']${escaped}["'][^>]+content=["']([^"']+)["']`,
+    "i"
+  );
+  const match = html.match(regex);
+  return match ? match[1] : null;
+};
+
+const fetchOembed = async (url: string, source: string): Promise<MetadataResponse> => {
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`oEmbed failed: ${res.status}`);
+  }
+  const data = (await res.json()) as {
+    title?: string;
+    author_name?: string;
+  };
+  return {
+    title: data.title ?? null,
+    artist: data.author_name ?? null,
+    source,
+  };
+};
+
+const fetchOpenGraph = async (url: string): Promise<MetadataResponse> => {
+  const res = await fetch(url, {
+    cache: "no-store",
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
+    },
+  });
+  if (!res.ok) {
+    throw new Error(`Fetch failed: ${res.status}`);
+  }
+  const html = await res.text();
+  const title =
+    parseMeta(html, "og:title") ??
+    parseMeta(html, "twitter:title") ??
+    parseMeta(html, "title");
+  const siteName =
+    parseMeta(html, "og:site_name") ?? parseMeta(html, "author");
+  return {
+    title,
+    artist: siteName,
+    source: null,
+  };
+};
+
+export async function POST(request: Request) {
+  const body = (await request.json().catch(() => ({}))) as { url?: string };
+  const rawUrl = body.url?.trim();
+  if (!rawUrl) {
+    return NextResponse.json({ error: "Missing url" }, { status: 400 });
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return NextResponse.json({ error: "Invalid url" }, { status: 400 });
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return NextResponse.json({ error: "Invalid protocol" }, { status: 400 });
+  }
+
+  if (isPrivateHost(parsed.hostname)) {
+    return NextResponse.json({ error: "Blocked host" }, { status: 400 });
+  }
+
+  const provider = providers.find((entry) => entry.test(parsed.hostname));
+  try {
+    if (provider) {
+      const data = await fetchOembed(provider.build(parsed.toString()), provider.name);
+      return NextResponse.json(data);
+    }
+  } catch {
+    // Fall through to Open Graph parsing.
+  }
+
+  try {
+    const data = await fetchOpenGraph(parsed.toString());
+    return NextResponse.json(data);
+  } catch {
+    return NextResponse.json({ title: null, artist: null, source: null });
+  }
+}

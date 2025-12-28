@@ -13,6 +13,27 @@ begin
 end;
 $$;
 
+create or replace function public.is_band_member(band uuid, uid uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.band_members bm
+    where bm.band_id = band
+      and bm.user_id = uid
+  )
+  or exists (
+    select 1
+    from public.bands b
+    where b.id = band
+      and b.created_by = uid
+  );
+$$;
+
 -- =========================
 -- 1) events
 -- =========================
@@ -100,7 +121,19 @@ drop policy if exists "bands_delete_owner_or_admin" on public.bands;
 
 alter table public.bands
   add column if not exists note_pa text,
-  add column if not exists note_lighting text;
+  add column if not exists note_lighting text,
+  add column if not exists repertoire_status text not null default 'draft';
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'bands_repertoire_status_check'
+  ) then
+    alter table public.bands
+      add constraint bands_repertoire_status_check
+      check (repertoire_status in ('draft', 'submitted'));
+  end if;
+end $$;
 
 create policy "bands_select_all_authenticated"
 on public.bands for select
@@ -122,10 +155,12 @@ to authenticated
 using (
   created_by = auth.uid()
   or public.is_admin_or_supervisor(auth.uid())
+  or public.is_band_member(id, auth.uid())
 )
 with check (
   created_by = auth.uid()
   or public.is_admin_or_supervisor(auth.uid())
+  or public.is_band_member(id, auth.uid())
 );
 
 create policy "bands_delete_owner_or_admin"
@@ -135,6 +170,50 @@ using (
   created_by = auth.uid()
   or public.is_admin_or_supervisor(auth.uid())
 );
+
+create or replace function public.bands_block_member_update()
+returns trigger
+language plpgsql
+as $$
+declare
+  actor uuid;
+  actor_is_admin boolean;
+  actor_is_owner boolean;
+  actor_is_member boolean;
+begin
+  actor := auth.uid();
+
+  if actor is null then
+    return new;
+  end if;
+
+  actor_is_admin := public.is_admin_or_supervisor(actor);
+  if actor_is_admin then
+    return new;
+  end if;
+
+  actor_is_owner := old.created_by = actor;
+  if actor_is_owner then
+    return new;
+  end if;
+
+  actor_is_member := public.is_band_member(old.id, actor);
+  if actor_is_member then
+    if (to_jsonb(new) - 'repertoire_status' - 'updated_at')
+      <> (to_jsonb(old) - 'repertoire_status' - 'updated_at') then
+      raise exception 'Band members can only update repertoire_status.';
+    end if;
+    return new;
+  end if;
+
+  raise exception 'Not allowed to update band.';
+end;
+$$;
+
+drop trigger if exists trg_bands_block_member_update on public.bands;
+create trigger trg_bands_block_member_update
+before update on public.bands
+for each row execute function public.bands_block_member_update();
 
 
 -- =========================
@@ -173,14 +252,22 @@ using (
   exists (
     select 1 from public.bands b
     where b.id = band_id
-      and (b.created_by = auth.uid() or public.is_admin_or_supervisor(auth.uid()))
+      and (
+        b.created_by = auth.uid()
+        or public.is_admin_or_supervisor(auth.uid())
+        or public.is_band_member(b.id, auth.uid())
+      )
   )
 )
 with check (
   exists (
     select 1 from public.bands b
     where b.id = band_id
-      and (b.created_by = auth.uid() or public.is_admin_or_supervisor(auth.uid()))
+      and (
+        b.created_by = auth.uid()
+        or public.is_admin_or_supervisor(auth.uid())
+        or public.is_band_member(b.id, auth.uid())
+      )
   )
 );
 
@@ -193,12 +280,45 @@ create table if not exists public.songs (
   band_id uuid not null references public.bands(id) on delete cascade,
   title text not null,
   artist text,
+  entry_type text not null default 'song',
+  url text,
+  order_index int4,
   duration_sec int4,                -- 任意。空ならevents.default_song_duration_sec使う想定
   memo text,
   created_at timestamptz not null default now()
 );
 
 create index if not exists idx_songs_band_id on public.songs(band_id);
+
+alter table public.songs
+  add column if not exists entry_type text not null default 'song',
+  add column if not exists url text,
+  add column if not exists order_index int4;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'songs_entry_type_check'
+  ) then
+    alter table public.songs
+      add constraint songs_entry_type_check
+      check (entry_type in ('song', 'mc'));
+  end if;
+end $$;
+
+do $$
+begin
+  if exists (select 1 from public.songs) then
+    update public.songs s
+    set order_index = ranked.rn
+    from (
+      select id, row_number() over (partition by band_id order by created_at) as rn
+      from public.songs
+      where order_index is null
+    ) ranked
+    where s.id = ranked.id;
+  end if;
+end $$;
 
 alter table public.songs enable row level security;
 

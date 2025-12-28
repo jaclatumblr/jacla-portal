@@ -73,6 +73,9 @@ type Song = {
   band_id: string;
   title: string;
   artist: string | null;
+  entry_type: "song" | "mc" | null;
+  url: string | null;
+  order_index: number | null;
   duration_sec: number | null;
   memo: string | null;
 };
@@ -121,7 +124,14 @@ export default function AdminEventDetailPage() {
   const [songs, setSongs] = useState<Song[]>([]);
   const [newBandName, setNewBandName] = useState("");
   const [memberForm, setMemberForm] = useState({ profileId: "", instrument: "" });
-  const [songForm, setSongForm] = useState({ title: "", artist: "", duration_sec: "", memo: "" });
+  const [songForm, setSongForm] = useState({
+    title: "",
+    artist: "",
+    url: "",
+    entry_type: "song",
+    duration_sec: "",
+    memo: "",
+  });
   const [savingEvent, setSavingEvent] = useState(false);
   const [savingBand, setSavingBand] = useState(false);
   const [savingMember, setSavingMember] = useState(false);
@@ -143,10 +153,15 @@ export default function AdminEventDetailPage() {
     [members, selectedBandId]
   );
 
-  const selectedBandSongs = useMemo(
-    () => songs.filter((s) => s.band_id === selectedBandId),
-    [songs, selectedBandId]
-  );
+  const selectedBandSongs = useMemo(() => {
+    const list = songs.filter((s) => s.band_id === selectedBandId);
+    return list.sort((a, b) => {
+      const orderA = a.order_index ?? Number.MAX_SAFE_INTEGER;
+      const orderB = b.order_index ?? Number.MAX_SAFE_INTEGER;
+      if (orderA !== orderB) return orderA - orderB;
+      return a.title.localeCompare(b.title, "ja");
+    });
+  }, [songs, selectedBandId]);
   useEffect(() => {
     if (!eventId || adminLoading || !isAdmin) return;
     let cancelled = false;
@@ -215,7 +230,12 @@ export default function AdminEventDetailPage() {
 
       const [membersRes, songsRes] = await Promise.all([
         supabase.from("band_members").select("id, band_id, user_id, instrument").in("band_id", bandIds),
-        supabase.from("songs").select("id, band_id, title, artist, duration_sec, memo").in("band_id", bandIds),
+        supabase
+          .from("songs")
+          .select("id, band_id, title, artist, entry_type, url, order_index, duration_sec, memo, created_at")
+          .in("band_id", bandIds)
+          .order("order_index", { ascending: true })
+          .order("created_at", { ascending: true }),
       ]);
 
       if (!cancelled) {
@@ -418,6 +438,7 @@ export default function AdminEventDetailPage() {
     if (!selectedBandId || !songForm.title.trim() || savingSong) return;
     setSavingSong(true);
     setError(null);
+    const orderIndex = selectedBandSongs.length + 1;
 
     const { data, error } = await supabase
       .from("songs")
@@ -425,7 +446,10 @@ export default function AdminEventDetailPage() {
         {
           band_id: selectedBandId,
           title: songForm.title.trim(),
-          artist: songForm.artist || null,
+          artist: songForm.entry_type === "mc" ? null : songForm.artist || null,
+          entry_type: songForm.entry_type,
+          url: songForm.entry_type === "mc" ? null : songForm.url || null,
+          order_index: orderIndex,
           duration_sec: songForm.duration_sec ? Number(songForm.duration_sec) : null,
           memo: songForm.memo || null,
         },
@@ -441,7 +465,7 @@ export default function AdminEventDetailPage() {
     }
 
     setSongs((prev) => [...prev, data as Song]);
-    setSongForm({ title: "", artist: "", duration_sec: "", memo: "" });
+    setSongForm({ title: "", artist: "", url: "", entry_type: "song", duration_sec: "", memo: "" });
     setSavingSong(false);
   };
 
@@ -941,15 +965,40 @@ export default function AdminEventDetailPage() {
                                     required
                                     value={songForm.title}
                                     onChange={(e) => setSongForm((prev) => ({ ...prev, title: e.target.value }))}
-                                    placeholder="曲名を入力"
+                                    placeholder={songForm.entry_type === "mc" ? "MCタイトル" : "曲名を入力"}
                                   />
                                 </label>
+                                <label className="space-y-1 block text-sm">
+                                  <span className="text-foreground">タイプ</span>
+                                  <select
+                                    value={songForm.entry_type}
+                                    onChange={(e) =>
+                                      setSongForm((prev) => ({ ...prev, entry_type: e.target.value }))
+                                    }
+                                    className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-colors"
+                                  >
+                                    <option value="song">曲</option>
+                                    <option value="mc">MC</option>
+                                  </select>
+                                </label>
+                              </div>
+                              <div className="grid md:grid-cols-2 gap-3">
                                 <label className="space-y-1 block text-sm">
                                   <span className="text-foreground">アーティスト</span>
                                   <Input
                                     value={songForm.artist}
                                     onChange={(e) => setSongForm((prev) => ({ ...prev, artist: e.target.value }))}
-                                    placeholder="任意"
+                                    placeholder={songForm.entry_type === "mc" ? "-" : "任意"}
+                                    disabled={songForm.entry_type === "mc"}
+                                  />
+                                </label>
+                                <label className="space-y-1 block text-sm">
+                                  <span className="text-foreground">URL</span>
+                                  <Input
+                                    value={songForm.url}
+                                    onChange={(e) => setSongForm((prev) => ({ ...prev, url: e.target.value }))}
+                                    placeholder={songForm.entry_type === "mc" ? "-" : "YouTube / Spotify / Apple Music"}
+                                    disabled={songForm.entry_type === "mc"}
                                   />
                                 </label>
                               </div>
@@ -979,7 +1028,7 @@ export default function AdminEventDetailPage() {
                                 className="gap-2 w-full"
                               >
                                 {savingSong ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                                曲を追加
+                                {songForm.entry_type === "mc" ? "MCを追加" : "曲を追加"}
                               </Button>
                             </form>
 
@@ -993,12 +1042,26 @@ export default function AdminEventDetailPage() {
                                     className="flex items-start justify-between rounded-lg border border-border px-3 py-2"
                                   >
                                     <div className="space-y-1">
-                                      <p className="font-medium text-sm">{song.title}</p>
-                                      <p className="text-xs text-muted-foreground">{song.artist ?? "アーティスト未設定"}</p>
+                                      <div className="flex items-center gap-2">
+                                        <Badge variant="outline">
+                                          {song.entry_type === "mc" ? "MC" : "曲"}
+                                        </Badge>
+                                        <p className="font-medium text-sm">{song.title}</p>
+                                      </div>
+                                      {song.entry_type !== "mc" && (
+                                        <p className="text-xs text-muted-foreground">
+                                          {song.artist ?? "アーティスト未設定"}
+                                        </p>
+                                      )}
                                       <p className="text-xs text-muted-foreground">
                                         {song.duration_sec ? `${song.duration_sec} 秒` : "時間未設定"}
                                       </p>
-                                      {song.memo && <p className="text-xs text-muted-foreground">メモ: {song.memo}</p>}
+                                      {song.url && (
+                                        <p className="text-xs text-muted-foreground">URL: {song.url}</p>
+                                      )}
+                                      {song.memo && (
+                                        <p className="text-xs text-muted-foreground">メモ: {song.memo}</p>
+                                      )}
                                     </div>
                                     <button
                                       type="button"

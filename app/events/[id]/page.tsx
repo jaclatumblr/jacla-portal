@@ -36,8 +36,9 @@ type Event = {
 };
 
 type BandSummary = {
+  id: string;
   name: string;
-  status: "提出済み" | "未提出";
+  status: "submitted" | "pending";
   songs: number;
 };
 
@@ -50,16 +51,7 @@ export default function EventDetailPage() {
   const [error, setError] = useState<string | null>(null);
 
   // TODO: Supabase から bands / songs を取得して実データ化する
-  const [bands] = useState<BandSummary[]>([
-    { name: "The Rockers", status: "提出済み", songs: 4 },
-    { name: "Jazz Quartet", status: "提出済み", songs: 5 },
-    { name: "Acoustic Duo", status: "未提出", songs: 0 },
-    { name: "Pop Stars", status: "提出済み", songs: 3 },
-    { name: "Metal Heads", status: "未提出", songs: 0 },
-    { name: "Indie Band", status: "提出済み", songs: 4 },
-    { name: "Electronic Beats", status: "提出済み", songs: 3 },
-    { name: "Folk Friends", status: "未提出", songs: 0 },
-  ]);
+  const [bands, setBands] = useState<BandSummary[]>([]);
 
   useEffect(() => {
     if (!eventId) return;
@@ -68,21 +60,62 @@ export default function EventDetailPage() {
       setLoading(true);
       setError(null);
 
-      const { data, error } = await supabase
-        .from("events")
-        .select(
-          "id, name, date, venue, status, open_time, start_time, note"
-        )
-        .eq("id", eventId)
-        .maybeSingle();
+      const [eventRes, bandsRes] = await Promise.all([
+        supabase
+          .from("events")
+          .select("id, name, date, venue, status, open_time, start_time, note")
+          .eq("id", eventId)
+          .maybeSingle(),
+        supabase
+          .from("bands")
+          .select("id, name, repertoire_status")
+          .eq("event_id", eventId)
+          .order("created_at", { ascending: true }),
+      ]);
 
-      if (error) {
-        console.error(error);
-        setError("イベント情報の取得に失敗しました。");
-      } else if (!data) {
-        setError("イベントが見つかりませんでした。");
+      if (eventRes.error) {
+        console.error(eventRes.error);
+        setError("?????????????????");
+      } else if (!eventRes.data) {
+        setError("????????????????");
       } else {
-        setEvent(data as Event);
+        setEvent(eventRes.data as Event);
+      }
+
+      if (bandsRes.error) {
+        console.error(bandsRes.error);
+        setBands([]);
+      } else {
+        const bandList = (bandsRes.data ?? []) as {
+          id: string;
+          name: string;
+          repertoire_status: string | null;
+        }[];
+        const bandIds = bandList.map((band) => band.id);
+        let counts: Record<string, number> = {};
+        if (bandIds.length > 0) {
+          const { data: songsData, error: songsError } = await supabase
+            .from("songs")
+            .select("band_id, entry_type")
+            .in("band_id", bandIds);
+          if (songsError) {
+            console.error(songsError);
+          } else {
+            (songsData ?? []).forEach((row) => {
+              const entry = row as { band_id: string; entry_type?: string | null };
+              if (entry.entry_type === "mc") return;
+              counts[entry.band_id] = (counts[entry.band_id] ?? 0) + 1;
+            });
+          }
+        }
+        setBands(
+          bandList.map((band) => ({
+            id: band.id,
+            name: band.name,
+            status: band.repertoire_status === "submitted" ? "submitted" : "pending",
+            songs: counts[band.id] ?? 0,
+          }))
+        );
       }
 
       setLoading(false);
@@ -277,11 +310,11 @@ export default function EventDetailPage() {
                       </TabsTrigger>
                       <TabsTrigger value="submitted" className="text-sm">
                         提出済み (
-                        {bands.filter((b) => b.status === "提出済み").length})
+                        {bands.filter((b) => b.status === "submitted").length})
                       </TabsTrigger>
                       <TabsTrigger value="pending" className="text-sm">
                         未提出 (
-                        {bands.filter((b) => b.status === "未提出").length})
+                        {bands.filter((b) => b.status === "pending").length})
                       </TabsTrigger>
                     </TabsList>
                   </div>
@@ -289,7 +322,7 @@ export default function EventDetailPage() {
                   <TabsContent value="all" className="space-y-3">
                     {bands.map((band, index) => (
                       <div
-                        key={`${band.name}-${index}`}
+                        key={band.id}
                         className="flex items-center justify-between p-3 md:p-4 bg-card/50 border border-border rounded-lg hover:border-primary/30 transition-all"
                       >
                         <div className="flex items-center gap-3 md:gap-4 min-w-0">
@@ -310,11 +343,11 @@ export default function EventDetailPage() {
                         </div>
                         <Badge
                           variant={
-                            band.status === "提出済み" ? "default" : "outline"
+                            band.status === "submitted" ? "default" : "outline"
                           }
                           className="shrink-0 text-xs"
                         >
-                          {band.status}
+                          {band.status === "submitted" ? "\u63d0\u51fa\u6e08\u307f" : "\u672a\u63d0\u51fa"}
                         </Badge>
                       </div>
                     ))}

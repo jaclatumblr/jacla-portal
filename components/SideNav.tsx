@@ -46,10 +46,7 @@ const utilityNavItems = bottomNavItems;
 export function SideNav() {
   const asideRef = useRef<HTMLElement | null>(null);
   const bodyOverflowRef = useRef<string | null>(null);
-  const [isExpanded, setIsExpanded] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return window.sessionStorage.getItem("sidenavExpanded") === "1";
-  });
+  const [isExpanded, setIsExpanded] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
@@ -81,6 +78,11 @@ export function SideNav() {
     const isDark = document.documentElement.classList.contains("dark");
     setTheme(isDark ? "light" : "dark");
   };
+
+  useEffect(() => {
+    const saved = window.sessionStorage.getItem("sidenavExpanded") === "1";
+    setIsExpanded(saved);
+  }, []);
 
   // ルートが変わったらモバイルメニューだけ閉じる
   useEffect(() => {

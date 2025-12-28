@@ -972,7 +972,7 @@ export default function RepertoireSubmitPage() {
                                 </div>
                               </label>
                               <label className="space-y-1 text-sm">
-                                <span className="text-muted-foreground">??</span>
+                                <span className="text-muted-foreground">メモ</span>
                                 <Textarea
                                   rows={2}
                                   value={entry.memo}
@@ -989,6 +989,7 @@ export default function RepertoireSubmitPage() {
                   </CardContent>
                 </Card>
               </div>
+              )}
             </div>
           </section>
         </main>

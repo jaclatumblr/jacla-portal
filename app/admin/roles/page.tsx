@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  AlertCircle,
   AlertTriangle,
   ArrowLeft,
   BadgeCheck,
@@ -26,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { toast } from "@/lib/toast";
 
 type ProfileRow = {
   id: string;
@@ -133,21 +133,7 @@ export default function AdminRolesPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<{ id: number; message: string } | null>(null);
-  const [toastVisible, setToastVisible] = useState(false);
   const detailRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!toast) return;
-    setToastVisible(true);
-    const hideTimer = window.setTimeout(() => setToastVisible(false), 2200);
-    const clearTimer = window.setTimeout(() => setToast(null), 2600);
-    return () => {
-      window.clearTimeout(hideTimer);
-      window.clearTimeout(clearTimer);
-    };
-  }, [toast?.id]);
 
   const filteredProfiles = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -456,7 +442,6 @@ export default function AdminRolesPage() {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      setError(null);
       const { data, error } = await supabase
         .from("profiles")
         .select("id, display_name, real_name, email, leader, crew, part, muted, avatar_url")
@@ -464,7 +449,7 @@ export default function AdminRolesPage() {
       if (cancelled) return;
       if (error) {
         console.error(error);
-        setError("プロフィールの取得に失敗しました。");
+        toast.error("プロフィールの取得に失敗しました。");
         setProfiles([]);
       } else {
         setProfiles((data ?? []) as ProfileRow[]);
@@ -502,8 +487,6 @@ export default function AdminRolesPage() {
     if (!selectedId || !selectedProfile) return;
     if (!canEditFullRoles) {
       setSaving(true);
-      setError(null);
-      setToast(null);
 
       const profileRes = await supabase
         .from("profiles")
@@ -514,7 +497,7 @@ export default function AdminRolesPage() {
 
       if (profileRes.error) {
         console.error(profileRes.error);
-        setError("更新に失敗しました。");
+        toast.error("更新に失敗しました。");
         setSaving(false);
         return;
       }
@@ -528,24 +511,24 @@ export default function AdminRolesPage() {
         );
       }
 
-      setToast({ id: Date.now(), message: "保存しました。" });
+      toast.success("保存しました。");
       setSaving(false);
       return;
     }
     if (leadersLoading) {
-      setError("ロール情報の読み込み中です。");
+      toast.error("ロール情報の読み込み中です。");
       return;
     }
     if (positionsLoading) {
-      setError("役職情報の読み込み中です。");
+      toast.error("役職情報の読み込み中です。");
       return;
     }
     if (!targetIsAdministrator && !primaryPart) {
-      setError("メイン楽器を選択してください。");
+      toast.error("メイン楽器を選択してください。");
       return;
     }
     if (targetIsAdministrator && form.muted) {
-      setError("Administrator には muted を設定できません。");
+      toast.error("Administrator には muted を設定できません。");
       return;
     }
     if (!selectedProfile.muted && form.muted) {
@@ -556,8 +539,6 @@ export default function AdminRolesPage() {
     }
 
     setSaving(true);
-    setError(null);
-    setToast(null);
 
     const partValue = primaryPart || "none";
     const profileRes = await supabase
@@ -573,7 +554,7 @@ export default function AdminRolesPage() {
 
     if (profileRes.error) {
       console.error(profileRes.error);
-      setError("保存に失敗しました。");
+      toast.error("保存に失敗しました。");
       setSaving(false);
       return;
     }
@@ -592,7 +573,7 @@ export default function AdminRolesPage() {
       .eq("profile_id", selectedId);
     if (rolesError) {
       console.error(rolesError);
-      setError("ロールの保存に失敗しました。");
+      toast.error("ロールの保存に失敗しました。");
       setSaving(false);
       return;
     }
@@ -609,7 +590,7 @@ export default function AdminRolesPage() {
         );
       if (upsertRes.error) {
         console.error(upsertRes.error);
-        setError("ロールの保存に失敗しました。");
+        toast.error("ロールの保存に失敗しました。");
         setSaving(false);
         return;
       }
@@ -626,7 +607,7 @@ export default function AdminRolesPage() {
         .in("id", deleteIds);
       if (deleteError) {
         console.error(deleteError);
-        setError("ロールの保存に失敗しました。");
+        toast.error("ロールの保存に失敗しました。");
         setSaving(false);
         return;
       }
@@ -646,7 +627,7 @@ export default function AdminRolesPage() {
       .eq("profile_id", selectedId);
     if (positionsError) {
       console.error(positionsError);
-      setError("役職の保存に失敗しました。");
+      toast.error("役職の保存に失敗しました。");
       setSaving(false);
       return;
     }
@@ -663,7 +644,7 @@ export default function AdminRolesPage() {
         );
       if (upsertRes.error) {
         console.error(upsertRes.error);
-        setError("役職の保存に失敗しました。");
+        toast.error("役職の保存に失敗しました。");
         setSaving(false);
         return;
       }
@@ -680,7 +661,7 @@ export default function AdminRolesPage() {
         .in("id", positionDeleteIds);
       if (deleteError) {
         console.error(deleteError);
-        setError("役職の保存に失敗しました。");
+        toast.error("役職の保存に失敗しました。");
         setSaving(false);
         return;
       }
@@ -704,7 +685,7 @@ export default function AdminRolesPage() {
         .eq("profile_id", selectedId);
       if (deleteError) {
         console.error(deleteError);
-        setError("楽器設定の保存に失敗しました。");
+        toast.error("楽器設定の保存に失敗しました。");
         setSaving(false);
         return;
       }
@@ -718,7 +699,7 @@ export default function AdminRolesPage() {
         .eq("profile_id", selectedId);
       if (resetRes.error) {
         console.error(resetRes.error);
-        setError("楽器設定の保存に失敗しました。");
+        toast.error("楽器設定の保存に失敗しました。");
         setSaving(false);
         return;
       }
@@ -733,7 +714,7 @@ export default function AdminRolesPage() {
         .upsert(upsertRows, { onConflict: "profile_id,part" });
       if (upsertRes.error) {
         console.error(upsertRes.error);
-        setError("楽器設定の保存に失敗しました。");
+        toast.error("楽器設定の保存に失敗しました。");
         setSaving(false);
         return;
       }
@@ -744,7 +725,7 @@ export default function AdminRolesPage() {
         .eq("profile_id", selectedId);
       if (currentError) {
         console.error(currentError);
-        setError("楽器設定の保存に失敗しました。");
+        toast.error("楽器設定の保存に失敗しました。");
         setSaving(false);
         return;
       }
@@ -760,7 +741,7 @@ export default function AdminRolesPage() {
           .in("id", deleteIds);
         if (deleteError) {
           console.error(deleteError);
-          setError("楽器設定の保存に失敗しました。");
+          toast.error("楽器設定の保存に失敗しました。");
           setSaving(false);
           return;
         }
@@ -775,7 +756,7 @@ export default function AdminRolesPage() {
         )
       );
     }
-    setToast({ id: Date.now(), message: "保存しました。" });
+    toast.success("保存しました。");
     setSaving(false);
   };
 
@@ -795,7 +776,6 @@ export default function AdminRolesPage() {
     }
 
     setDeleting(true);
-    setError(null);
     try {
       const res = await fetch("/api/account/delete", {
         method: "POST",
@@ -810,7 +790,7 @@ export default function AdminRolesPage() {
           | { error?: string; details?: string }
           | null;
         const message = data?.details ? `${data.error ?? "削除エラー"}: ${data.details}` : data?.error;
-        setError(message ?? "アカウントの削除に失敗しました。");
+        toast.error(message ?? "アカウントの削除に失敗しました。");
         setDeleting(false);
         return;
       }
@@ -823,11 +803,11 @@ export default function AdminRolesPage() {
 
       setProfiles((prev) => prev.filter((p) => p.id !== selectedId));
       setSelectedId(null);
-      setToast({ id: Date.now(), message: "アカウントを削除しました。" });
+      toast.success("アカウントを削除しました。");
       setDeleting(false);
     } catch (err) {
       console.error(err);
-      setError("アカウントの削除に失敗しました。");
+      toast.error("アカウントの削除に失敗しました。");
       setDeleting(false);
     }
   };
@@ -865,17 +845,6 @@ export default function AdminRolesPage() {
     <AuthGuard>
       <div className="flex min-h-screen bg-background">
         <SideNav />
-        {toast && (
-          <div
-            className={cn(
-              "fixed right-6 top-6 z-[90] flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-emerald-500 shadow-lg backdrop-blur transition-all",
-              toastVisible ? "translate-x-0 opacity-100" : "translate-x-4 opacity-0"
-            )}
-          >
-            <CheckCircle2 className="h-4 w-4" />
-            <span className="text-sm">{toast.message}</span>
-          </div>
-        )}
 
         <main className="flex-1 md:ml-20">
           <section className="relative py-12 md:py-16 overflow-hidden">
@@ -901,18 +870,6 @@ export default function AdminRolesPage() {
 
           <section className="pb-12 md:pb-16">
             <div className="container mx-auto px-4 sm:px-6 space-y-8 md:space-y-10">
-              {error && (
-                <div
-                  className={cn(
-                    "flex items-center gap-2 px-4 py-3 rounded-lg border",
-                    "text-destructive bg-destructive/10 border-destructive/30"
-                  )}
-                >
-                  <AlertCircle className="w-4 h-4" />
-                  <span className="text-sm">{error}</span>
-                </div>
-              )}
-
               <div className="grid lg:grid-cols-[1.2fr,1fr] gap-6">
                 <Card className="bg-card/60 border-border">
                   <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">

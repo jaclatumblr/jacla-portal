@@ -6,7 +6,6 @@ import {
   ArrowLeft,
   ClipboardList,
   Loader2,
-  RefreshCw,
   Save,
 } from "lucide-react";
 import { AuthGuard } from "@/lib/AuthGuard";
@@ -28,6 +27,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { toast } from "@/lib/toast";
 
 type MaintenanceStatus =
   | "ok"
@@ -149,8 +149,6 @@ export default function EquipmentMaintenancePage() {
   const [logsLoading, setLogsLoading] = useState(false);
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [openToAll, setOpenToAll] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [settingsError, setSettingsError] = useState<string | null>(null);
   const detailRef = useRef<HTMLDivElement | null>(null);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -215,7 +213,6 @@ export default function EquipmentMaintenancePage() {
 
   const fetchSettings = useCallback(async () => {
     setSettingsLoading(true);
-    setSettingsError(null);
     const { data, error } = await supabase
       .from("equipment_settings")
       .select("open_to_all")
@@ -223,7 +220,7 @@ export default function EquipmentMaintenancePage() {
       .maybeSingle();
     if (error) {
       console.error(error);
-      setSettingsError("編集設定の取得に失敗しました。");
+      toast.error("編集設定の取得に失敗しました。");
       setOpenToAll(false);
     } else {
       setOpenToAll((data as { open_to_all?: boolean } | null)?.open_to_all ?? false);
@@ -233,7 +230,6 @@ export default function EquipmentMaintenancePage() {
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
-    setError(null);
     const { data, error } = await supabase
       .from("equipment_items")
       .select(
@@ -242,7 +238,7 @@ export default function EquipmentMaintenancePage() {
       .order("updated_at", { ascending: false });
     if (error) {
       console.error(error);
-      setError("備品データの取得に失敗しました。");
+      toast.error("備品データの取得に失敗しました。");
       setItems([]);
     } else {
       setItems((data ?? []) as unknown as EquipmentItem[]);
@@ -328,17 +324,16 @@ export default function EquipmentMaintenancePage() {
   const handleSave = async () => {
     if (!canEdit) return;
     if (!name.trim()) {
-      setError("備品名を入力してください。");
+      toast.error("備品名を入力してください。");
       return;
     }
     const quantityValue = Number.parseInt(quantity, 10);
     if (Number.isNaN(quantityValue) || quantityValue < 0) {
-      setError("数量は0以上の数値で入力してください。");
+      toast.error("数量は0以上の数値で入力してください。");
       return;
     }
 
     setSaving(true);
-    setError(null);
 
     const payload = {
       name: name.trim(),
@@ -359,7 +354,7 @@ export default function EquipmentMaintenancePage() {
         .eq("id", selectedId);
       if (error) {
         console.error(error);
-        setError("更新に失敗しました。");
+        toast.error("更新に失敗しました。");
         setSaving(false);
         return;
       }
@@ -373,7 +368,7 @@ export default function EquipmentMaintenancePage() {
         .maybeSingle();
       if (error || !data) {
         console.error(error);
-        setError("作成に失敗しました。");
+        toast.error("作成に失敗しました。");
         setSaving(false);
         return;
       }
@@ -386,6 +381,7 @@ export default function EquipmentMaintenancePage() {
     if (nextId) {
       await fetchLogs(nextId);
     }
+    toast.success("保存しました。");
     setSaving(false);
   };
 
@@ -400,7 +396,7 @@ export default function EquipmentMaintenancePage() {
     if (error) {
       console.error(error);
       setOpenToAll(!nextValue);
-      setSettingsError("編集権限の更新に失敗しました。");
+      toast.error("編集権限の更新に失敗しました。");
     }
   };
 
@@ -444,9 +440,6 @@ export default function EquipmentMaintenancePage() {
                       {openToAll ? "全員編集を解除" : "全員編集を許可"}
                     </Button>
                   )}
-                  {settingsError && (
-                    <span className="text-xs text-destructive">{settingsError}</span>
-                  )}
                 </div>
               </div>
             </div>
@@ -454,13 +447,6 @@ export default function EquipmentMaintenancePage() {
 
           <section className="pb-12 md:pb-16">
             <div className="container mx-auto px-4 sm:px-6 space-y-6">
-              {error && (
-                <div className="flex items-center gap-2 px-4 py-3 rounded-lg border border-destructive/30 bg-destructive/10 text-destructive text-sm">
-                  <RefreshCw className="w-4 h-4" />
-                  {error}
-                </div>
-              )}
-
               <div className="grid lg:grid-cols-[1.15fr,1fr] gap-6">
                 <div className="order-2 space-y-6">
                   <Card ref={detailRef} className="bg-card/60 border-border">

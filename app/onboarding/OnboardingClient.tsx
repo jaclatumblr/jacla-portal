@@ -209,7 +209,6 @@ export default function OnboardingClient({
     let cancelled = false;
     (async () => {
       setLoading(true);
-      setError(null);
 
       const { data, error } = await supabase
         .from("profiles")
@@ -238,7 +237,7 @@ export default function OnboardingClient({
 
         if (insertError) {
           console.error(insertError);
-          setError("プロフィールの取得に失敗しました。時間をおいて再度お試しください。");
+          toast.error("プロフィールの取得に失敗しました。時間をおいて再度お試しください。");
           setLoading(false);
           return;
         }
@@ -263,12 +262,15 @@ export default function OnboardingClient({
 
       if (partsRes.error) {
         console.error(partsRes.error);
+        toast.error("プロフィールの取得に失敗しました。時間をおいて再度お試しください。");
       }
       if (leadersRes.error) {
         console.error(leadersRes.error);
+        toast.error("ロール情報の取得に失敗しました。");
       }
       if (privateRes.error) {
         console.error(privateRes.error);
+        toast.error("学籍番号の取得に失敗しました。");
       }
 
       const parts = (partsRes.data ?? []) as ProfilePartRow[];
@@ -338,33 +340,31 @@ export default function OnboardingClient({
   };
 
   const handleAvatarChange = async (file: File | null) => {
-    setAvatarError(null);
     if (!file) {
       setAvatarFile(null);
       return;
     }
     if (!avatarTypes.includes(file.type)) {
-      setAvatarError("PNG/JPG/WEBP の画像を選択してください。");
+      toast.error("PNG/JPG/WEBP の画像を選択してください。");
       return;
     }
     try {
       const compressed = await compressAvatarImage(file);
       if (compressed.size > maxAvatarSizeMb * 1024 * 1024) {
-        setAvatarError(`画像サイズは ${maxAvatarSizeMb}MB 以下にしてください。`);
+        toast.error(`画像サイズは ${maxAvatarSizeMb}MB 以下にしてください。`);
         setAvatarFile(null);
         return;
       }
       setAvatarFile(compressed);
     } catch (compressionError) {
       console.error(compressionError);
-      setAvatarError("画像の処理に失敗しました。");
+      toast.error("画像の処理に失敗しました。");
       setAvatarFile(null);
     }
   };
 
   const handleDiscordConnect = async () => {
     if (!session) return;
-    setDiscordError(null);
     setDiscordConnecting(true);
     try {
       const connectNext = isEdit ? pathname : next;
@@ -378,27 +378,26 @@ export default function OnboardingClient({
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => null)) as { error?: string } | null;
-        setDiscordError(data?.error ?? "Discord連携に失敗しました。");
+        toast.error(data?.error ?? "Discord連携に失敗しました。");
         setDiscordConnecting(false);
         return;
       }
       const data = (await res.json().catch(() => null)) as { url?: string } | null;
       if (!data?.url) {
-        setDiscordError("Discord連携に失敗しました。");
+        toast.error("Discord連携に失敗しました。");
         setDiscordConnecting(false);
         return;
       }
       window.location.href = data.url;
     } catch (err) {
       console.error(err);
-      setDiscordError("Discord連携に失敗しました。");
+      toast.error("Discord連携に失敗しました。");
       setDiscordConnecting(false);
     }
   };
 
   const handleDiscordDisconnect = async () => {
     if (!session) return;
-    setDiscordError(null);
     setDiscordDisconnecting(true);
     try {
       const res = await fetch("/api/discord/disconnect", {
@@ -409,7 +408,7 @@ export default function OnboardingClient({
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => null)) as { error?: string } | null;
-        setDiscordError(data?.error ?? "Discord連携の解除に失敗しました。");
+        toast.error(data?.error ?? "Discord連携の解除に失敗しました。");
         setDiscordDisconnecting(false);
         return;
       }
@@ -418,7 +417,7 @@ export default function OnboardingClient({
       setDiscordDisconnecting(false);
     } catch (err) {
       console.error(err);
-      setDiscordError("Discord連携の解除に失敗しました。");
+      toast.error("Discord連携の解除に失敗しました。");
       setDiscordDisconnecting(false);
     }
   };
@@ -427,38 +426,37 @@ export default function OnboardingClient({
     e.preventDefault();
     if (!session) return;
     if (!displayName.trim()) {
-      setError("表示名を入力してください。");
+      toast.error("表示名を入力してください。");
       return;
     }
     if (!realName.trim()) {
-      setError("本名を入力してください。");
+      toast.error("本名を入力してください。");
       return;
     }
     if (!studentId.trim() && !isAdminLeader) {
-      setError("学籍番号を入力してください。");
+      toast.error("学籍番号を入力してください。");
       return;
     }
     const enrollmentYearValue = enrollmentYear.trim();
     const birthDateValue = birthDate.trim();
     if (!enrollmentYearValue && !isAdminLeader) {
-      setError("入学年度を入力してください。");
+      toast.error("入学年度を入力してください。");
       return;
     }
     if (enrollmentYearValue && !/^\d{4}$/.test(enrollmentYearValue)) {
-      setError("入学年度は西暦4桁で入力してください。");
+      toast.error("入学年度は西暦4桁で入力してください。");
       return;
     }
     if (birthDateValue && !/^\d{4}-\d{2}-\d{2}$/.test(birthDateValue)) {
-      setError("誕生日はYYYY-MM-DD形式で入力してください。");
+      toast.error("誕生日はYYYY-MM-DD形式で入力してください。");
       return;
     }
     if (!isAdminLeader && !part) {
-      setError("メイン楽器を選択してください。");
+      toast.error("メイン楽器を選択してください。");
       return;
     }
 
     setSaving(true);
-    setError(null);
 
     const partValue = part || "none";
     const avatarCandidate =
@@ -475,7 +473,7 @@ export default function OnboardingClient({
         .upload(path, avatarFile, { upsert: true });
       if (uploadError) {
         console.error(uploadError);
-        setError("画像のアップロードに失敗しました。");
+        toast.error("画像のアップロードに失敗しました。");
         setSaving(false);
         setAvatarUploading(false);
         return;
@@ -512,7 +510,7 @@ export default function OnboardingClient({
 
     if (profileRes.error) {
       console.error(profileRes.error);
-      setError("保存に失敗しました。時間をおいて再度お試しください。");
+      toast.error("保存に失敗しました。時間をおいて再度お試しください。");
       setSaving(false);
       return;
     }
@@ -531,7 +529,7 @@ export default function OnboardingClient({
 
     if (privateRes.error) {
       console.error(privateRes.error);
-      setError("学籍番号の保存に失敗しました。");
+      toast.error("学籍番号の保存に失敗しました。");
       setSaving(false);
       return;
     }
@@ -543,7 +541,7 @@ export default function OnboardingClient({
         .eq("profile_id", session.user.id);
       if (deleteError) {
         console.error(deleteError);
-        setError("サブ楽器の保存に失敗しました。");
+        toast.error("サブ楽器の保存に失敗しました。");
         setSaving(false);
         return;
       }
@@ -557,7 +555,7 @@ export default function OnboardingClient({
         .eq("profile_id", session.user.id);
       if (resetRes.error) {
         console.error(resetRes.error);
-        setError("サブ楽器の保存に失敗しました。");
+        toast.error("サブ楽器の保存に失敗しました。");
         setSaving(false);
         return;
       }
@@ -572,7 +570,7 @@ export default function OnboardingClient({
         .upsert(upsertRows, { onConflict: "profile_id,part" });
       if (upsertRes.error) {
         console.error(upsertRes.error);
-        setError("サブ楽器の保存に失敗しました。");
+        toast.error("サブ楽器の保存に失敗しました。");
         setSaving(false);
         return;
       }
@@ -583,7 +581,7 @@ export default function OnboardingClient({
         .eq("profile_id", session.user.id);
       if (currentError) {
         console.error(currentError);
-        setError("サブ楽器の保存に失敗しました。");
+        toast.error("サブ楽器の保存に失敗しました。");
         setSaving(false);
         return;
       }
@@ -599,14 +597,14 @@ export default function OnboardingClient({
           .in("id", deleteIds);
         if (deleteError) {
           console.error(deleteError);
-          setError("サブ楽器の保存に失敗しました。");
+          toast.error("サブ楽器の保存に失敗しました。");
           setSaving(false);
           return;
         }
       }
     }
 
-    setDone(true);
+    toast.success(doneMessage);
     setSaving(false);
     router.replace(next);
   };
@@ -619,7 +617,6 @@ export default function OnboardingClient({
     if (!confirmedTwice) return;
 
     setDeleting(true);
-    setDeleteError(null);
 
     try {
       const res = await fetch("/api/account/delete", {
@@ -635,7 +632,7 @@ export default function OnboardingClient({
           | { error?: string; details?: string }
           | null;
         const message = data?.details ? `${data.error ?? "削除エラー"}: ${data.details}` : data?.error;
-        setDeleteError(message ?? "アカウントの削除に失敗しました。");
+        toast.error(message ?? "アカウントの削除に失敗しました。");
         setDeleting(false);
         return;
       }
@@ -644,7 +641,7 @@ export default function OnboardingClient({
       router.replace("/login");
     } catch (err) {
       console.error(err);
-      setDeleteError("アカウントの削除に失敗しました。");
+      toast.error("アカウントの削除に失敗しました。");
       setDeleting(false);
     }
   };
@@ -723,9 +720,6 @@ export default function OnboardingClient({
                             </p>
                           </div>
                         </div>
-                        {avatarError && (
-                          <p className="text-xs text-destructive">{avatarError}</p>
-                        )}
                       </div>
 
                       <label className="space-y-1 block text-sm">
@@ -827,9 +821,6 @@ export default function OnboardingClient({
                               </Button>
                             )}
                           </div>
-                          {discordError && (
-                            <p className="text-sm text-destructive">{discordError}</p>
-                          )}
                         </div>
                       )}
 
@@ -900,14 +891,6 @@ export default function OnboardingClient({
                         </div>
                       </div>
 
-                      {error && <p className="text-sm text-destructive">{error}</p>}
-                      {done && !error && (
-                        <p className="text-sm text-emerald-500 flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4" />
-                          {doneMessage}
-                        </p>
-                      )}
-
                       <Button type="submit" disabled={saving} className="gap-2">
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <PencilLine className="w-4 h-4" />}
                         {submitLabel}
@@ -926,11 +909,6 @@ export default function OnboardingClient({
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    {deleteError && (
-                      <p className="text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-lg p-3">
-                        {deleteError}
-                      </p>
-                    )}
                     <Button
                       type="button"
                       variant="destructive"

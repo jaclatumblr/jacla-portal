@@ -17,6 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { toast } from "@/lib/toast";
 
 type EquipmentStatus =
   | "ok"
@@ -80,7 +81,6 @@ const statusBadge = (status: EquipmentStatus) => {
 export default function LightingEquipmentPage() {
   const [items, setItems] = useState<EquipmentItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("updated_desc");
 
@@ -88,7 +88,6 @@ export default function LightingEquipmentPage() {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      setError(null);
       const { data, error } = await supabase
         .from("equipment_items")
         .select(
@@ -99,7 +98,7 @@ export default function LightingEquipmentPage() {
       if (cancelled) return;
       if (error) {
         console.error(error);
-        setError("照明機材の取得に失敗しました。");
+        toast.error("照明機材の取得に失敗しました。");
         setItems([]);
       } else {
         setItems((data ?? []) as EquipmentItem[]);
@@ -176,12 +175,6 @@ export default function LightingEquipmentPage() {
 
           <section className="pb-12 md:pb-16">
             <div className="container mx-auto px-4 sm:px-6 space-y-4">
-              {error && (
-                <div className="flex items-center gap-2 px-4 py-3 rounded-lg border border-destructive/30 bg-destructive/10 text-destructive text-sm">
-                  {error}
-                </div>
-              )}
-
               <div className="flex flex-col sm:flex-row gap-2">
                 <Input
                   placeholder="機材名・メーカーで検索"

@@ -22,6 +22,7 @@ import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
+import { toast } from "@/lib/toast";
 
 type ProfileData = {
   display_name?: string | null;
@@ -78,7 +79,6 @@ export default function ProfilePage() {
   const [enrollmentYear, setEnrollmentYear] = useState<string | null>(null);
   const [birthDate, setBirthDate] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [showDiscordFallback, setShowDiscordFallback] = useState(false);
 
   const getDiscordAppUrl = (id: string) => {
@@ -94,7 +94,6 @@ export default function ProfilePage() {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      setError(null);
 
       const [profileRes, bandRes, leadersRes, privateRes, positionsRes] = await Promise.all([
         supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle(),
@@ -121,7 +120,7 @@ export default function ProfilePage() {
 
       if (profileRes.error) {
         console.error(profileRes.error);
-        setError("プロフィールの取得に失敗しました。");
+        toast.error("プロフィールの取得に失敗しました。");
       } else {
         setProfile((profileRes.data ?? null) as ProfileData | null);
       }
@@ -150,6 +149,7 @@ export default function ProfilePage() {
       if (positionsRes.error) {
         console.error(positionsRes.error);
         setPositions([]);
+        toast.error("役職情報の取得に失敗しました。");
       } else {
         const values = (positionsRes.data ?? [])
           .map((row) => (row as { position?: string }).position)
@@ -159,6 +159,7 @@ export default function ProfilePage() {
 
       if (privateRes.error) {
         console.error(privateRes.error);
+        toast.error("学籍番号の取得に失敗しました。");
       } else {
         const privateRow = privateRes.data as
           | { student_id?: string | null; enrollment_year?: number | null; birth_date?: string | null }
@@ -172,7 +173,7 @@ export default function ProfilePage() {
 
       if (bandRes.error) {
         console.error(bandRes.error);
-        setError((prev) => prev ?? "所属バンドの取得に失敗しました。");
+        toast.error("所属バンドの取得に失敗しました。");
         setBands([]);
       } else {
         const map = new Map<string, { name: string; roles: Set<string> }>();
@@ -354,12 +355,6 @@ export default function ProfilePage() {
 
           <section className="py-8 md:py-12">
             <div className="container mx-auto px-4 sm:px-6">
-              {error && (
-                <div className="mb-6 text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-lg p-3">
-                  {error}
-                </div>
-              )}
-
               <div className="grid lg:grid-cols-2 gap-4 md:gap-6 max-w-4xl mx-auto mb-8 md:mb-12">
                 <div className="p-4 md:p-6 bg-card/50 border border-border rounded-lg">
                   <h3 className="text-lg font-bold mb-4 md:mb-6">登録情報</h3>
@@ -370,7 +365,7 @@ export default function ProfilePage() {
                       </div>
                       <div className="min-w-0">
                         <p className="text-xs text-muted-foreground">Discord</p>
-                        <p className="font-medium text-sm md:text-base truncate">
+                        <div className="font-medium text-sm md:text-base truncate">
                           {loading ? (
                             "..."
                           ) : discordLinks ? (
@@ -399,7 +394,7 @@ export default function ProfilePage() {
                           ) : (
                             discordLabel
                           )}
-                        </p>
+                        </div>
                       </div>
                     </div>
 

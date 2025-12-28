@@ -12,7 +12,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import type { Attributes, DragEndEvent, DragStartEvent, DraggableSyntheticListeners } from "@dnd-kit/core";
+import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import {
   SortableContext,
   arrayMove,
@@ -85,6 +85,8 @@ type SongEntry = {
   memo: string;
   order_index: number | null;
 };
+
+type DragHandleProps = Record<string, any>;
 
 const statusOptions: { value: RepertoireStatus; label: string }[] = [
   { value: "draft", label: "下書き" },
@@ -642,8 +644,8 @@ export default function RepertoireSubmitPage() {
   }: {
     entry: SongEntry;
     index: number;
-    dragAttributes?: Attributes;
-    dragListeners?: DraggableSyntheticListeners;
+    dragAttributes?: DragHandleProps;
+    dragListeners?: DragHandleProps;
     setNodeRef?: (node: HTMLElement | null) => void;
     style?: CSSProperties;
     isDragging?: boolean;

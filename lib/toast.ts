@@ -24,5 +24,7 @@ export const toast = {
 
 export const subscribeToasts = (listener: ToastListener) => {
   listeners.add(listener);
-  return () => listeners.delete(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 };

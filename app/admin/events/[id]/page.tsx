@@ -34,6 +34,7 @@ type EventRow = {
   name: string;
   date: string;
   status: string;
+  event_type: string;
   venue: string | null;
   open_time: string | null;
   start_time: string | null;
@@ -86,6 +87,14 @@ const statusOptions = [
   { value: "closed", label: "終了" },
 ];
 
+const eventTypeOptions = [
+  { value: "live", label: "ライブ" },
+  { value: "workshop", label: "講習会" },
+  { value: "briefing", label: "説明会" },
+  { value: "camp", label: "合宿" },
+  { value: "other", label: "その他" },
+];
+
 function statusBadge(status: string) {
   if (status === "recruiting") return "default";
   if (status === "fixed") return "secondary";
@@ -94,6 +103,10 @@ function statusBadge(status: string) {
 
 function statusLabel(status: string) {
   return statusOptions.find((s) => s.value === status)?.label ?? status;
+}
+
+function eventTypeLabel(eventType: string) {
+  return eventTypeOptions.find((t) => t.value === eventType)?.label ?? eventType;
 }
 
 export default function AdminEventDetailPage() {
@@ -177,7 +190,7 @@ export default function AdminEventDetailPage() {
         supabase
           .from("events")
           .select(
-            "id, name, date, status, venue, open_time, start_time, note, default_changeover_min"
+            "id, name, date, status, event_type, venue, open_time, start_time, note, default_changeover_min"
           )
           .eq("id", eventId)
           .maybeSingle(),
@@ -303,6 +316,7 @@ export default function AdminEventDetailPage() {
       name: eventForm.name.trim(),
       date: eventForm.date,
       status: eventForm.status,
+      event_type: eventForm.event_type,
       venue: eventForm.venue || null,
       open_time: eventForm.open_time || null,
       start_time: eventForm.start_time || null,
@@ -582,6 +596,7 @@ export default function AdminEventDetailPage() {
                 </p>
                 <div className="flex flex-wrap items-center gap-3 mt-4">
                   <Badge variant={statusBadge(eventForm.status)}>{statusLabel(eventForm.status)}</Badge>
+                  <Badge variant="outline">{eventTypeLabel(eventForm.event_type)}</Badge>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Calendar className="w-4 h-4 text-primary" />
                     <span>{eventForm.date}</span>
@@ -644,6 +659,21 @@ export default function AdminEventDetailPage() {
                         </select>
                       </label>
                     </div>
+
+                    <label className="space-y-1 block text-sm">
+                      <span className="text-foreground">イベント種別</span>
+                      <select
+                        className="h-10 w-full rounded-md border border-input bg-card px-3 pr-9 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-colors"
+                        value={eventForm.event_type}
+                        onChange={(e) => handleEventChange("event_type", e.target.value)}
+                      >
+                        {eventTypeOptions.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
 
                     <div className="grid md:grid-cols-2 gap-4">
                       <label className="space-y-1 block text-sm">

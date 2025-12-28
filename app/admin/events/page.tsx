@@ -18,6 +18,7 @@ type EventRow = {
   name: string;
   date: string;
   status: string;
+  event_type: string;
   venue: string | null;
   open_time: string | null;
   start_time: string | null;
@@ -32,6 +33,14 @@ const statusOptions = [
   { value: "closed", label: "終了" },
 ];
 
+const eventTypeOptions = [
+  { value: "live", label: "ライブ" },
+  { value: "workshop", label: "講習会" },
+  { value: "briefing", label: "説明会" },
+  { value: "camp", label: "合宿" },
+  { value: "other", label: "その他" },
+];
+
 function statusVariant(status: string) {
   if (status === "draft") return "outline";
   if (status === "recruiting") return "default";
@@ -44,6 +53,7 @@ const emptyForm: EventRow = {
   name: "",
   date: "",
   status: "draft",
+  event_type: "live",
   venue: "",
   open_time: "",
   start_time: "",
@@ -78,7 +88,9 @@ export default function AdminEventsPage() {
       setError(null);
       const { data, error } = await supabase
         .from("events")
-        .select("id, name, date, status, venue, open_time, start_time, note, default_changeover_min")
+        .select(
+          "id, name, date, status, event_type, venue, open_time, start_time, note, default_changeover_min"
+        )
         .order("date", { ascending: true });
       if (cancelled) return;
       if (error) {
@@ -109,6 +121,7 @@ export default function AdminEventsPage() {
       name: form.name.trim(),
       date: form.date,
       status: form.status,
+      event_type: form.event_type,
       venue: form.venue || null,
       open_time: form.open_time || null,
       start_time: form.start_time || null,
@@ -269,6 +282,22 @@ export default function AdminEventsPage() {
                       </select>
                     </label>
                   </div>
+
+                  <label className="space-y-1 block text-sm">
+                    <span className="text-foreground">イベント種別</span>
+                    <select
+                      aria-label="イベント種別"
+                      className="h-10 w-full rounded-md border border-input bg-card/80 px-3 pr-9 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-colors"
+                      value={form.event_type}
+                      onChange={(e) => handleChange("event_type", e.target.value)}
+                    >
+                      {eventTypeOptions.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
 
                   <div className="grid sm:grid-cols-2 gap-3">
                     <label className="space-y-1 block text-sm">

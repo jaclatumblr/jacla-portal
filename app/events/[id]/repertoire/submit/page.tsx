@@ -29,6 +29,7 @@ type EventRow = {
   id: string;
   name: string;
   date: string;
+  event_type: string;
 };
 
 type BandRow = {
@@ -154,6 +155,9 @@ export default function RepertoireSubmitPage() {
     [bands, selectedBandId]
   );
 
+  const canManageBands =
+    event?.event_type === "live" || event?.event_type === "camp";
+
   const joinableBands = useMemo(() => {
     if (allBands.length === 0) return [];
     const editableIds = new Set(bands.map((band) => band.id));
@@ -222,6 +226,10 @@ export default function RepertoireSubmitPage() {
     if (e) e.preventDefault();
     const name = newBandName.trim();
     if (!eventId || !name || creatingBand) return;
+    if (!canManageBands) {
+      setCreateBandError("このイベントではバンドを作成できません。");
+      return;
+    }
     if (!userId) {
       setCreateBandError("ログイン情報を確認できません。");
       return;
@@ -258,6 +266,10 @@ export default function RepertoireSubmitPage() {
   const handleJoinBand = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!eventId || joining) return;
+    if (!canManageBands) {
+      setJoinError("このイベントでは参加登録できません。");
+      return;
+    }
     if (!userId) {
       setJoinError("ログイン情報を確認できません。");
       return;
@@ -308,7 +320,11 @@ export default function RepertoireSubmitPage() {
       setSaveMessage(null);
 
       const [eventRes, bandsRes] = await Promise.all([
-        supabase.from("events").select("id, name, date").eq("id", eventId).maybeSingle(),
+        supabase
+          .from("events")
+          .select("id, name, date, event_type")
+          .eq("id", eventId)
+          .maybeSingle(),
         supabase
           .from("bands")
           .select("id, name, created_by, repertoire_status")
@@ -620,193 +636,198 @@ export default function RepertoireSubmitPage() {
                 </div>
               )}
 
-              <div className="grid lg:grid-cols-[0.9fr,1.6fr] gap-6">
-                <Card className="bg-card/60 border-border">
-                  <CardHeader>
-                    <CardTitle className="text-lg">バンド一覧</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {loading ? (
-                      <div className="flex items-center gap-2 rounded-lg border border-border bg-card/60 px-4 py-3 text-sm text-muted-foreground">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        読み込み中...
-                      </div>
-                    ) : bands.length === 0 ? (
-                      <div className="rounded-lg border border-border bg-card/60 px-4 py-3 text-sm text-muted-foreground">
-                        編集できるバンドがありません。
-                      </div>
-                    ) : (
-                      bands.map((band) => {
-                        const selected = band.id === selectedBandId;
-                        const status = (band.repertoire_status as RepertoireStatus | null) ?? "draft";
-                        return (
-                          <button
-                            key={band.id}
-                            type="button"
-                            onClick={() => setSelectedBandId(band.id)}
-                            className={cn(
-                              "w-full text-left rounded-lg border border-border px-4 py-3 transition-colors",
-                              selected
-                                ? "border-primary/50 bg-primary/10"
-                                : "bg-card/60 hover:bg-muted/40"
-                            )}
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="font-medium truncate">{band.name}</div>
-                                <div className="mt-1 text-xs text-muted-foreground">
-                                  曲数: {bandCountLabel(band.id)}
-                                </div>
-                              </div>
-                              <Badge variant={status === "submitted" ? "default" : "secondary"}>
-                                {status === "submitted" ? "提出済み" : "下書き"}
-                              </Badge>
-                            </div>
-                          </button>
-                        );
-                      })
-                    )}
-
-                    <div className="pt-3 border-t border-border/60 space-y-4">
-                      <div className="space-y-2">
-                        <p className="text-sm font-medium text-foreground">既存バンドに参加する</p>
-                        {joinableBands.length === 0 ? (
-                          <p className="text-xs text-muted-foreground">参加できるバンドがありません。</p>
-                        ) : (
-                          <form onSubmit={handleJoinBand} className="flex flex-col gap-2">
-                            <select
-                              value={joinBandId}
-                              onChange={(event) => {
-                                setJoinBandId(event.target.value);
-                                if (joinError) setJoinError(null);
-                              }}
-                              className="h-10 w-full rounded-md border border-input bg-card px-3 pr-8 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+              {event && !canManageBands ? (
+                <div className="rounded-xl border border-border bg-card/60 p-4 text-sm text-muted-foreground">
+                  このイベントではレパ表の提出・バンド登録はできません。（ライブ/合宿のみ対応）
+                </div>
+              ) : (
+                <div className="grid lg:grid-cols-[0.9fr,1.6fr] gap-6">
+                  <Card className="bg-card/60 border-border">
+                    <CardHeader>
+                      <CardTitle className="text-lg">バンド一覧</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {loading ? (
+                        <div className="flex items-center gap-2 rounded-lg border border-border bg-card/60 px-4 py-3 text-sm text-muted-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          読み込み中...
+                        </div>
+                      ) : bands.length === 0 ? (
+                        <div className="rounded-lg border border-border bg-card/60 px-4 py-3 text-sm text-muted-foreground">
+                          編集できるバンドがありません。
+                        </div>
+                      ) : (
+                        bands.map((band) => {
+                          const selected = band.id === selectedBandId;
+                          const status = (band.repertoire_status as RepertoireStatus | null) ?? "draft";
+                          return (
+                            <button
+                              key={band.id}
+                              type="button"
+                              onClick={() => setSelectedBandId(band.id)}
+                              className={cn(
+                                "w-full text-left rounded-lg border border-border px-4 py-3 transition-colors",
+                                selected
+                                  ? "border-primary/50 bg-primary/10"
+                                  : "bg-card/60 hover:bg-muted/40"
+                              )}
                             >
-                              <option value="">バンドを選択</option>
-                              {joinableBands.map((band) => (
-                                <option key={band.id} value={band.id}>
-                                  {band.name}
-                                </option>
-                              ))}
-                            </select>
-                            <div className="flex flex-col sm:flex-row gap-2">
-                              <Input
-                                value={joinInstrument}
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="font-medium truncate">{band.name}</div>
+                                  <div className="mt-1 text-xs text-muted-foreground">
+                                    曲数: {bandCountLabel(band.id)}
+                                  </div>
+                                </div>
+                                <Badge variant={status === "submitted" ? "default" : "secondary"}>
+                                  {status === "submitted" ? "提出済み" : "下書き"}
+                                </Badge>
+                              </div>
+                            </button>
+                          );
+                        })
+                      )}
+
+                      <div className="pt-3 border-t border-border/60 space-y-4">
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium text-foreground">既存バンドに参加する</p>
+                          {joinableBands.length === 0 ? (
+                            <p className="text-xs text-muted-foreground">参加できるバンドがありません。</p>
+                          ) : (
+                            <form onSubmit={handleJoinBand} className="flex flex-col gap-2">
+                              <select
+                                value={joinBandId}
                                 onChange={(event) => {
-                                  setJoinInstrument(event.target.value);
+                                  setJoinBandId(event.target.value);
                                   if (joinError) setJoinError(null);
                                 }}
-                                placeholder="担当楽器/パート"
+                                className="h-10 w-full rounded-md border border-input bg-card px-3 pr-8 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                              >
+                                <option value="">バンドを選択</option>
+                                {joinableBands.map((band) => (
+                                  <option key={band.id} value={band.id}>
+                                    {band.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <div className="flex flex-col sm:flex-row gap-2">
+                                <Input
+                                  value={joinInstrument}
+                                  onChange={(event) => {
+                                    setJoinInstrument(event.target.value);
+                                    if (joinError) setJoinError(null);
+                                  }}
+                                  placeholder="担当楽器/パート"
+                                />
+                                <Button
+                                  type="submit"
+                                  disabled={!joinBandId || !joinInstrument.trim() || joining}
+                                  className="gap-2"
+                                >
+                                  {joining ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <Plus className="w-4 h-4" />
+                                  )}
+                                  参加する
+                                </Button>
+                              </div>
+                              {joinError && <p className="text-xs text-destructive">{joinError}</p>}
+                            </form>
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium text-foreground">新しくバンドを作成する</p>
+                          <form onSubmit={handleCreateBand} className="flex flex-col gap-2">
+                            <div className="flex flex-col sm:flex-row gap-2">
+                              <Input
+                                value={newBandName}
+                                onChange={(event) => {
+                                  setNewBandName(event.target.value);
+                                  if (createBandError) setCreateBandError(null);
+                                }}
+                                placeholder="バンド名を入力"
                               />
                               <Button
                                 type="submit"
-                                disabled={!joinBandId || !joinInstrument.trim() || joining}
+                                disabled={!newBandName.trim() || creatingBand}
                                 className="gap-2"
                               >
-                                {joining ? (
+                                {creatingBand ? (
                                   <Loader2 className="w-4 h-4 animate-spin" />
                                 ) : (
                                   <Plus className="w-4 h-4" />
                                 )}
-                                参加する
+                                作成
                               </Button>
                             </div>
-                            {joinError && <p className="text-xs text-destructive">{joinError}</p>}
+                            {createBandError && (
+                              <p className="text-xs text-destructive">{createBandError}</p>
+                            )}
                           </form>
-                        )}
+                        </div>
                       </div>
+                    </CardContent>
+                  </Card>
 
-                      <div className="space-y-2">
-                        <p className="text-sm font-medium text-foreground">新しくバンドを作成する</p>
-                        <form onSubmit={handleCreateBand} className="flex flex-col gap-2">
-                          <div className="flex flex-col sm:flex-row gap-2">
-                            <Input
-                              value={newBandName}
-                              onChange={(event) => {
-                                setNewBandName(event.target.value);
-                                if (createBandError) setCreateBandError(null);
-                              }}
-                              placeholder="バンド名を入力"
-                            />
-                            <Button
-                              type="submit"
-                              disabled={!newBandName.trim() || creatingBand}
-                              className="gap-2"
-                            >
-                              {creatingBand ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <Plus className="w-4 h-4" />
-                              )}
-                              作成
-                            </Button>
-                          </div>
-                          {createBandError && (
-                            <p className="text-xs text-destructive">{createBandError}</p>
-                          )}
-                        </form>
+                  <Card className="bg-card/60 border-border">
+                    <CardHeader className="space-y-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <CardTitle className="text-lg">セットリスト</CardTitle>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <select
+                            value={repertoireStatus}
+                            onChange={(event) =>
+                              setRepertoireStatus(event.target.value as RepertoireStatus)
+                            }
+                            className="h-9 rounded-md border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                            disabled={!selectedBandId}
+                          >
+                            {statusOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                          <Button
+                            type="button"
+                            onClick={handleSave}
+                            disabled={!selectedBandId || saving}
+                            className="gap-2"
+                          >
+                            {saving ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Save className="w-4 h-4" />
+                            )}
+                            保存
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card className="bg-card/60 border-border">
-                  <CardHeader className="space-y-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <CardTitle className="text-lg">セットリスト</CardTitle>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <select
-                          value={repertoireStatus}
-                          onChange={(event) =>
-                            setRepertoireStatus(event.target.value as RepertoireStatus)
-                          }
-                          className="h-9 rounded-md border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-                          disabled={!selectedBandId}
-                        >
-                          {statusOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
+                      <div className="flex flex-wrap gap-2">
                         <Button
                           type="button"
-                          onClick={handleSave}
-                          disabled={!selectedBandId || saving}
+                          variant="outline"
+                          onClick={() => addEntry("song")}
+                          disabled={!selectedBandId}
                           className="gap-2"
                         >
-                          {saving ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Save className="w-4 h-4" />
-                          )}
-                          保存
+                          <Plus className="w-4 h-4" />
+                          曲を追加
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => addEntry("mc")}
+                          disabled={!selectedBandId}
+                          className="gap-2"
+                        >
+                          <Plus className="w-4 h-4" />
+                          MCを追加
                         </Button>
                       </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => addEntry("song")}
-                        disabled={!selectedBandId}
-                        className="gap-2"
-                      >
-                        <Plus className="w-4 h-4" />
-                        曲を追加
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => addEntry("mc")}
-                        disabled={!selectedBandId}
-                        className="gap-2"
-                      >
-                        <Plus className="w-4 h-4" />
-                        MCを追加
-                      </Button>
-                    </div>
-                  </CardHeader>
+                    </CardHeader>
 
                   <CardContent className="space-y-3">
                     {!selectedBandId ? (
@@ -951,7 +972,7 @@ export default function RepertoireSubmitPage() {
                                 </div>
                               </label>
                               <label className="space-y-1 text-sm">
-                                <span className="text-muted-foreground">メモ</span>
+                                <span className="text-muted-foreground">??</span>
                                 <Textarea
                                   rows={2}
                                   value={entry.memo}

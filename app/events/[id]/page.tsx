@@ -28,6 +28,7 @@ type Event = {
   id: string;
   name: string;
   date: string;
+  event_type: string;
   venue: string | null;
   status: string;
   open_time: string | null;
@@ -63,7 +64,7 @@ export default function EventDetailPage() {
       const [eventRes, bandsRes] = await Promise.all([
         supabase
           .from("events")
-          .select("id, name, date, venue, status, open_time, start_time, note")
+          .select("id, name, date, venue, status, event_type, open_time, start_time, note")
           .eq("id", eventId)
           .maybeSingle(),
         supabase
@@ -75,9 +76,9 @@ export default function EventDetailPage() {
 
       if (eventRes.error) {
         console.error(eventRes.error);
-        setError("?????????????????");
+        setError("イベント情報の取得に失敗しました。");
       } else if (!eventRes.data) {
-        setError("????????????????");
+        setError("イベントが見つかりませんでした。");
       } else {
         setEvent(eventRes.data as Event);
       }
@@ -126,6 +127,17 @@ export default function EventDetailPage() {
     event?.open_time && event?.start_time
       ? `${event.open_time} - ${event.start_time}`
       : "時間未定";
+
+  const eventTypeLabel = (eventType: string) => {
+    if (eventType === "live") return "ライブ";
+    if (eventType === "workshop") return "講習会";
+    if (eventType === "briefing") return "説明会";
+    if (eventType === "camp") return "合宿";
+    return "その他";
+  };
+
+  const canManageBands =
+    event?.event_type === "live" || event?.event_type === "camp";
 
   return (
     <AuthGuard>
@@ -199,6 +211,15 @@ export default function EventDetailPage() {
                         </p>
                       </div>
                       <div className="p-3 md:p-4 bg-card/50 border border-border rounded-lg">
+                        <List className="w-5 h-5 text-primary mb-2" />
+                        <p className="text-xs text-muted-foreground mb-1">
+                          イベント種別
+                        </p>
+                        <p className="font-medium text-sm md:text-base">
+                          {eventTypeLabel(event.event_type)}
+                        </p>
+                      </div>
+                      <div className="p-3 md:p-4 bg-card/50 border border-border rounded-lg">
                         <FileText className="w-5 h-5 text-primary mb-2" />
                         <p className="text-xs text-muted-foreground mb-1">
                           メモ
@@ -241,27 +262,29 @@ export default function EventDetailPage() {
                     </div>
                   </Link>
 
-                  <Link
-                    href={`/events/${event.id}/repertoire/submit`}
-                    className="group"
-                  >
-                    <div className="relative h-40 md:h-48 p-4 md:p-6 bg-card/50 border border-border rounded-lg hover:border-secondary/50 transition-all">
-                      <div className="absolute inset-0 bg-gradient-to-br from-secondary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-lg" />
-                      <div className="relative h-full flex flex-col">
-                        <FileText className="w-6 md:w-8 h-6 md:h-8 text-secondary mb-3 md:mb-4" />
-                        <h3 className="text-base md:text-lg font-bold mb-2">
-                          レパ表提出
-                        </h3>
-                        <p className="text-xs md:text-sm text-muted-foreground flex-1">
-                          自分のバンドの曲を登録
-                        </p>
-                        <div className="flex items-center gap-2 text-secondary text-sm opacity-0 group-hover:opacity-100 transition-opacity">
-                          <span>提出する</span>
-                          <ArrowRight className="w-4 h-4" />
+                  {canManageBands && (
+                    <Link
+                      href={`/events/${event.id}/repertoire/submit`}
+                      className="group"
+                    >
+                      <div className="relative h-40 md:h-48 p-4 md:p-6 bg-card/50 border border-border rounded-lg hover:border-secondary/50 transition-all">
+                        <div className="absolute inset-0 bg-gradient-to-br from-secondary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-lg" />
+                        <div className="relative h-full flex flex-col">
+                          <FileText className="w-6 md:w-8 h-6 md:h-8 text-secondary mb-3 md:mb-4" />
+                          <h3 className="text-base md:text-lg font-bold mb-2">
+                            レパ表提出
+                          </h3>
+                          <p className="text-xs md:text-sm text-muted-foreground flex-1">
+                            自分のバンドの曲を登録
+                          </p>
+                          <div className="flex items-center gap-2 text-secondary text-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                            <span>提出する</span>
+                            <ArrowRight className="w-4 h-4" />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </Link>
+                    </Link>
+                  )}
 
                   <Link
                     href={`/events/${event.id}/tt/view`}

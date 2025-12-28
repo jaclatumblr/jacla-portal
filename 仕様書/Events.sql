@@ -42,6 +42,7 @@ create table if not exists public.events (
   name text not null,
   date date not null,
   status text not null default 'draft',  -- draft / recruiting / fixed / closed
+  event_type text not null default 'live',
   venue text,
   open_time time,
   start_time time,
@@ -56,6 +57,24 @@ create table if not exists public.events (
 
 alter table public.events
   drop column if exists default_song_duration_sec;
+
+alter table public.events
+  add column if not exists event_type text not null default 'live';
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'events_event_type_check'
+  ) then
+    alter table public.events
+      add constraint events_event_type_check
+      check (event_type in ('live', 'workshop', 'briefing', 'camp', 'other'));
+  end if;
+end $$;
+
+update public.events
+set event_type = 'live'
+where event_type is null;
 
 drop trigger if exists trg_events_updated_at on public.events;
 create trigger trg_events_updated_at
@@ -148,6 +167,11 @@ on public.bands for insert
 to authenticated
 with check (
   created_by = auth.uid()  -- ここを必須にして「作成者固定」
+  and exists (
+    select 1 from public.events e
+    where e.id = event_id
+      and e.event_type in ('live', 'camp')
+  )
 );
 
 -- 更新/削除：作成者 or Admin/Supervisor
@@ -273,6 +297,13 @@ with check (
       )
   )
   or user_id = auth.uid()
+  and exists (
+    select 1
+    from public.bands b
+    join public.events e on e.id = b.event_id
+    where b.id = band_id
+      and e.event_type in ('live', 'camp')
+  )
 );
 
 

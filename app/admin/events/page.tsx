@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { useIsAdmin } from "@/lib/useIsAdmin";
+import { toast } from "@/lib/toast";
 
 type EventRow = {
   id: string;
@@ -81,6 +82,18 @@ export default function AdminEventsPage() {
   }, [form.date, form.name, saving]);
 
   useEffect(() => {
+    if (!error) return;
+    toast.error(error);
+    setError(null);
+  }, [error]);
+
+  useEffect(() => {
+    if (!deleteError) return;
+    toast.error(deleteError);
+    setDeleteError(null);
+  }, [deleteError]);
+
+  useEffect(() => {
     if (adminLoading || !isAdmin) return;
     let cancelled = false;
     (async () => {
@@ -140,6 +153,7 @@ export default function AdminEventsPage() {
 
     setEvents((prev) => [...prev, data as EventRow].sort((a, b) => a.date.localeCompare(b.date)));
     setForm(emptyForm);
+    toast.success("イベントを作成しました。");
     setSaving(false);
   };
 
@@ -172,6 +186,7 @@ export default function AdminEventsPage() {
     }
     setEvents((prev) => prev.filter((item) => item.id !== eventRow.id));
     handleDeleteCancel();
+    toast.success("イベントを削除しました。");
     setDeleting(false);
   };
 
@@ -351,8 +366,6 @@ export default function AdminEventsPage() {
                   </div>
                 </div>
 
-                {error && <p className="text-sm text-destructive">{error}</p>}
-
                 <div className="flex items-center gap-3 pt-1">
                   <Button type="submit" disabled={!canSubmit} className="gap-2">
                     {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
@@ -487,9 +500,6 @@ export default function AdminEventsPage() {
                                   </Button>
                                 </div>
                               </div>
-                              {deleteError && (
-                                <p className="text-xs text-destructive mt-2">{deleteError}</p>
-                              )}
                             </div>
                           )}
                         </div>

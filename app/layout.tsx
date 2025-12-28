@@ -5,6 +5,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { PageTransition } from "@/components/PageTransition";
 import { TitleManager } from "@/components/TitleManager";
+import { ToastViewport } from "@/components/ToastViewport";
 import { siteTitle, titleTemplate } from "@/lib/pageTitles";
 
 export const metadata: Metadata = {
@@ -27,6 +28,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <AuthProvider>
             <TitleManager />
             <PageTransition>{children}</PageTransition>
+            <ToastViewport />
           </AuthProvider>
         </ThemeProvider>
       </body>

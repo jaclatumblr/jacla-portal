@@ -2,7 +2,7 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, Loader2, MessageCircle, Send, Sparkles } from "lucide-react";
+import { Loader2, MessageCircle, Send, Sparkles } from "lucide-react";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { supabase } from "@/lib/supabaseClient";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { toast } from "@/lib/toast";
 
 const categories = [
   { value: "ui", label: "UI/UX" },
@@ -23,15 +24,11 @@ export default function FeedbackPage() {
   const [message, setMessage] = useState("");
   const [contact, setContact] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim()) return;
     setSubmitting(true);
-    setError(null);
-    setSubmitted(false);
 
     const { error } = await supabase.from("feedbacks").insert([
       {
@@ -43,9 +40,9 @@ export default function FeedbackPage() {
 
     if (error) {
       console.error(error);
-      setError("送信に失敗しました。時間をおいて再度お試しください。");
+      toast.error("送信に失敗しました。時間をおいて再度お試しください。");
     } else {
-      setSubmitted(true);
+      toast.success("送信しました。ご協力ありがとうございます！");
       setMessage("");
       setContact("");
     }
@@ -123,14 +120,6 @@ export default function FeedbackPage() {
                         placeholder="Discord ID や メールアドレス"
                       />
                     </label>
-
-                    {error && <p className="text-sm text-destructive">{error}</p>}
-                    {submitted && !error && (
-                      <p className="text-sm text-emerald-500 flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4" />
-                        送信しました。ご協力ありがとうございます！
-                      </p>
-                    )}
 
                     <div className="flex flex-wrap items-center gap-3">
                       <Button type="submit" disabled={submitting || !message.trim()} className="gap-2">

@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Chrome, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
+import { toast } from "@/lib/toast";
 
 function getAuthCallbackUrl() {
   return `${window.location.origin}/auth/callback`;
@@ -18,7 +19,6 @@ function LoginPageContent() {
   const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const queryError = (() => {
     const value = searchParams.get("error");
     if (!value) return null;
@@ -28,7 +28,11 @@ function LoginPageContent() {
       return value;
     }
   })();
-  const errorMessage = error ?? queryError;
+  useEffect(() => {
+    if (queryError) {
+      toast.error(queryError);
+    }
+  }, [queryError]);
 
   // すでにログイン済みならホームに飛ばす
   useEffect(() => {
@@ -50,7 +54,6 @@ function LoginPageContent() {
   }, [router]);
 
   const handleGoogleLogin = async () => {
-    setError(null);
     setIsLoading(true);
 
     const { error } = await supabase.auth.signInWithOAuth({
@@ -66,7 +69,7 @@ function LoginPageContent() {
 
     if (error) {
       console.error(error);
-      setError("Googleログインに失敗しました。");
+      toast.error("Googleログインに失敗しました。");
       setIsLoading(false);
     }
   };
@@ -142,12 +145,6 @@ function LoginPageContent() {
                 大学アカウントでログインしてください
               </p>
             </div>
-
-            {errorMessage && (
-              <div className="text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-lg p-3">
-                {errorMessage}
-              </div>
-            )}
 
             <>
               <Button

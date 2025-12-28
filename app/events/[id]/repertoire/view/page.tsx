@@ -3,12 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, ExternalLink } from "lucide-react";
+import { ArrowLeft, ChevronDown, ExternalLink } from "lucide-react";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { SideNav } from "@/components/SideNav";
 import { supabase } from "@/lib/supabaseClient";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+import { toast } from "@/lib/toast";
 
 type EventRow = {
   id: string;
@@ -50,7 +52,7 @@ export default function RepertoireViewPage() {
   const [bands, setBands] = useState<BandRow[]>([]);
   const [songsByBand, setSongsByBand] = useState<Record<string, SongRow[]>>({});
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [expandedBands, setExpandedBands] = useState<Record<string, boolean>>({});
 
   const bandIds = useMemo(() => bands.map((band) => band.id), [bands]);
 
@@ -60,7 +62,6 @@ export default function RepertoireViewPage() {
 
     (async () => {
       setLoading(true);
-      setError(null);
 
       const [eventRes, bandsRes] = await Promise.all([
         supabase.from("events").select("id, name, date").eq("id", eventId).maybeSingle(),
@@ -75,7 +76,7 @@ export default function RepertoireViewPage() {
 
       if (eventRes.error || !eventRes.data) {
         console.error(eventRes.error);
-        setError("イベント情報の取得に失敗しました。");
+        toast.error("イベント情報の取得に失敗しました。");
         setEvent(null);
       } else {
         setEvent(eventRes.data as EventRow);
@@ -158,7 +159,7 @@ export default function RepertoireViewPage() {
                   REPERTOIRE
                 </span>
                 <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-3 mb-3">
-                  レパートリー一覧
+                  レパ表一覧
                 </h1>
                 {event && (
                   <p className="text-muted-foreground text-sm md:text-base">
@@ -171,12 +172,6 @@ export default function RepertoireViewPage() {
 
           <section className="pb-12 md:pb-16">
             <div className="container mx-auto px-4 sm:px-6 space-y-6">
-              {error && (
-                <div className="flex items-center gap-2 px-4 py-3 rounded-lg border border-destructive/30 bg-destructive/10 text-destructive text-sm">
-                  {error}
-                </div>
-              )}
-
               {loading ? (
                 <div className="rounded-lg border border-border bg-card/60 px-4 py-3 text-sm text-muted-foreground">
                   読み込み中...
@@ -190,20 +185,56 @@ export default function RepertoireViewPage() {
                   {bands.map((band) => {
                     const status = band.repertoire_status === "submitted" ? "提出済み" : "下書き";
                     const entries = songsByBand[band.id] ?? [];
+                    const isExpanded = expandedBands[band.id] ?? false;
                     return (
                       <Card key={band.id} className="bg-card/60 border-border">
-                        <CardHeader className="flex flex-row items-center justify-between gap-3">
-                          <div>
-                            <CardTitle className="text-lg">{band.name}</CardTitle>
-                            <div className="mt-1 text-xs text-muted-foreground">
-                              {entries.filter((entry) => entry.entry_type !== "mc").length} 曲
+                        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExpandedBands((prev) => ({
+                                ...prev,
+                                [band.id]: !isExpanded,
+                              }))
+                            }
+                            className="text-left sm:pointer-events-none"
+                            aria-expanded={isExpanded}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <CardTitle className="text-lg">{band.name}</CardTitle>
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                  {entries.filter((entry) => entry.entry_type !== "mc").length} 曲
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 sm:hidden">
+                                <Badge
+                                  variant={status === "提出済み" ? "default" : "secondary"}
+                                >
+                                  {status}
+                                </Badge>
+                                <ChevronDown
+                                  className={cn(
+                                    "h-4 w-4 text-muted-foreground transition-transform",
+                                    isExpanded ? "rotate-180" : ""
+                                  )}
+                                />
+                              </div>
                             </div>
-                          </div>
-                          <Badge variant={status === "提出済み" ? "default" : "secondary"}>
+                          </button>
+                          <Badge
+                            variant={status === "提出済み" ? "default" : "secondary"}
+                            className="hidden sm:inline-flex"
+                          >
                             {status}
                           </Badge>
                         </CardHeader>
-                        <CardContent className="space-y-3">
+                        <CardContent
+                          className={cn(
+                            "space-y-3",
+                            isExpanded ? "block" : "hidden sm:block"
+                          )}
+                        >
                           {entries.length === 0 ? (
                             <div className="rounded-lg border border-border bg-card/60 px-4 py-3 text-sm text-muted-foreground">
                               セットリスト未提出
@@ -212,7 +243,7 @@ export default function RepertoireViewPage() {
                             entries.map((entry, index) => (
                               <div
                                 key={entry.id}
-                                className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 rounded-lg border border-border bg-card/70 px-4 py-3"
+                                className="flex flex-col gap-2 rounded-lg border border-border bg-card/70 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4"
                               >
                                 <div className="text-xs text-muted-foreground w-8">
                                   {String(index + 1).padStart(2, "0")}

@@ -28,6 +28,7 @@ import { useIsAdmin } from "@/lib/useIsAdmin";
 import { useIsAdministrator } from "@/lib/useIsAdministrator";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
+import { toast } from "@/lib/toast";
 
 type EventRow = {
   id: string;
@@ -179,6 +180,18 @@ export default function AdminEventDetailPage() {
       return a.title.localeCompare(b.title, "ja");
     });
   }, [songs, selectedBandId]);
+
+  useEffect(() => {
+    if (!error) return;
+    toast.error(error);
+    setError(null);
+  }, [error]);
+
+  useEffect(() => {
+    if (!deleteError) return;
+    toast.error(deleteError);
+    setDeleteError(null);
+  }, [deleteError]);
   useEffect(() => {
     if (!eventId || adminLoading || !isAdmin) return;
     let cancelled = false;
@@ -337,6 +350,7 @@ export default function AdminEventDetailPage() {
     } else {
       setEvent(data as EventRow);
       setEventForm(data as EventRow);
+      toast.success("イベントを更新しました。");
     }
     setSavingEvent(false);
   };
@@ -368,6 +382,7 @@ export default function AdminEventDetailPage() {
       setDeleting(false);
       return;
     }
+    toast.success("イベントを削除しました。");
     router.replace("/admin/events");
   };
 
@@ -401,6 +416,7 @@ export default function AdminEventDetailPage() {
     setBands((prev) => [...prev, added]);
     setSelectedBandId(added.id);
     setNewBandName("");
+    toast.success("バンドを作成しました。");
     setSavingBand(false);
   };
 
@@ -434,6 +450,7 @@ export default function AdminEventDetailPage() {
 
     const updated = data as Band;
     setBands((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
+    toast.success("バンドを更新しました。");
     setSavingBand(false);
   };
 
@@ -466,6 +483,7 @@ export default function AdminEventDetailPage() {
 
     setMembers((prev) => [...prev, data as BandMember]);
     setMemberForm({ profileId: "", instrument: "" });
+    toast.success("メンバーを追加しました。");
     setSavingMember(false);
   };
 
@@ -478,6 +496,7 @@ export default function AdminEventDetailPage() {
       return;
     }
     setMembers((prev) => prev.filter((m) => m.id !== memberId));
+    toast.success("メンバーを削除しました。");
   };
 
   const handleAddSong = async (e: React.FormEvent) => {
@@ -513,6 +532,7 @@ export default function AdminEventDetailPage() {
 
     setSongs((prev) => [...prev, data as Song]);
     setSongForm({ title: "", artist: "", url: "", entry_type: "song", duration_sec: "", memo: "" });
+    toast.success("セットリストに追加しました。");
     setSavingSong(false);
   };
 
@@ -525,6 +545,7 @@ export default function AdminEventDetailPage() {
       return;
     }
     setSongs((prev) => prev.filter((s) => s.id !== songId));
+    toast.success("曲を削除しました。");
   };
   if (adminLoading) {
     return (
@@ -614,13 +635,6 @@ export default function AdminEventDetailPage() {
 
           <section className="pb-12 md:pb-16">
             <div className="container mx-auto px-4 sm:px-6 space-y-8 md:space-y-10">
-              {error && (
-                <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-lg px-4 py-3">
-                  <AlertCircle className="w-4 h-4" />
-                  <span>{error}</span>
-                </div>
-              )}
-
               <Card className="bg-card/60 border-border">
                 <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                   <div>
@@ -778,7 +792,6 @@ export default function AdminEventDetailPage() {
                         value={deleteConfirmText}
                         onChange={(e) => {
                           setDeleteConfirmText(e.target.value);
-                          if (deleteError) setDeleteError(null);
                         }}
                         placeholder={deleteTargetName}
                       />
@@ -805,7 +818,6 @@ export default function AdminEventDetailPage() {
                           キャンセル
                         </Button>
                       </div>
-                      {deleteError && <p className="text-xs text-destructive">{deleteError}</p>}
                     </div>
                   )}
                 </CardContent>

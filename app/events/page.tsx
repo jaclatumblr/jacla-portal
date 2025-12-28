@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { supabase } from "@/lib/supabaseClient";
+import { toast } from "@/lib/toast";
 
 type EventRow = {
   id: string;
@@ -38,14 +39,12 @@ function statusLabel(status: string) {
 export default function EventsPage() {
   const [events, setEvents] = useState<EventRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
       setLoading(true);
-      setError(null);
 
       const { data, error } = await supabase
         .from("events")
@@ -56,7 +55,7 @@ export default function EventsPage() {
 
       if (error) {
         console.error(error);
-        setError("イベント情報の取得に失敗しました。");
+        toast.error("イベント情報の取得に失敗しました。");
         setEvents([]);
       } else {
         setEvents((data ?? []) as EventRow[]);
@@ -97,8 +96,6 @@ export default function EventsPage() {
               <div className="max-w-4xl mx-auto space-y-4 md:space-y-6">
                 {loading ? (
                   <div className="text-sm text-muted-foreground">読み込み中...</div>
-                ) : error ? (
-                  <div className="text-sm text-destructive">{error}</div>
                 ) : events.length === 0 ? (
                   <div className="text-sm text-muted-foreground">イベントがありません。</div>
                 ) : (

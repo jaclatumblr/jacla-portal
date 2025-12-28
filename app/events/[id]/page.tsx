@@ -23,6 +23,7 @@ import {
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { supabase } from "@/lib/supabaseClient";
+import { toast } from "@/lib/toast";
 
 type Event = {
   id: string;
@@ -49,7 +50,6 @@ export default function EventDetailPage() {
 
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   // TODO: Supabase から bands / songs を取得して実データ化する
   const [bands, setBands] = useState<BandSummary[]>([]);
@@ -59,7 +59,6 @@ export default function EventDetailPage() {
 
     (async () => {
       setLoading(true);
-      setError(null);
 
       const [eventRes, bandsRes] = await Promise.all([
         supabase
@@ -76,15 +75,18 @@ export default function EventDetailPage() {
 
       if (eventRes.error) {
         console.error(eventRes.error);
-        setError("イベント情報の取得に失敗しました。");
+        toast.error("イベント情報の取得に失敗しました。");
+        setEvent(null);
       } else if (!eventRes.data) {
-        setError("イベントが見つかりませんでした。");
+        toast.error("イベントが見つかりませんでした。");
+        setEvent(null);
       } else {
         setEvent(eventRes.data as Event);
       }
 
       if (bandsRes.error) {
         console.error(bandsRes.error);
+        toast.error("バンド情報の取得に失敗しました。");
         setBands([]);
       } else {
         const bandList = (bandsRes.data ?? []) as {
@@ -101,6 +103,7 @@ export default function EventDetailPage() {
             .in("band_id", bandIds);
           if (songsError) {
             console.error(songsError);
+            toast.error("セットリストの取得に失敗しました。");
           } else {
             (songsData ?? []).forEach((row) => {
               const entry = row as { band_id: string; entry_type?: string | null };
@@ -163,8 +166,6 @@ export default function EventDetailPage() {
                   <p className="text-sm text-muted-foreground">
                     イベント情報を読み込み中です…
                   </p>
-                ) : error ? (
-                  <p className="text-sm text-destructive">{error}</p>
                 ) : event ? (
                   <div className="max-w-4xl">
                     <div className="flex items-center gap-3 mb-4 flex-wrap">
@@ -249,7 +250,7 @@ export default function EventDetailPage() {
                       <div className="relative h-full flex flex-col">
                         <Music className="w-6 md:w-8 h-6 md:h-8 text-primary mb-3 md:mb-4" />
                         <h3 className="text-base md:text-lg font-bold mb-2">
-                          レパートリー
+                          レパ表一覧
                         </h3>
                         <p className="text-xs md:text-sm text-muted-foreground flex-1">
                           全バンドのセットリストを確認

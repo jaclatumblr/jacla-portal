@@ -6,7 +6,6 @@ import {
   ArrowLeft,
   Image as ImageIcon,
   Loader2,
-  RefreshCw,
   Save,
   Trash2,
 } from "lucide-react";
@@ -35,6 +34,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { toast } from "@/lib/toast";
 
 const categoryOptions = ["重要", "イベント", "締切", "機材", "事務", "お知らせ"];
 
@@ -81,7 +81,6 @@ export default function AdminAnnouncementsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "published" | "draft">("all");
 
@@ -94,7 +93,6 @@ export default function AdminAnnouncementsPage() {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [imageError, setImageError] = useState<string | null>(null);
   const [imageRemove, setImageRemove] = useState(false);
 
   const selectedAnnouncement = useMemo(
@@ -120,7 +118,6 @@ export default function AdminAnnouncementsPage() {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      setError(null);
       const { data, error } = await supabase
         .from("announcements")
         .select(
@@ -130,7 +127,7 @@ export default function AdminAnnouncementsPage() {
       if (cancelled) return;
       if (error) {
         console.error(error);
-        setError("お知らせの取得に失敗しました。");
+        toast.error("お知らせの取得に失敗しました。");
         setAnnouncements([]);
       } else {
         const rows = (data ?? []) as AnnouncementRowResponse[];
@@ -165,7 +162,6 @@ export default function AdminAnnouncementsPage() {
     setImagePreview(null);
     setImageFile(null);
     setImageRemove(false);
-    setImageError(null);
   };
 
   const loadForm = (row: AnnouncementRow) => {
@@ -180,21 +176,19 @@ export default function AdminAnnouncementsPage() {
     setImagePreview(row.image_url ?? null);
     setImageFile(null);
     setImageRemove(false);
-    setImageError(null);
   };
 
   const handleFileChange = (file: File | null) => {
-    setImageError(null);
     if (!file) {
       setImageFile(null);
       return;
     }
     if (!imageTypes.includes(file.type)) {
-      setImageError("PNG/JPG/WEBP の画像を選択してください。");
+      toast.error("PNG/JPG/WEBP の画像を選択してください。");
       return;
     }
     if (file.size > maxImageSizeMb * 1024 * 1024) {
-      setImageError(`画像サイズは ${maxImageSizeMb}MB 以下にしてください。`);
+      toast.error(`画像サイズは ${maxImageSizeMb}MB 以下にしてください。`);
       return;
     }
     setImageFile(file);
@@ -204,19 +198,18 @@ export default function AdminAnnouncementsPage() {
   const handleSave = async () => {
     if (!session) return;
     if (!title.trim()) {
-      setError("タイトルを入力してください。");
+      toast.error("タイトルを入力してください。");
       return;
     }
     if (!content.trim()) {
-      setError("本文を入力してください。");
+      toast.error("本文を入力してください。");
       return;
     }
     if (!categoryOptions.includes(category)) {
-      setError("カテゴリを選択してください。");
+      toast.error("カテゴリを選択してください。");
       return;
     }
     setSaving(true);
-    setError(null);
 
     const publishedAt =
       isPublished && selectedAnnouncement?.published_at
@@ -244,7 +237,7 @@ export default function AdminAnnouncementsPage() {
         .eq("id", selectedId);
       if (error) {
         console.error(error);
-        setError("保存に失敗しました。");
+        toast.error("保存に失敗しました。");
         setSaving(false);
         return;
       }
@@ -258,7 +251,7 @@ export default function AdminAnnouncementsPage() {
         .maybeSingle();
       if (error || !data) {
         console.error(error);
-        setError("作成に失敗しました。");
+        toast.error("作成に失敗しました。");
         setSaving(false);
         return;
       }
@@ -278,7 +271,7 @@ export default function AdminAnnouncementsPage() {
         .upload(path, imageFile, { upsert: true });
       if (uploadError) {
         console.error(uploadError);
-        setError("画像のアップロードに失敗しました。");
+        toast.error("画像のアップロードに失敗しました。");
         setSaving(false);
         return;
       }
@@ -299,7 +292,7 @@ export default function AdminAnnouncementsPage() {
         .eq("id", targetId);
       if (imageUpdateError) {
         console.error(imageUpdateError);
-        setError("画像の保存に失敗しました。");
+        toast.error("画像の保存に失敗しました。");
         setSaving(false);
         return;
       }
@@ -319,6 +312,7 @@ export default function AdminAnnouncementsPage() {
       const rows = (refreshed ?? []) as AnnouncementRowResponse[];
       setAnnouncements(rows.map(normalizeAnnouncementRow));
     }
+    toast.success("保存しました。");
     setSaving(false);
   };
 
@@ -330,16 +324,16 @@ export default function AdminAnnouncementsPage() {
     if (!confirmedTwice) return;
 
     setDeleting(true);
-    setError(null);
     const { error } = await supabase.from("announcements").delete().eq("id", selectedId);
     if (error) {
       console.error(error);
-      setError("削除に失敗しました。");
+      toast.error("削除に失敗しました。");
       setDeleting(false);
       return;
     }
     setAnnouncements((prev) => prev.filter((item) => item.id !== selectedId));
     resetForm();
+    toast.success("削除しました。");
     setDeleting(false);
   };
 
@@ -399,13 +393,6 @@ export default function AdminAnnouncementsPage() {
 
           <section className="pb-12 md:pb-16">
             <div className="container mx-auto px-4 sm:px-6 space-y-6">
-              {error && (
-                <div className="flex items-center gap-2 px-4 py-3 rounded-lg border border-destructive/30 bg-destructive/10 text-destructive text-sm">
-                  <RefreshCw className="w-4 h-4" />
-                  {error}
-                </div>
-              )}
-
               <div className="grid lg:grid-cols-[1.15fr,1fr] gap-6">
                 <Card className="bg-card/60 border-border">
                   <CardHeader className="space-y-3">
@@ -631,7 +618,6 @@ export default function AdminAnnouncementsPage() {
                           className="w-full max-h-48 object-cover rounded-md border border-border"
                         />
                       )}
-                      {imageError && <p className="text-xs text-destructive">{imageError}</p>}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3">

@@ -12,6 +12,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsAdministrator } from "@/lib/useIsAdministrator";
 import { useCanViewStudentId } from "@/lib/useCanViewStudentId";
+import { toast } from "@/lib/toast";
 
 type Member = {
   id: string;
@@ -97,7 +98,6 @@ export default function MembersPage() {
   const { canViewStudentId, loading: studentAccessLoading } = useCanViewStudentId();
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [discordFallbackFor, setDiscordFallbackFor] = useState<string | null>(null);
 
   const getDiscordAppUrl = (id: string) => {
@@ -113,7 +113,6 @@ export default function MembersPage() {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      setError(null);
 
       const profilesPromise = isAdministrator
         ? supabase
@@ -139,7 +138,7 @@ export default function MembersPage() {
 
       if (profilesRes.error) {
         console.error(profilesRes.error);
-        setError("部員情報の取得に失敗しました。時間をおいて再度お試しください。");
+        toast.error("部員情報の取得に失敗しました。時間をおいて再度お試しください。");
         setMembers([]);
         setLoading(false);
         return;
@@ -148,7 +147,7 @@ export default function MembersPage() {
       const bandMap = new Map<string, Set<string>>();
       if (bandsRes.error) {
         console.error(bandsRes.error);
-        setError((prev) => prev ?? "バンド情報の取得に失敗しました。");
+        toast.error("バンド情報の取得に失敗しました。");
       } else {
         (bandsRes.data ?? []).forEach((row) => {
           const bandRow = row as BandMemberRow;
@@ -166,7 +165,7 @@ export default function MembersPage() {
       const leaderMap = new Map<string, Set<string>>();
       if (leadersRes.error) {
         console.error(leadersRes.error);
-        setError((prev) => prev ?? "ロール情報の取得に失敗しました。");
+        toast.error("ロール情報の取得に失敗しました。");
       } else {
         (leadersRes.data ?? []).forEach((row) => {
           const leaderRow = row as LeaderRow;
@@ -180,7 +179,7 @@ export default function MembersPage() {
       const positionMap = new Map<string, Set<string>>();
       if (positionsRes.error) {
         console.error(positionsRes.error);
-        setError((prev) => prev ?? "役職情報の取得に失敗しました。");
+        toast.error("役職情報の取得に失敗しました。");
       } else {
         (positionsRes.data ?? []).forEach((row) => {
           const positionRow = row as PositionRow;
@@ -195,7 +194,7 @@ export default function MembersPage() {
       const birthDateMap = new Map<string, string>();
       if (enrollmentRes.error) {
         console.error(enrollmentRes.error);
-        setError((prev) => prev ?? "入学年度の取得に失敗しました。");
+        toast.error("入学年度の取得に失敗しました。");
       } else {
         const enrollmentRows = (enrollmentRes.data ?? []) as EnrollmentYearRow[];
         enrollmentRows.forEach((entry) => {
@@ -218,7 +217,7 @@ export default function MembersPage() {
           .select("profile_id, student_id");
         if (privateError) {
           console.error(privateError);
-          setError((prev) => prev ?? "学籍番号の取得に失敗しました。");
+          toast.error("学籍番号の取得に失敗しました。");
         } else {
           (privateData ?? []).forEach((row) => {
             const entry = row as ProfilePrivateRow;
@@ -355,12 +354,6 @@ export default function MembersPage() {
 
           <section className="py-8 md:py-12">
             <div className="container mx-auto px-4 sm:px-6">
-              {error && (
-                <div className="mb-6 text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-lg p-3">
-                  {error}
-                </div>
-              )}
-
               {loading ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <RefreshCw className="w-4 h-4 animate-spin" />

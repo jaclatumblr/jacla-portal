@@ -4,6 +4,7 @@ type MetadataResponse = {
   title: string | null;
   artist: string | null;
   source: string | null;
+  duration_sec: number | null;
 };
 
 const providers = [
@@ -44,11 +45,54 @@ const isPrivateHost = (host: string) =>
 const parseMeta = (html: string, property: string) => {
   const escaped = property.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const regex = new RegExp(
-    `<meta[^>]+(?:property|name)=["']${escaped}["'][^>]+content=["']([^"']+)["']`,
+    `<meta[^>]+(?:property|name|itemprop)=["']${escaped}["'][^>]+content=["']([^"']+)["']`,
     "i"
   );
   const match = html.match(regex);
   return match ? match[1] : null;
+};
+
+const parseDurationSeconds = (raw: string | null) => {
+  if (!raw) return null;
+  const value = raw.trim();
+  if (!value) return null;
+
+  if (/^\d+$/.test(value)) {
+    const seconds = Number.parseInt(value, 10);
+    return Number.isNaN(seconds) ? null : seconds;
+  }
+
+  const timeMatch = value.match(/^(\d+):(\d{2})(?::(\d{2}))?$/);
+  if (timeMatch) {
+    const hours = timeMatch[3] ? Number.parseInt(timeMatch[1], 10) : 0;
+    const minutes = timeMatch[3]
+      ? Number.parseInt(timeMatch[2], 10)
+      : Number.parseInt(timeMatch[1], 10);
+    const seconds = Number.parseInt(timeMatch[3] ?? timeMatch[2], 10);
+    if ([hours, minutes, seconds].some((num) => Number.isNaN(num))) return null;
+    return hours * 3600 + minutes * 60 + seconds;
+  }
+
+  const isoMatch = value.match(
+    /^P(?:\d+D)?T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/i
+  );
+  if (isoMatch) {
+    const hours = Number.parseInt(isoMatch[1] ?? "0", 10);
+    const minutes = Number.parseInt(isoMatch[2] ?? "0", 10);
+    const seconds = Number.parseInt(isoMatch[3] ?? "0", 10);
+    if ([hours, minutes, seconds].some((num) => Number.isNaN(num))) return null;
+    return hours * 3600 + minutes * 60 + seconds;
+  }
+
+  const compactMatch = value.match(/^(?:(\d+)m)?\s*(?:(\d+)s)?$/i);
+  if (compactMatch && (compactMatch[1] || compactMatch[2])) {
+    const minutes = Number.parseInt(compactMatch[1] ?? "0", 10);
+    const seconds = Number.parseInt(compactMatch[2] ?? "0", 10);
+    if ([minutes, seconds].some((num) => Number.isNaN(num))) return null;
+    return minutes * 60 + seconds;
+  }
+
+  return null;
 };
 
 const fetchOembed = async (url: string, source: string): Promise<MetadataResponse> => {
@@ -59,11 +103,20 @@ const fetchOembed = async (url: string, source: string): Promise<MetadataRespons
   const data = (await res.json()) as {
     title?: string;
     author_name?: string;
+    duration?: number | string;
+    length_seconds?: number | string;
   };
+  const durationRaw =
+    typeof data.duration === "number" || typeof data.duration === "string"
+      ? String(data.duration)
+      : typeof data.length_seconds === "number" || typeof data.length_seconds === "string"
+        ? String(data.length_seconds)
+        : null;
   return {
     title: data.title ?? null,
     artist: data.author_name ?? null,
     source,
+    duration_sec: parseDurationSeconds(durationRaw),
   };
 };
 
@@ -85,10 +138,17 @@ const fetchOpenGraph = async (url: string): Promise<MetadataResponse> => {
     parseMeta(html, "title");
   const siteName =
     parseMeta(html, "og:site_name") ?? parseMeta(html, "author");
+  const durationRaw =
+    parseMeta(html, "music:duration") ??
+    parseMeta(html, "video:duration") ??
+    parseMeta(html, "og:video:duration") ??
+    parseMeta(html, "og:duration") ??
+    parseMeta(html, "duration");
   return {
     title,
     artist: siteName,
     source: null,
+    duration_sec: parseDurationSeconds(durationRaw),
   };
 };
 
@@ -128,6 +188,11 @@ export async function POST(request: Request) {
     const data = await fetchOpenGraph(parsed.toString());
     return NextResponse.json(data);
   } catch {
-    return NextResponse.json({ title: null, artist: null, source: null });
+    return NextResponse.json({
+      title: null,
+      artist: null,
+      source: null,
+      duration_sec: null,
+    });
   }
 }

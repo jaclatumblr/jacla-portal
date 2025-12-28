@@ -55,8 +55,8 @@ export function getPageTitle(pathname: string): string | null {
   }
 
   if (pathname.startsWith("/events/")) {
-    if (pathname.includes("/repertoire/submit")) return "レパートリー提出";
-    if (pathname.includes("/repertoire/view")) return "レパートリー確認";
+    if (pathname.includes("/repertoire/submit")) return "レパ表提出";
+    if (pathname.includes("/repertoire/view")) return "レパ表一覧";
     if (pathname.includes("/tt/view")) return "タイムテーブル";
     return "イベント詳細";
   }

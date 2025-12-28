@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { AlertTriangle, CheckCircle2, Image as ImageIcon, Loader2, PencilLine } from "lucide-react";
+import { AlertTriangle, Image as ImageIcon, Loader2, PencilLine } from "lucide-react";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { useAuth } from "@/contexts/AuthContext";
@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { toast } from "@/lib/toast";
 
 const crewOptions = ["User", "PA", "Lighting"];
 const partOptions = [
@@ -164,14 +165,10 @@ export default function OnboardingClient({
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-  const [avatarError, setAvatarError] = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
-  const [done, setDone] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   const [displayName, setDisplayName] = useState("");
@@ -183,7 +180,6 @@ export default function OnboardingClient({
   const [discordId, setDiscordId] = useState<string | null>(null);
   const [discordConnecting, setDiscordConnecting] = useState(false);
   const [discordDisconnecting, setDiscordDisconnecting] = useState(false);
-  const [discordError, setDiscordError] = useState<string | null>(null);
   const [crew, setCrew] = useState("User");
   const [part, setPart] = useState("");
   const [subParts, setSubParts] = useState<string[]>([]);

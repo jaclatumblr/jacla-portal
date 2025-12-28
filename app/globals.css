@@ -158,6 +158,21 @@ html {
   }
 }
 
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.toast-in {
+  animation: toastIn 180ms ease-out;
+}
+
 .page-fade-in {
   animation: pageFadeIn var(--page-fade-duration, 420ms) ease both;
 }

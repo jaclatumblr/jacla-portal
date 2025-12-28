@@ -47,13 +47,15 @@ create table if not exists public.events (
   start_time time,
   note text,
 
-  default_song_duration_sec int4 not null default 240,   -- 4分
   default_changeover_min    int4 not null default 15,
 
   created_by uuid references public.profiles(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.events
+  drop column if exists default_song_duration_sec;
 
 drop trigger if exists trg_events_updated_at on public.events;
 create trigger trg_events_updated_at
@@ -258,6 +260,7 @@ using (
         or public.is_band_member(b.id, auth.uid())
       )
   )
+  or user_id = auth.uid()
 )
 with check (
   exists (
@@ -269,6 +272,7 @@ with check (
         or public.is_band_member(b.id, auth.uid())
       )
   )
+  or user_id = auth.uid()
 );
 
 
@@ -283,7 +287,7 @@ create table if not exists public.songs (
   entry_type text not null default 'song',
   url text,
   order_index int4,
-  duration_sec int4,                -- 任意。空ならevents.default_song_duration_sec使う想定
+  duration_sec int4,                -- 任意
   memo text,
   created_at timestamptz not null default now()
 );

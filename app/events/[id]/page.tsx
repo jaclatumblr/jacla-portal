@@ -250,7 +250,7 @@ export default function EventDetailPage() {
                       <div className="relative h-full flex flex-col">
                         <FileText className="w-6 md:w-8 h-6 md:h-8 text-secondary mb-3 md:mb-4" />
                         <h3 className="text-base md:text-lg font-bold mb-2">
-                          レパートリー提出
+                          レパ表提出
                         </h3>
                         <p className="text-xs md:text-sm text-muted-foreground flex-1">
                           自分のバンドの曲を登録

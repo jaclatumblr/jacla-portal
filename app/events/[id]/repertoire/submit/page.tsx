@@ -125,6 +125,7 @@ export default function RepertoireSubmitPage() {
   const userId = session?.user.id;
 
   const [event, setEvent] = useState<EventRow | null>(null);
+  const [allBands, setAllBands] = useState<BandRow[]>([]);
   const [bands, setBands] = useState<BandRow[]>([]);
   const [songCounts, setSongCounts] = useState<Record<string, number>>({});
   const [selectedBandId, setSelectedBandId] = useState<string | null>(null);
@@ -137,6 +138,13 @@ export default function RepertoireSubmitPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [newBandName, setNewBandName] = useState("");
+  const [creatingBand, setCreatingBand] = useState(false);
+  const [createBandError, setCreateBandError] = useState<string | null>(null);
+  const [joinBandId, setJoinBandId] = useState("");
+  const [joinInstrument, setJoinInstrument] = useState("");
+  const [joining, setJoining] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
   const [fetchingMeta, setFetchingMeta] = useState<Record<string, boolean>>({});
   const draggingId = useRef<string | null>(null);
   const urlFetchTimers = useRef<Map<string, number>>(new Map());
@@ -145,6 +153,12 @@ export default function RepertoireSubmitPage() {
     () => bands.find((band) => band.id === selectedBandId) ?? null,
     [bands, selectedBandId]
   );
+
+  const joinableBands = useMemo(() => {
+    if (allBands.length === 0) return [];
+    const editableIds = new Set(bands.map((band) => band.id));
+    return allBands.filter((band) => !editableIds.has(band.id));
+  }, [allBands, bands]);
 
   const bandCountLabel = (bandId: string) => songCounts[bandId] ?? 0;
 
@@ -204,6 +218,86 @@ export default function RepertoireSubmitPage() {
     setSongCounts(counts);
   }, []);
 
+  const handleCreateBand = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const name = newBandName.trim();
+    if (!eventId || !name || creatingBand) return;
+    if (!userId) {
+      setCreateBandError("ログイン情報を確認できません。");
+      return;
+    }
+    setCreatingBand(true);
+    setCreateBandError(null);
+    const { data, error } = await supabase
+      .from("bands")
+      .insert([
+        {
+          event_id: eventId,
+          name,
+          created_by: userId,
+          is_approved: false,
+        },
+      ])
+      .select("id, name, created_by, repertoire_status")
+      .maybeSingle();
+    if (error || !data) {
+      console.error(error);
+      setCreateBandError("バンドの作成に失敗しました。");
+      setCreatingBand(false);
+      return;
+    }
+    const created = data as BandRow;
+    setAllBands((prev) => [...prev, created]);
+    setBands((prev) => [...prev, created]);
+    setSelectedBandId(created.id);
+    setSongCounts((prev) => ({ ...prev, [created.id]: 0 }));
+    setNewBandName("");
+    setCreatingBand(false);
+  };
+
+  const handleJoinBand = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!eventId || joining) return;
+    if (!userId) {
+      setJoinError("ログイン情報を確認できません。");
+      return;
+    }
+    const bandId = joinBandId;
+    const instrument = joinInstrument.trim();
+    if (!bandId || !instrument) {
+      setJoinError("参加するバンドと担当楽器を入力してください。");
+      return;
+    }
+    setJoining(true);
+    setJoinError(null);
+    const { error } = await supabase.from("band_members").insert([
+      {
+        band_id: bandId,
+        user_id: userId,
+        instrument,
+      },
+    ]);
+    if (error) {
+      console.error(error);
+      setJoinError("バンドへの参加に失敗しました。");
+      setJoining(false);
+      return;
+    }
+    const joinedBand = allBands.find((band) => band.id === bandId);
+    if (joinedBand) {
+      setBands((prev) =>
+        prev.some((band) => band.id === joinedBand.id) ? prev : [...prev, joinedBand]
+      );
+      setSelectedBandId(joinedBand.id);
+      await refreshCounts(
+        Array.from(new Set([...bands.map((band) => band.id), joinedBand.id]))
+      );
+    }
+    setJoinBandId("");
+    setJoinInstrument("");
+    setJoining(false);
+  };
+
   useEffect(() => {
     if (!eventId || roleLoading) return;
     let cancelled = false;
@@ -234,14 +328,18 @@ export default function RepertoireSubmitPage() {
 
       if (bandsRes.error) {
         console.error(bandsRes.error);
+        setAllBands([]);
         setBands([]);
         setSelectedBandId(null);
       } else {
-        let bandList = (bandsRes.data ?? []) as BandRow[];
+        const allBandList = (bandsRes.data ?? []) as BandRow[];
+        setAllBands(allBandList);
+
+        let editableBands = allBandList;
 
         if (!isAdmin) {
-          if (!userId || bandList.length === 0) {
-            bandList = [];
+          if (!userId || allBandList.length === 0) {
+            editableBands = [];
           } else {
             const { data: memberData, error: memberError } = await supabase
               .from("band_members")
@@ -249,25 +347,25 @@ export default function RepertoireSubmitPage() {
               .eq("user_id", userId)
               .in(
                 "band_id",
-                bandList.map((band) => band.id)
+                allBandList.map((band) => band.id)
               );
             if (memberError) {
               console.error(memberError);
-              bandList = [];
+              editableBands = [];
             } else {
               const memberSet = new Set(
                 (memberData ?? []).map((row) => (row as { band_id: string }).band_id)
               );
-              bandList = bandList.filter(
+              editableBands = allBandList.filter(
                 (band) => band.created_by === userId || memberSet.has(band.id)
               );
             }
           }
         }
 
-        setBands(bandList);
-        setSelectedBandId((prev) => prev ?? bandList[0]?.id ?? null);
-        await refreshCounts(bandList.map((band) => band.id));
+        setBands(editableBands);
+        setSelectedBandId((prev) => prev ?? editableBands[0]?.id ?? null);
+        await refreshCounts(editableBands.map((band) => band.id));
       }
 
       setLoading(false);
@@ -497,7 +595,7 @@ export default function RepertoireSubmitPage() {
                   REPERTOIRE SUBMIT
                 </span>
                 <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-3 mb-3">
-                  レパートリー提出
+                  レパ表提出
                 </h1>
                 {event && (
                   <p className="text-muted-foreground text-sm md:text-base">
@@ -568,6 +666,87 @@ export default function RepertoireSubmitPage() {
                         );
                       })
                     )}
+
+                    <div className="pt-3 border-t border-border/60 space-y-4">
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-foreground">既存バンドに参加する</p>
+                        {joinableBands.length === 0 ? (
+                          <p className="text-xs text-muted-foreground">参加できるバンドがありません。</p>
+                        ) : (
+                          <form onSubmit={handleJoinBand} className="flex flex-col gap-2">
+                            <select
+                              value={joinBandId}
+                              onChange={(event) => {
+                                setJoinBandId(event.target.value);
+                                if (joinError) setJoinError(null);
+                              }}
+                              className="h-10 w-full rounded-md border border-input bg-card px-3 pr-8 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                            >
+                              <option value="">バンドを選択</option>
+                              {joinableBands.map((band) => (
+                                <option key={band.id} value={band.id}>
+                                  {band.name}
+                                </option>
+                              ))}
+                            </select>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                              <Input
+                                value={joinInstrument}
+                                onChange={(event) => {
+                                  setJoinInstrument(event.target.value);
+                                  if (joinError) setJoinError(null);
+                                }}
+                                placeholder="担当楽器/パート"
+                              />
+                              <Button
+                                type="submit"
+                                disabled={!joinBandId || !joinInstrument.trim() || joining}
+                                className="gap-2"
+                              >
+                                {joining ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Plus className="w-4 h-4" />
+                                )}
+                                参加する
+                              </Button>
+                            </div>
+                            {joinError && <p className="text-xs text-destructive">{joinError}</p>}
+                          </form>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-foreground">新しくバンドを作成する</p>
+                        <form onSubmit={handleCreateBand} className="flex flex-col gap-2">
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            <Input
+                              value={newBandName}
+                              onChange={(event) => {
+                                setNewBandName(event.target.value);
+                                if (createBandError) setCreateBandError(null);
+                              }}
+                              placeholder="バンド名を入力"
+                            />
+                            <Button
+                              type="submit"
+                              disabled={!newBandName.trim() || creatingBand}
+                              className="gap-2"
+                            >
+                              {creatingBand ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Plus className="w-4 h-4" />
+                              )}
+                              作成
+                            </Button>
+                          </div>
+                          {createBandError && (
+                            <p className="text-xs text-destructive">{createBandError}</p>
+                          )}
+                        </form>
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
 

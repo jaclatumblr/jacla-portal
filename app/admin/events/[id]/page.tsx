@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   AlertCircle,
   ArrowLeft,
@@ -38,7 +38,6 @@ type EventRow = {
   open_time: string | null;
   start_time: string | null;
   note: string | null;
-  default_song_duration_sec: number;
   default_changeover_min: number;
 };
 
@@ -99,6 +98,7 @@ function statusLabel(status: string) {
 
 export default function AdminEventDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const eventId =
     typeof params?.id === "string" ? params.id : Array.isArray(params?.id) ? params.id[0] : "";
   const { isAdmin, loading: adminLoading } = useIsAdmin();
@@ -136,6 +136,10 @@ export default function AdminEventDetailPage() {
   const [savingBand, setSavingBand] = useState(false);
   const [savingMember, setSavingMember] = useState(false);
   const [savingSong, setSavingSong] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const selectedBand = useMemo(
     () => bands.find((b) => b.id === selectedBandId) ?? null,
@@ -173,7 +177,7 @@ export default function AdminEventDetailPage() {
         supabase
           .from("events")
           .select(
-            "id, name, date, status, venue, open_time, start_time, note, default_song_duration_sec, default_changeover_min"
+            "id, name, date, status, venue, open_time, start_time, note, default_changeover_min"
           )
           .eq("id", eventId)
           .maybeSingle(),
@@ -303,7 +307,6 @@ export default function AdminEventDetailPage() {
       open_time: eventForm.open_time || null,
       start_time: eventForm.start_time || null,
       note: eventForm.note || null,
-      default_song_duration_sec: Number(eventForm.default_song_duration_sec) || 240,
       default_changeover_min: Number(eventForm.default_changeover_min) || 15,
     };
 
@@ -322,6 +325,36 @@ export default function AdminEventDetailPage() {
       setEventForm(data as EventRow);
     }
     setSavingEvent(false);
+  };
+
+  const handleDeleteRequest = () => {
+    setShowDeleteConfirm(true);
+    setDeleteConfirmText("");
+    setDeleteError(null);
+  };
+
+  const handleDeleteCancel = () => {
+    setShowDeleteConfirm(false);
+    setDeleteConfirmText("");
+    setDeleteError(null);
+  };
+
+  const handleDeleteEvent = async () => {
+    if (!event || deleting) return;
+    if (deleteConfirmText.trim() !== event.name.trim()) {
+      setDeleteError("イベント名が一致しません。");
+      return;
+    }
+    setDeleting(true);
+    setDeleteError(null);
+    const { error } = await supabase.from("events").delete().eq("id", event.id);
+    if (error) {
+      console.error(error);
+      setDeleteError("イベントの削除に失敗しました。");
+      setDeleting(false);
+      return;
+    }
+    router.replace("/admin/events");
   };
 
   const handleCreateBand = async (e: React.FormEvent) => {
@@ -520,6 +553,10 @@ export default function AdminEventDetailPage() {
       </AuthGuard>
     );
   }
+
+  const deleteTargetName = (event?.name ?? eventForm.name ?? "").trim();
+  const deleteMatches = deleteConfirmText.trim() === deleteTargetName;
+
   return (
     <AuthGuard>
       <div className="flex min-h-screen bg-background">
@@ -650,17 +687,6 @@ export default function AdminEventDetailPage() {
 
                       <div className="grid sm:grid-cols-2 gap-3">
                         <label className="space-y-1 block text-sm">
-                          <span className="text-foreground">デフォルト演奏時間（秒）</span>
-                          <Input
-                            type="number"
-                            min={30}
-                            value={eventForm.default_song_duration_sec}
-                            onChange={(e) =>
-                              handleEventChange("default_song_duration_sec", Number(e.target.value))
-                            }
-                          />
-                        </label>
-                        <label className="space-y-1 block text-sm">
                           <span className="text-foreground">デフォルト転換時間（分）</span>
                           <Input
                             type="number"
@@ -699,6 +725,59 @@ export default function AdminEventDetailPage() {
                       </Button>
                     </div>
                   </form>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-card/60 border-destructive/40">
+                <CardHeader>
+                  <CardTitle className="text-lg text-destructive">イベント削除</CardTitle>
+                  <CardDescription>削除すると元に戻せません。</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {!showDeleteConfirm ? (
+                    <Button type="button" variant="destructive" className="gap-2" onClick={handleDeleteRequest}>
+                      <Trash2 className="w-4 h-4" />
+                      イベントを削除
+                    </Button>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground">
+                        削除するにはイベント名「{deleteTargetName}」を入力してください。
+                      </p>
+                      <Input
+                        value={deleteConfirmText}
+                        onChange={(e) => {
+                          setDeleteConfirmText(e.target.value);
+                          if (deleteError) setDeleteError(null);
+                        }}
+                        placeholder={deleteTargetName}
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          disabled={!deleteMatches || deleting}
+                          onClick={handleDeleteEvent}
+                        >
+                          {deleting ? (
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                          削除する
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleDeleteCancel}
+                          disabled={deleting}
+                        >
+                          キャンセル
+                        </Button>
+                      </div>
+                      {deleteError && <p className="text-xs text-destructive">{deleteError}</p>}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
               <div className="grid lg:grid-cols-[320px,1fr] gap-6">

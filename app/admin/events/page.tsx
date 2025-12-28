@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Calendar, Clock, MapPin, Plus, RefreshCw } from "lucide-react";
+import { ArrowRight, Calendar, Clock, MapPin, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { supabase } from "@/lib/supabaseClient";
@@ -22,7 +22,6 @@ type EventRow = {
   open_time: string | null;
   start_time: string | null;
   note: string | null;
-  default_song_duration_sec: number;
   default_changeover_min: number;
 };
 
@@ -49,7 +48,6 @@ const emptyForm: EventRow = {
   open_time: "",
   start_time: "",
   note: "",
-  default_song_duration_sec: 240,
   default_changeover_min: 15,
 };
 
@@ -61,6 +59,10 @@ export default function AdminEventsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<EventRow>(emptyForm);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const userId = session?.user.id;
 
@@ -76,9 +78,7 @@ export default function AdminEventsPage() {
       setError(null);
       const { data, error } = await supabase
         .from("events")
-        .select(
-          "id, name, date, status, venue, open_time, start_time, note, default_song_duration_sec, default_changeover_min"
-        )
+        .select("id, name, date, status, venue, open_time, start_time, note, default_changeover_min")
         .order("date", { ascending: true });
       if (cancelled) return;
       if (error) {
@@ -113,7 +113,6 @@ export default function AdminEventsPage() {
       open_time: form.open_time || null,
       start_time: form.start_time || null,
       note: form.note || null,
-      default_song_duration_sec: Number(form.default_song_duration_sec) || 240,
       default_changeover_min: Number(form.default_changeover_min) || 15,
       created_by: userId ?? null,
     };
@@ -129,6 +128,38 @@ export default function AdminEventsPage() {
     setEvents((prev) => [...prev, data as EventRow].sort((a, b) => a.date.localeCompare(b.date)));
     setForm(emptyForm);
     setSaving(false);
+  };
+
+  const handleDeleteRequest = (eventId: string) => {
+    setDeleteTargetId(eventId);
+    setDeleteConfirmText("");
+    setDeleteError(null);
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteTargetId(null);
+    setDeleteConfirmText("");
+    setDeleteError(null);
+  };
+
+  const handleDeleteEvent = async (eventRow: EventRow) => {
+    if (deleting) return;
+    if (deleteConfirmText.trim() !== eventRow.name.trim()) {
+      setDeleteError("イベント名が一致しません。");
+      return;
+    }
+    setDeleting(true);
+    setDeleteError(null);
+    const { error } = await supabase.from("events").delete().eq("id", eventRow.id);
+    if (error) {
+      console.error(error);
+      setDeleteError("イベントの削除に失敗しました。");
+      setDeleting(false);
+      return;
+    }
+    setEvents((prev) => prev.filter((item) => item.id !== eventRow.id));
+    handleDeleteCancel();
+    setDeleting(false);
   };
 
   if (adminLoading) {
@@ -280,15 +311,6 @@ export default function AdminEventsPage() {
 
                   <div className="grid sm:grid-cols-2 gap-3">
                     <label className="space-y-1 block text-sm">
-                      <span className="text-foreground">デフォルト演奏時間（秒）</span>
-                      <Input
-                        type="number"
-                        min={30}
-                        value={form.default_song_duration_sec}
-                        onChange={(e) => handleChange("default_song_duration_sec", Number(e.target.value))}
-                      />
-                    </label>
-                    <label className="space-y-1 block text-sm">
                       <span className="text-foreground">デフォルト転換時間（分）</span>
                       <Input
                         type="number"
@@ -335,10 +357,14 @@ export default function AdminEventsPage() {
                         event.open_time && event.start_time
                           ? `${event.open_time} - ${event.start_time}`
                           : "時間未定";
+                      const isDeleteTarget = deleteTargetId === event.id;
+                      const confirmMatches =
+                        isDeleteTarget && deleteConfirmText.trim() === event.name.trim();
+                      const isDeletingTarget = deleting && isDeleteTarget;
                       return (
                         <div
                           key={event.id}
-                          className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 bg-card/50 border border-border rounded-lg"
+                          className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 p-4 bg-card/50 border border-border rounded-lg"
                         >
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
@@ -379,7 +405,64 @@ export default function AdminEventsPage() {
                               詳細
                               <ArrowRight className="w-4 h-4" />
                             </Link>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteRequest(event.id)}
+                              disabled={isDeletingTarget}
+                              className={cn(
+                                "inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors",
+                                isDeleteTarget
+                                  ? "border-destructive/60 text-destructive"
+                                  : "border-border text-destructive/80 hover:border-destructive/60 hover:text-destructive",
+                                isDeletingTarget && "opacity-70 pointer-events-none"
+                              )}
+                            >
+                              {isDeletingTarget ? (
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-4 h-4" />
+                              )}
+                              削除
+                            </button>
                           </div>
+                          {isDeleteTarget && (
+                            <div className="w-full sm:basis-full rounded-lg border border-destructive/40 bg-destructive/5 p-3">
+                              <p className="text-xs text-muted-foreground">
+                                削除するにはイベント名「{event.name}」を入力してください。
+                              </p>
+                              <div className="mt-2 flex flex-col sm:flex-row gap-2">
+                                <Input
+                                  value={deleteConfirmText}
+                                  onChange={(e) => {
+                                    setDeleteConfirmText(e.target.value);
+                                    if (deleteError) setDeleteError(null);
+                                  }}
+                                  placeholder={event.name}
+                                />
+                                <div className="flex gap-2">
+                                  <Button
+                                    type="button"
+                                    variant="destructive"
+                                    disabled={!confirmMatches || isDeletingTarget}
+                                    onClick={() => handleDeleteEvent(event)}
+                                  >
+                                    {isDeletingTarget ? (
+                                      <RefreshCw className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="w-4 h-4" />
+                                    )}
+                                    削除する
+                                  </Button>
+                                  <Button type="button" variant="outline" onClick={handleDeleteCancel}>
+                                    キャンセル
+                                  </Button>
+                                </div>
+                              </div>
+                              {deleteError && (
+                                <p className="text-xs text-destructive mt-2">{deleteError}</p>
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
                     })

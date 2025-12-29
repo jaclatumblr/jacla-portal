@@ -18,7 +18,7 @@ import { AuthGuard } from "@/lib/AuthGuard";
 import { useRoleFlags } from "@/lib/useRoleFlags";
 import { useIsAdministrator } from "@/lib/useIsAdministrator";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabaseClient";
+import { safeSignOut, supabase } from "@/lib/supabaseClient";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -777,11 +777,21 @@ export default function AdminRolesPage() {
 
     setDeleting(true);
     try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) {
+        console.error(sessionError);
+      }
+      const accessToken = sessionData.session?.access_token ?? session.access_token;
+      if (!accessToken) {
+        toast.error("セッションが切れました。再ログインしてください。");
+        setDeleting(false);
+        return;
+      }
       const res = await fetch("/api/account/delete", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({ targetUserId: selectedId }),
       });
@@ -796,7 +806,7 @@ export default function AdminRolesPage() {
       }
 
       if (isSelf) {
-        await supabase.auth.signOut();
+        await safeSignOut();
         router.replace("/login");
         return;
       }

@@ -180,7 +180,8 @@ begin
     end if;
   end if;
 
-  if auth.uid() is not null then
+  if auth.uid() is not null
+    and exists (select 1 from public.profiles p where p.id = auth.uid()) then
     new.updated_by := auth.uid();
   end if;
 
@@ -232,7 +233,15 @@ declare
   actor uuid;
 begin
   actor := auth.uid();
-  if actor is null then
+  if actor is not null and not exists (
+    select 1 from public.profiles p where p.id = actor
+  ) then
+    actor := null;
+  end if;
+
+  if actor is null and new.updated_by is not null and exists (
+    select 1 from public.profiles p where p.id = new.updated_by
+  ) then
     actor := new.updated_by;
   end if;
 
@@ -251,7 +260,15 @@ declare
   actor uuid;
 begin
   actor := auth.uid();
-  if actor is null then
+  if actor is not null and not exists (
+    select 1 from public.profiles p where p.id = actor
+  ) then
+    actor := null;
+  end if;
+
+  if actor is null and new.updated_by is not null and exists (
+    select 1 from public.profiles p where p.id = new.updated_by
+  ) then
     actor := new.updated_by;
   end if;
 

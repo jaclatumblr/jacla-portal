@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect } from "react";
 import type { ReactNode } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { safeSignOut, supabase } from "@/lib/supabaseClient";
 import { emailPolicyMessage, getUserEmail, isAllowedEmail, isGmailAddress } from "@/lib/authEmail";
 
 export function AuthGuard({ children }: { children: ReactNode }) {
@@ -54,7 +54,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
         const isAdmin = await isAdminUser(session.user.id);
         if (isAdmin) return;
       }
-      await supabase.auth.signOut();
+      await safeSignOut();
       if (cancelled) return;
       router.replace(`/login?error=${encodeURIComponent(emailPolicyMessage)}`);
     })();

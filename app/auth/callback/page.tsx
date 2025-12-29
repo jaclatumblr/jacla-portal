@@ -3,7 +3,7 @@
 import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
-import { supabase } from "@/lib/supabaseClient";
+import { safeSignOut, supabase } from "@/lib/supabaseClient";
 import { emailPolicyMessage, getUserEmail, isAllowedEmail, isGmailAddress } from "@/lib/authEmail";
 
 function AuthCallbackContent() {
@@ -66,7 +66,7 @@ function AuthCallbackContent() {
           return;
         }
       }
-      await supabase.auth.signOut();
+      await safeSignOut();
       router.replace(`/login?error=${encodeURIComponent(emailPolicyMessage)}`);
     };
 

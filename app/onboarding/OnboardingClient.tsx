@@ -7,7 +7,7 @@ import { AlertTriangle, Image as ImageIcon, Loader2, PencilLine } from "lucide-r
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabaseClient";
+import { safeSignOut, supabase } from "@/lib/supabaseClient";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -619,11 +619,21 @@ export default function OnboardingClient({
     setDeleting(true);
 
     try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) {
+        console.error(sessionError);
+      }
+      const accessToken = sessionData.session?.access_token ?? session.access_token;
+      if (!accessToken) {
+        toast.error("セッションが切れました。再ログインしてください。");
+        setDeleting(false);
+        return;
+      }
       const res = await fetch("/api/account/delete", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({}),
       });
@@ -637,7 +647,7 @@ export default function OnboardingClient({
         return;
       }
 
-      await supabase.auth.signOut();
+      await safeSignOut();
       router.replace("/login");
     } catch (err) {
       console.error(err);

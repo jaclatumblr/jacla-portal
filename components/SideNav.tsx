@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "next-themes";
-import { supabase } from "@/lib/supabaseClient";
+import { safeSignOut, supabase } from "@/lib/supabaseClient";
 import { useRoleFlags } from "@/lib/useRoleFlags";
 import { useAuth } from "@/contexts/AuthContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -46,7 +46,11 @@ const utilityNavItems = bottomNavItems;
 export function SideNav() {
   const asideRef = useRef<HTMLElement | null>(null);
   const bodyOverflowRef = useRef<string | null>(null);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const lastRouteChangeRef = useRef(0);
+  const [isExpanded, setIsExpanded] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.sessionStorage.getItem("sidenavExpanded") === "1";
+  });
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
@@ -74,18 +78,29 @@ export function SideNav() {
     }
   };
 
+  const isAsideHovering = () => {
+    const el = asideRef.current;
+    if (!el) return false;
+    return el.matches(":hover");
+  };
+
   const toggleTheme = () => {
     const isDark = document.documentElement.classList.contains("dark");
     setTheme(isDark ? "light" : "dark");
   };
 
-  useEffect(() => {
-    const saved = window.sessionStorage.getItem("sidenavExpanded") === "1";
-    setIsExpanded(saved);
+  useLayoutEffect(() => {
+    const syncHover = () => {
+      const hovering = isAsideHovering();
+      updateExpanded(hovering);
+    };
+    const id = window.setTimeout(syncHover, 220);
+    return () => window.clearTimeout(id);
   }, []);
 
   // ルートが変わったらモバイルメニューだけ閉じる
   useEffect(() => {
+    lastRouteChangeRef.current = Date.now();
     setIsMobileMenuOpen(false);
     setIsAccountMenuOpen(false);
   }, [pathname]);
@@ -94,14 +109,13 @@ export function SideNav() {
     const el = asideRef.current;
     if (!el) return;
     const id = window.requestAnimationFrame(() => {
-      const hovering = el.matches(":hover");
-      updateExpanded(hovering);
+      updateExpanded(el.matches(":hover"));
     });
     return () => window.cancelAnimationFrame(id);
   }, [pathname]);
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await safeSignOut();
     setIsMobileMenuOpen(false);
     router.replace("/login");
   };
@@ -253,7 +267,20 @@ export function SideNav() {
       <aside
         ref={asideRef}
         onMouseEnter={() => updateExpanded(true)}
-        onMouseLeave={() => updateExpanded(false)}
+        onMouseLeave={() => {
+          const now = Date.now();
+          const recentRouteChange = now - lastRouteChangeRef.current < 250;
+          const scheduleClose = () => {
+            if (!isAsideHovering()) {
+              updateExpanded(false);
+            }
+          };
+          if (recentRouteChange) {
+            window.setTimeout(scheduleClose, 250);
+          } else {
+            window.requestAnimationFrame(scheduleClose);
+          }
+        }}
         className={cn(
           "fixed left-0 top-0 h-screen bg-card/95 backdrop-blur-xl border-r border-border transition-all duration-300 flex flex-col z-50",
           "hidden md:flex",

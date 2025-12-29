@@ -119,6 +119,11 @@ create table if not exists public.bands (
   name text not null,
 
   stage_plot_data jsonb not null default '{}'::jsonb,
+  representative_name text,
+  sound_note text,
+  lighting_note text,
+  general_note text,
+  lighting_total_min int4,
   is_approved boolean not null default false,
 
   created_by uuid references public.profiles(id) on delete set null,
@@ -143,7 +148,12 @@ drop policy if exists "bands_delete_owner_or_admin" on public.bands;
 alter table public.bands
   add column if not exists note_pa text,
   add column if not exists note_lighting text,
-  add column if not exists repertoire_status text not null default 'draft';
+  add column if not exists repertoire_status text not null default 'draft',
+  add column if not exists representative_name text,
+  add column if not exists sound_note text,
+  add column if not exists lighting_note text,
+  add column if not exists general_note text,
+  add column if not exists lighting_total_min int4;
 
 do $$
 begin
@@ -182,11 +192,21 @@ using (
   created_by = auth.uid()
   or public.is_admin_or_supervisor(auth.uid())
   or public.is_band_member(id, auth.uid())
+  or exists (
+    select 1 from public.profile_leaders pl
+    where pl.profile_id = auth.uid()
+      and pl.leader in ('Part Leader', 'PA Leader', 'Lighting Leader')
+  )
 )
 with check (
   created_by = auth.uid()
   or public.is_admin_or_supervisor(auth.uid())
   or public.is_band_member(id, auth.uid())
+  or exists (
+    select 1 from public.profile_leaders pl
+    where pl.profile_id = auth.uid()
+      and pl.leader in ('Part Leader', 'PA Leader', 'Lighting Leader')
+  )
 );
 
 create policy "bands_delete_owner_or_admin"
@@ -195,6 +215,11 @@ to authenticated
 using (
   created_by = auth.uid()
   or public.is_admin_or_supervisor(auth.uid())
+  or exists (
+    select 1 from public.profile_leaders pl
+    where pl.profile_id = auth.uid()
+      and pl.leader in ('PA Leader', 'Lighting Leader')
+  )
 );
 
 create or replace function public.bands_block_member_update()
@@ -206,6 +231,7 @@ declare
   actor_is_admin boolean;
   actor_is_owner boolean;
   actor_is_member boolean;
+  actor_is_leader boolean;
 begin
   actor := auth.uid();
 
@@ -218,16 +244,41 @@ begin
     return new;
   end if;
 
+  actor_is_leader := exists (
+    select 1 from public.profile_leaders pl
+    where pl.profile_id = actor
+      and pl.leader in ('Part Leader', 'PA Leader', 'Lighting Leader')
+  );
+
   actor_is_owner := old.created_by = actor;
   if actor_is_owner then
     return new;
   end if;
 
   actor_is_member := public.is_band_member(old.id, actor);
-  if actor_is_member then
-    if (to_jsonb(new) - 'repertoire_status' - 'updated_at')
-      <> (to_jsonb(old) - 'repertoire_status' - 'updated_at') then
-      raise exception 'Band members can only update repertoire_status.';
+  if actor_is_member or actor_is_leader then
+    if (
+      to_jsonb(new)
+      - 'repertoire_status'
+      - 'stage_plot_data'
+      - 'representative_name'
+      - 'sound_note'
+      - 'lighting_note'
+      - 'general_note'
+      - 'lighting_total_min'
+      - 'updated_at'
+    ) <> (
+      to_jsonb(old)
+      - 'repertoire_status'
+      - 'stage_plot_data'
+      - 'representative_name'
+      - 'sound_note'
+      - 'lighting_note'
+      - 'general_note'
+      - 'lighting_total_min'
+      - 'updated_at'
+    ) then
+      raise exception 'Band members/leaders can only update repertoire and notes fields.';
     end if;
     return new;
   end if;
@@ -250,8 +301,20 @@ create table if not exists public.band_members (
   band_id uuid not null references public.bands(id) on delete cascade,
   user_id uuid not null references public.profiles(id) on delete cascade,
   instrument text not null,          -- このバンドでの担当（例: "Sax", "Key"）
+  position_x numeric,                -- 立ち位置 X(0-100)
+  position_y numeric,                -- 立ち位置 Y(0-100)
+  monitor_request text,
+  monitor_note text,
+  is_mc boolean not null default false,
   created_at timestamptz not null default now()
 );
+
+alter table public.band_members
+  add column if not exists position_x numeric,
+  add column if not exists position_y numeric,
+  add column if not exists monitor_request text,
+  add column if not exists monitor_note text,
+  add column if not exists is_mc boolean not null default false;
 
 create index if not exists idx_band_members_band_id on public.band_members(band_id);
 create index if not exists idx_band_members_user_id on public.band_members(user_id);
@@ -282,6 +345,11 @@ using (
         b.created_by = auth.uid()
         or public.is_admin_or_supervisor(auth.uid())
         or public.is_band_member(b.id, auth.uid())
+        or exists (
+          select 1 from public.profile_leaders pl
+          where pl.profile_id = auth.uid()
+            and pl.leader in ('Part Leader', 'PA Leader', 'Lighting Leader')
+        )
       )
   )
   or user_id = auth.uid()
@@ -294,6 +362,11 @@ with check (
         b.created_by = auth.uid()
         or public.is_admin_or_supervisor(auth.uid())
         or public.is_band_member(b.id, auth.uid())
+        or exists (
+          select 1 from public.profile_leaders pl
+          where pl.profile_id = auth.uid()
+            and pl.leader in ('Part Leader', 'PA Leader', 'Lighting Leader')
+        )
       )
   )
   or user_id = auth.uid()
@@ -319,6 +392,11 @@ create table if not exists public.songs (
   url text,
   order_index int4,
   duration_sec int4,                -- 任意
+  arrangement_note text,
+  lighting_spot text,
+  lighting_strobe text,
+  lighting_moving text,
+  lighting_color text,
   memo text,
   created_at timestamptz not null default now()
 );
@@ -328,7 +406,31 @@ create index if not exists idx_songs_band_id on public.songs(band_id);
 alter table public.songs
   add column if not exists entry_type text not null default 'song',
   add column if not exists url text,
-  add column if not exists order_index int4;
+  add column if not exists order_index int4,
+  add column if not exists arrangement_note text,
+  add column if not exists lighting_spot text,
+  add column if not exists lighting_strobe text,
+  add column if not exists lighting_moving text,
+  add column if not exists lighting_color text;
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'songs_lighting_spot_check') then
+    alter table public.songs
+      add constraint songs_lighting_spot_check
+      check (lighting_spot is null or lighting_spot in ('o', 'x', 'auto'));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'songs_lighting_strobe_check') then
+    alter table public.songs
+      add constraint songs_lighting_strobe_check
+      check (lighting_strobe is null or lighting_strobe in ('o', 'x', 'auto'));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'songs_lighting_moving_check') then
+    alter table public.songs
+      add constraint songs_lighting_moving_check
+      check (lighting_moving is null or lighting_moving in ('o', 'x', 'auto'));
+  end if;
+end $$;
 
 do $$
 begin
@@ -372,14 +474,32 @@ using (
   exists (
     select 1 from public.bands b
     where b.id = band_id
-      and (b.created_by = auth.uid() or public.is_admin_or_supervisor(auth.uid()))
+      and (
+        b.created_by = auth.uid()
+        or public.is_admin_or_supervisor(auth.uid())
+        or public.is_band_member(b.id, auth.uid())
+        or exists (
+          select 1 from public.profile_leaders pl
+          where pl.profile_id = auth.uid()
+            and pl.leader in ('Part Leader', 'PA Leader', 'Lighting Leader')
+        )
+      )
   )
 )
 with check (
   exists (
     select 1 from public.bands b
     where b.id = band_id
-      and (b.created_by = auth.uid() or public.is_admin_or_supervisor(auth.uid()))
+      and (
+        b.created_by = auth.uid()
+        or public.is_admin_or_supervisor(auth.uid())
+        or public.is_band_member(b.id, auth.uid())
+        or exists (
+          select 1 from public.profile_leaders pl
+          where pl.profile_id = auth.uid()
+            and pl.leader in ('Part Leader', 'PA Leader', 'Lighting Leader')
+        )
+      )
   )
 );
 

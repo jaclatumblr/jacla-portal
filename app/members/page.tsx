@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { MessageCircle, Music, RefreshCw, Search } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowUp, MessageCircle, Music, RefreshCw, Search } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -92,13 +92,25 @@ const positionPriority: Record<string, number> = {
   "Web Secretary": 5,
 };
 
+const sortOptions = [
+  { value: "role", label: "権限順" },
+  { value: "name", label: "名前順" },
+  { value: "part", label: "パート順" },
+  { value: "enrollment", label: "入学年度順" },
+] as const;
+
+type SortKey = (typeof sortOptions)[number]["value"];
+
 export default function MembersPage() {
   const { session, loading: authLoading } = useAuth();
   const { isAdministrator, loading: adminLoading } = useIsAdministrator();
   const { canViewStudentId, loading: studentAccessLoading } = useCanViewStudentId();
   const [members, setMembers] = useState<Member[]>([]);
+  const [searchText, setSearchText] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("role");
   const [loading, setLoading] = useState(true);
   const [discordFallbackFor, setDiscordFallbackFor] = useState<string | null>(null);
+  const [showBackToTop, setShowBackToTop] = useState(false);
 
   const getDiscordAppUrl = (id: string) => {
     const encoded = encodeURIComponent(id);
@@ -107,6 +119,15 @@ export default function MembersPage() {
     }
     return `discord://discord.com/users/${encoded}`;
   };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowBackToTop(window.scrollY > 320);
+    };
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   useEffect(() => {
     if (authLoading || adminLoading || studentAccessLoading || !session) return;
@@ -318,6 +339,59 @@ export default function MembersPage() {
     };
   }, [authLoading, adminLoading, studentAccessLoading, isAdministrator, canViewStudentId, session]);
 
+  const normalizedQuery = searchText.trim().toLowerCase();
+
+  const visibleMembers = useMemo(() => {
+    const filtered = normalizedQuery
+      ? members.filter((member) => {
+          const values: Array<string | null | undefined> = [
+            member.name,
+            member.realName,
+            member.part,
+            member.crew,
+            member.discordName,
+            member.enrollmentYear,
+            member.birthDate,
+            ...member.leaderRoles,
+            ...member.positions,
+            ...member.bands,
+          ];
+          if (member.studentId && member.leaderRoles.length > 0) {
+            values.push(member.studentId);
+          }
+          return values.some(
+            (value) => value && value.toLowerCase().includes(normalizedQuery)
+          );
+        })
+      : members;
+
+    if (sortKey === "role") return filtered;
+
+    const sorted = [...filtered].sort((a, b) => {
+      switch (sortKey) {
+        case "name":
+          return a.name.localeCompare(b.name, "ja");
+        case "part": {
+          const partA = a.part ?? "";
+          const partB = b.part ?? "";
+          if (!partA && !partB) return 0;
+          if (!partA) return 1;
+          if (!partB) return -1;
+          return partA.localeCompare(partB, "ja");
+        }
+        case "enrollment": {
+          const yearA = a.enrollmentYear ? Number(a.enrollmentYear) : Number.POSITIVE_INFINITY;
+          const yearB = b.enrollmentYear ? Number(b.enrollmentYear) : Number.POSITIVE_INFINITY;
+          if (yearA !== yearB) return yearA - yearB;
+          return a.name.localeCompare(b.name, "ja");
+        }
+        default:
+          return 0;
+      }
+    });
+    return sorted;
+  }, [members, normalizedQuery, sortKey]);
+
   return (
     <AuthGuard>
       <div className="flex min-h-screen bg-background">
@@ -340,13 +414,23 @@ export default function MembersPage() {
                   <div className="flex-1 relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
-                      placeholder="名前、パート、バンドで検索..."
+                      value={searchText}
+                      onChange={(event) => setSearchText(event.target.value)}
+                      placeholder="名前、役職、パート、バンドで検索..."
                       className="pl-10 bg-card/50 border-border"
                     />
                   </div>
-                  <Button variant="outline" className="bg-transparent w-full sm:w-auto">
-                    絞り込み
-                  </Button>
+                  <select
+                    value={sortKey}
+                    onChange={(event) => setSortKey(event.target.value as SortKey)}
+                    className="h-10 w-full sm:w-auto rounded-md border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  >
+                    {sortOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </div>
@@ -359,11 +443,11 @@ export default function MembersPage() {
                   <RefreshCw className="w-4 h-4 animate-spin" />
                   読み込み中...
                 </div>
-              ) : members.length === 0 ? (
+              ) : visibleMembers.length === 0 ? (
                 <div className="text-sm text-muted-foreground">部員が見つかりませんでした。</div>
               ) : (
                 <div className="grid lg:grid-cols-2 gap-4 md:gap-6 max-w-5xl mx-auto">
-                  {members.map((member, index) => {
+                  {visibleMembers.map((member, index) => {
                     const isOfficialRole = member.positions.includes("Official");
                     const isAdministratorRole = member.leaderRoles.includes("Administrator");
                     const showAdminBadge = isAdministratorRole && !isOfficialRole;
@@ -529,6 +613,18 @@ export default function MembersPage() {
               )}
             </div>
           </section>
+
+          {showBackToTop && (
+            <Button
+              type="button"
+              size="icon"
+              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+              className="fixed bottom-6 right-6 z-50 rounded-full shadow-lg"
+              aria-label="ページ上部へ戻る"
+            >
+              <ArrowUp className="w-4 h-4" />
+            </Button>
+          )}
         </main>
       </div>
     </AuthGuard>

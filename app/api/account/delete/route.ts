@@ -73,12 +73,29 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error: "Forbidden",
-          details: "Administrator/Supervisor のみ他ユーザーを削除できます。",
+          details: "Only Administrator/Supervisor can delete other users.",
         },
         { status: 403 }
       );
     }
   }
+
+  await Promise.all([
+    adminClient
+      .from("equipment_item_logs")
+      .update({ changed_by: null })
+      .eq("changed_by", targetUserId)
+      .then(({ error }) => {
+        if (error) console.error(error);
+      }),
+    adminClient
+      .from("equipment_instrument_logs")
+      .update({ changed_by: null })
+      .eq("changed_by", targetUserId)
+      .then(({ error }) => {
+        if (error) console.error(error);
+      }),
+  ]);
 
   const { error: profileDeleteError } = await adminClient
     .from("profiles")

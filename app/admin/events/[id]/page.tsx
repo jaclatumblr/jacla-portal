@@ -153,6 +153,9 @@ export default function AdminEventDetailPage() {
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [showBandDeleteConfirm, setShowBandDeleteConfirm] = useState(false);
+  const [bandDeleteText, setBandDeleteText] = useState("");
+  const [deletingBand, setDeletingBand] = useState(false);
 
   const selectedBand = useMemo(
     () => bands.find((b) => b.id === selectedBandId) ?? null,
@@ -313,6 +316,11 @@ export default function AdminEventDetailPage() {
         "",
     });
   }, [selectedBand]);
+
+  useEffect(() => {
+    setShowBandDeleteConfirm(false);
+    setBandDeleteText("");
+  }, [selectedBandId]);
   const handleEventChange = (key: keyof EventRow, value: string | number) => {
     if (!eventForm) return;
     setEventForm((prev) => (prev ? { ...prev, [key]: value } : prev));
@@ -383,6 +391,45 @@ export default function AdminEventDetailPage() {
     }
     toast.success("イベントを削除しました。");
     router.replace("/admin/events");
+  };
+
+  const handleBandDeleteRequest = () => {
+    setShowBandDeleteConfirm(true);
+    setBandDeleteText("");
+  };
+
+  const handleBandDeleteCancel = () => {
+    setShowBandDeleteConfirm(false);
+    setBandDeleteText("");
+  };
+
+  const handleDeleteBand = async () => {
+    if (!selectedBandId || !selectedBand || deletingBand) return;
+    const targetName = selectedBand.name.trim();
+    if (bandDeleteText.trim() !== targetName) {
+      setError("バンド名が一致しません。");
+      return;
+    }
+    setDeletingBand(true);
+    setError(null);
+
+    const { error } = await supabase.from("bands").delete().eq("id", selectedBandId);
+    if (error) {
+      console.error(error);
+      setError("バンドの削除に失敗しました。");
+      setDeletingBand(false);
+      return;
+    }
+
+    const nextBands = bands.filter((band) => band.id !== selectedBandId);
+    setBands(nextBands);
+    setMembers((prev) => prev.filter((member) => member.band_id !== selectedBandId));
+    setSongs((prev) => prev.filter((song) => song.band_id !== selectedBandId));
+    setSelectedBandId(nextBands[0]?.id ?? null);
+    setShowBandDeleteConfirm(false);
+    setBandDeleteText("");
+    toast.success("バンドを削除しました。");
+    setDeletingBand(false);
   };
 
   const handleCreateBand = async (e: React.FormEvent) => {
@@ -590,6 +637,8 @@ export default function AdminEventDetailPage() {
 
   const deleteTargetName = (event?.name ?? eventForm.name ?? "").trim();
   const deleteMatches = deleteConfirmText.trim() === deleteTargetName;
+  const bandDeleteTargetName = selectedBand?.name?.trim() ?? "";
+  const bandDeleteMatches = bandDeleteText.trim() === bandDeleteTargetName;
 
   return (
     <AuthGuard>
@@ -972,6 +1021,53 @@ export default function AdminEventDetailPage() {
                             >
                               変更を戻す
                             </Button>
+                          </div>
+                          <div className="rounded-lg border border-destructive/40 p-3 space-y-2">
+                            {!showBandDeleteConfirm ? (
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                className="gap-2"
+                                onClick={handleBandDeleteRequest}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                バンドを削除
+                              </Button>
+                            ) : (
+                              <div className="space-y-2">
+                                <p className="text-xs text-muted-foreground">
+                                  削除するにはバンド名「{bandDeleteTargetName}」を入力してください。
+                                </p>
+                                <Input
+                                  value={bandDeleteText}
+                                  onChange={(e) => setBandDeleteText(e.target.value)}
+                                  placeholder={bandDeleteTargetName}
+                                />
+                                <div className="flex flex-wrap gap-2">
+                                  <Button
+                                    type="button"
+                                    variant="destructive"
+                                    disabled={!bandDeleteMatches || deletingBand}
+                                    onClick={handleDeleteBand}
+                                  >
+                                    {deletingBand ? (
+                                      <RefreshCw className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="w-4 h-4" />
+                                    )}
+                                    削除する
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={handleBandDeleteCancel}
+                                    disabled={deletingBand}
+                                  >
+                                    キャンセル
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </form>
                       )}

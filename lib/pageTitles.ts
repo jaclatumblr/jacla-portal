@@ -22,6 +22,7 @@ const exactTitles: Record<string, string> = {
   "/admin/roles": "ユーザー管理",
   "/admin/events": "イベント管理",
   "/admin/announcements": "お知らせ管理",
+  "/admin/feedback": "フィードバック",
   "/me": "マイページ",
   "/me/profile": "プロフィール",
   "/me/profile/edit": "プロフィール編集",
@@ -31,7 +32,7 @@ const exactTitles: Record<string, string> = {
   "/privacy": "プライバシーポリシー",
   "/feedback": "フィードバック",
   "/onboarding": "初回設定",
-  "/auth/callback": "ログイン処理中",
+  "/auth/callback": "ログイン処理",
   "/debug-auth": "認証デバッグ",
 };
 

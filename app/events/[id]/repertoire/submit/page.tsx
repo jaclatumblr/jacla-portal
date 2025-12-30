@@ -186,7 +186,7 @@ const lightingChoiceLabels: Record<Exclude<LightingChoice, "">, string> = {
   auto: "おまかせ",
 };
 
-const adminLeaderSet = new Set(["Administrator", "Supervisor"]);
+const adminLeaderSet = new Set(["Administrator"]);
 
 const createTempId = () => `temp-${crypto.randomUUID()}`;
 
@@ -603,7 +603,7 @@ export default function RepertoireSubmitPage() {
       return {
         id: memberRow.id,
         userId: memberRow.user_id,
-        name: profile?.display_name ?? profile?.real_name ?? "名前未登録",
+        name: profile?.real_name ?? profile?.display_name ?? "名前未登録",
         realName: profile?.real_name ?? null,
         part: profile?.part ?? null,
         instrument,
@@ -738,11 +738,11 @@ export default function RepertoireSubmitPage() {
         supabase
           .from("profiles")
           .select("id, display_name, real_name, part, leader")
-          .order("display_name", { ascending: true }),
+          .order("real_name", { ascending: true }),
         supabase
           .from("profile_leaders")
           .select("profile_id, leader")
-          .in("leader", ["Administrator", "Supervisor"]),
+          .in("leader", ["Administrator"]),
       ]);
 
       if (cancelled) return;
@@ -1170,7 +1170,7 @@ export default function RepertoireSubmitPage() {
     const nextMember: StageMember = {
       id: row.id,
       userId: row.user_id,
-      name: profile?.display_name ?? profile?.real_name ?? "名前未登録",
+      name: profile?.real_name ?? profile?.display_name ?? "名前未登録",
       realName: profile?.real_name ?? null,
       part: profile?.part ?? null,
       instrument: row.instrument,
@@ -2491,8 +2491,8 @@ export default function RepertoireSubmitPage() {
                                         <optgroup key={group.key} label={group.label}>
                                           {group.items.map((profile) => (
                                             <option key={profile.id} value={profile.id}>
-                                              {(profile.display_name ??
-                                                profile.real_name ??
+                                              {(profile.real_name ??
+                                                profile.display_name ??
                                                 "名前未登録") +
                                                 (profile.part ? ` (${profile.part})` : "")}
                                             </option>

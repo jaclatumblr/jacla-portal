@@ -1,16 +1,15 @@
-// app/feedback/page.tsx
 "use client";
 
-import { useState } from "react";
-import { Loader2, MessageCircle, Send, Sparkles } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import { Loader2, MessageCircle, Send } from "lucide-react";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
-import { supabase } from "@/lib/supabaseClient";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "@/lib/toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabaseClient";
 
 const categories = [
   { value: "ui", label: "UI/UX" },
@@ -19,35 +18,98 @@ const categories = [
   { value: "other", label: "その他" },
 ];
 
+type ProfileInfo = {
+  displayName: string | null;
+  realName: string | null;
+  studentId: string | null;
+};
+
 export default function FeedbackPage() {
+  const { session } = useAuth();
+  const userId = session?.user.id ?? null;
+  const accessToken = session?.access_token ?? null;
   const [category, setCategory] = useState("feature");
   const [message, setMessage] = useState("");
-  const [contact, setContact] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [profileInfo, setProfileInfo] = useState<ProfileInfo | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+
+    (async () => {
+      setLoadingProfile(true);
+      const [profileRes, privateRes] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("display_name, real_name")
+          .eq("id", userId)
+          .maybeSingle(),
+        supabase
+          .from("profile_private")
+          .select("student_id")
+          .eq("profile_id", userId)
+          .maybeSingle(),
+      ]);
+
+      if (cancelled) return;
+
+      if (profileRes.error) {
+        console.error(profileRes.error);
+      }
+
+      if (privateRes.error) {
+        console.error(privateRes.error);
+      }
+
+      setProfileInfo({
+        displayName: profileRes.data?.display_name ?? null,
+        realName: profileRes.data?.real_name ?? null,
+        studentId: privateRes.data?.student_id ?? null,
+      });
+      setLoadingProfile(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!message.trim()) return;
+    if (!userId || !accessToken) {
+      toast.error("ログイン情報が取得できませんでした。");
+      return;
+    }
+
     setSubmitting(true);
 
-    const { error } = await supabase.from("feedbacks").insert([
-      {
+    const res = await fetch("/api/feedback", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
         category,
         message: message.trim(),
-        contact: contact.trim() || null,
-      },
-    ]);
+      }),
+    });
 
-    if (error) {
-      console.error(error);
-      toast.error("送信に失敗しました。時間をおいて再度お試しください。");
+    if (!res.ok) {
+      const payload = (await res.json().catch(() => ({}))) as { error?: string };
+      toast.error(payload.error ?? "送信に失敗しました。時間をおいて再度お試しください。");
     } else {
       toast.success("送信しました。ご協力ありがとうございます！");
       setMessage("");
-      setContact("");
     }
     setSubmitting(false);
   };
+
+  const displayName = profileInfo?.realName || profileInfo?.displayName || "未登録";
+  const studentId = profileInfo?.studentId || "未登録";
 
   return (
     <AuthGuard>
@@ -64,7 +126,7 @@ export default function FeedbackPage() {
                 <span className="text-xs text-primary tracking-[0.3em] font-mono">FEEDBACK</span>
                 <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-3 mb-3">フィードバック</h1>
                 <p className="text-muted-foreground text-sm md:text-base">
-                  改善アイデアや不具合を共有してください。矢内が確認します。
+                  改善したい点や不具合を共有してください。運営が確認します。
                 </p>
               </div>
             </div>
@@ -80,11 +142,29 @@ export default function FeedbackPage() {
                     </div>
                     <div>
                       <CardTitle className="text-xl">ご意見フォーム</CardTitle>
-                      <CardDescription>必須: カテゴリ / 内容。連絡先は任意です。</CardDescription>
+                      <CardDescription>送信者情報は運営側で確認します。</CardDescription>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent>
+                  <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground mb-4">
+                    {loadingProfile ? (
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        送信者情報を確認中...
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <p>
+                          送信者: <span className="text-foreground font-medium">{displayName}</span>
+                        </p>
+                        <p>
+                          学籍番号: <span className="text-foreground font-medium">{studentId}</span>
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <label className="space-y-1 block text-sm">
                       <span className="text-foreground">カテゴリ</span>
@@ -112,24 +192,15 @@ export default function FeedbackPage() {
                       />
                     </label>
 
-                    <label className="space-y-1 block text-sm">
-                      <span className="text-foreground">連絡先 (任意: Discord, メールなど)</span>
-                      <Input
-                        value={contact}
-                        onChange={(e) => setContact(e.target.value)}
-                        placeholder="Discord ID や メールアドレス"
-                      />
-                    </label>
-
                     <div className="flex flex-wrap items-center gap-3">
                       <Button type="submit" disabled={submitting || !message.trim()} className="gap-2">
-                        {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                        {submitting ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Send className="w-4 h-4" />
+                        )}
                         送信する
                       </Button>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Sparkles className="w-4 h-4 text-primary" />
-                        入力内容は運営にのみ共有されます。
-                      </div>
                     </div>
                   </form>
                 </CardContent>

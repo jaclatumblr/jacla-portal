@@ -503,4 +503,126 @@ with check (
   )
 );
 
+-- =========================
+-- 5) event_slots（TT/スロット）
+-- =========================
+create table if not exists public.event_slots (
+  id uuid primary key default gen_random_uuid(),
+  event_id uuid not null references public.events(id) on delete cascade,
+  band_id uuid references public.bands(id) on delete set null,
+  slot_type text not null default 'band', -- band / break / mc / other
+  order_in_event int4,
+  start_time time,
+  end_time time,
+  changeover_min int4,
+  note text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_event_slots_event_id on public.event_slots(event_id);
+create index if not exists idx_event_slots_band_id on public.event_slots(band_id);
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'event_slots_type_check') then
+    alter table public.event_slots
+      add constraint event_slots_type_check
+      check (slot_type in ('band', 'break', 'mc', 'other'));
+  end if;
+end $$;
+
+drop trigger if exists trg_event_slots_updated_at on public.event_slots;
+create trigger trg_event_slots_updated_at
+before update on public.event_slots
+for each row execute function public.set_updated_at();
+
+alter table public.event_slots enable row level security;
+
+drop policy if exists "event_slots_select_all_authenticated" on public.event_slots;
+drop policy if exists "event_slots_write_admin" on public.event_slots;
+
+create policy "event_slots_select_all_authenticated"
+on public.event_slots for select
+to authenticated
+using (true);
+
+create policy "event_slots_write_admin"
+on public.event_slots for all
+to authenticated
+using (public.is_admin_or_supervisor(auth.uid()))
+with check (public.is_admin_or_supervisor(auth.uid()));
+
+-- =========================
+-- 6) event_staff_members（イベント参加クルー）
+-- =========================
+create table if not exists public.event_staff_members (
+  id uuid primary key default gen_random_uuid(),
+  event_id uuid not null references public.events(id) on delete cascade,
+  profile_id uuid not null references public.profiles(id) on delete cascade,
+  can_pa boolean not null default false,
+  can_light boolean not null default false,
+  note text,
+  created_at timestamptz not null default now()
+);
+
+create unique index if not exists uq_event_staff_event_profile
+  on public.event_staff_members(event_id, profile_id);
+
+alter table public.event_staff_members enable row level security;
+
+drop policy if exists "event_staff_members_select_all_authenticated" on public.event_staff_members;
+drop policy if exists "event_staff_members_write_admin" on public.event_staff_members;
+
+create policy "event_staff_members_select_all_authenticated"
+on public.event_staff_members for select
+to authenticated
+using (true);
+
+create policy "event_staff_members_write_admin"
+on public.event_staff_members for all
+to authenticated
+using (public.is_admin_or_supervisor(auth.uid()))
+with check (public.is_admin_or_supervisor(auth.uid()));
+
+-- =========================
+-- 7) slot_staff_assignments（スロット担当）
+-- =========================
+create table if not exists public.slot_staff_assignments (
+  id uuid primary key default gen_random_uuid(),
+  event_slot_id uuid not null references public.event_slots(id) on delete cascade,
+  profile_id uuid not null references public.profiles(id) on delete cascade,
+  role text not null, -- pa / light
+  is_fixed boolean not null default false,
+  note text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_slot_staff_slot_id on public.slot_staff_assignments(event_slot_id);
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'slot_staff_role_check') then
+    alter table public.slot_staff_assignments
+      add constraint slot_staff_role_check
+      check (role in ('pa', 'light'));
+  end if;
+end $$;
+
+alter table public.slot_staff_assignments enable row level security;
+
+drop policy if exists "slot_staff_assignments_select_all_authenticated" on public.slot_staff_assignments;
+drop policy if exists "slot_staff_assignments_write_admin" on public.slot_staff_assignments;
+
+create policy "slot_staff_assignments_select_all_authenticated"
+on public.slot_staff_assignments for select
+to authenticated
+using (true);
+
+create policy "slot_staff_assignments_write_admin"
+on public.slot_staff_assignments for all
+to authenticated
+using (public.is_admin_or_supervisor(auth.uid()))
+with check (public.is_admin_or_supervisor(auth.uid()));
+
 commit;

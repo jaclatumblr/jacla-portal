@@ -11,6 +11,7 @@ import {
   MapPin,
   PencilLine,
   Plus,
+  Save,
   RefreshCw,
   Trash2,
   Users,
@@ -80,6 +81,18 @@ type Song = {
   memo: string | null;
 };
 
+type EventSlot = {
+  id: string;
+  event_id: string;
+  band_id: string | null;
+  slot_type: string;
+  order_in_event: number | null;
+  start_time: string | null;
+  end_time: string | null;
+  changeover_min: number | null;
+  note: string | null;
+};
+
 const statusOptions = [
   { value: "draft", label: "下書き" },
   { value: "recruiting", label: "募集中" },
@@ -92,6 +105,13 @@ const eventTypeOptions = [
   { value: "workshop", label: "講習会" },
   { value: "briefing", label: "説明会" },
   { value: "camp", label: "合宿" },
+  { value: "other", label: "その他" },
+];
+
+const slotTypeOptions = [
+  { value: "band", label: "バンド" },
+  { value: "break", label: "休憩" },
+  { value: "mc", label: "MC" },
   { value: "other", label: "その他" },
 ];
 
@@ -135,6 +155,9 @@ export default function AdminEventDetailPage() {
   const [profiles, setProfiles] = useState<ProfileOption[]>([]);
   const [members, setMembers] = useState<BandMember[]>([]);
   const [songs, setSongs] = useState<Song[]>([]);
+  const [slots, setSlots] = useState<EventSlot[]>([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [slotsSaving, setSlotsSaving] = useState(false);
   const [newBandName, setNewBandName] = useState("");
   const [memberForm, setMemberForm] = useState({ profileId: "", instrument: "" });
   const [songForm, setSongForm] = useState({
@@ -194,14 +217,27 @@ export default function AdminEventDetailPage() {
     toast.error(deleteError);
     setDeleteError(null);
   }, [deleteError]);
+
+  const orderedSlots = useMemo(() => {
+    return [...slots].sort((a, b) => {
+      const orderA = a.order_in_event ?? Number.MAX_SAFE_INTEGER;
+      const orderB = b.order_in_event ?? Number.MAX_SAFE_INTEGER;
+      if (orderA !== orderB) return orderA - orderB;
+      const startA = a.start_time ?? "";
+      const startB = b.start_time ?? "";
+      if (startA !== startB) return startA.localeCompare(startB);
+      return (a.note ?? "").localeCompare(b.note ?? "");
+    });
+  }, [slots]);
   useEffect(() => {
     if (!eventId || adminLoading || !isAdmin) return;
     let cancelled = false;
     (async () => {
       setLoading(true);
       setError(null);
+      setSlotsLoading(true);
 
-      const [eventRes, bandsRes, profilesRes] = await Promise.all([
+      const [eventRes, bandsRes, profilesRes, slotsRes] = await Promise.all([
         supabase
           .from("events")
           .select(
@@ -215,6 +251,14 @@ export default function AdminEventDetailPage() {
           .eq("event_id", eventId)
           .order("created_at", { ascending: true }),
         supabase.from("profiles").select("*").order("display_name", { ascending: true }),
+        supabase
+          .from("event_slots")
+          .select(
+            "id, event_id, band_id, slot_type, order_in_event, start_time, end_time, changeover_min, note"
+          )
+          .eq("event_id", eventId)
+          .order("order_in_event", { ascending: true })
+          .order("start_time", { ascending: true }),
       ]);
 
       if (cancelled) return;
@@ -227,6 +271,8 @@ export default function AdminEventDetailPage() {
         setProfiles([]);
         setMembers([]);
         setSongs([]);
+        setSlots([]);
+        setSlotsLoading(false);
         setLoading(false);
         return;
       }
@@ -251,6 +297,15 @@ export default function AdminEventDetailPage() {
         crew: p.crew ?? null,
       }));
       setProfiles(profileList);
+
+      if (slotsRes.error) {
+        console.error(slotsRes.error);
+        setError((prev) => prev ?? "タイムテーブルの取得に失敗しました。");
+        setSlots([]);
+      } else {
+        setSlots((slotsRes.data ?? []) as EventSlot[]);
+      }
+      setSlotsLoading(false);
 
       const bandIds = bandList.map((b) => b.id);
       if (bandIds.length === 0) {
@@ -293,6 +348,79 @@ export default function AdminEventDetailPage() {
       cancelled = true;
     };
   }, [adminLoading, eventId, isAdmin, viewerIsAdministrator]);
+
+  const handleAddSlot = () => {
+    if (!eventId) return;
+    const nextOrder =
+      slots.reduce((max, slot) => Math.max(max, slot.order_in_event ?? 0), 0) + 1;
+    const newSlot: EventSlot = {
+      id: crypto.randomUUID(),
+      event_id: eventId,
+      band_id: null,
+      slot_type: "band",
+      order_in_event: nextOrder,
+      start_time: null,
+      end_time: null,
+      changeover_min: eventForm?.default_changeover_min ?? 15,
+      note: "",
+    };
+    setSlots((prev) => [...prev, newSlot]);
+  };
+
+  const handleSlotChange = <K extends keyof EventSlot>(id: string, key: K, value: EventSlot[K]) => {
+    setSlots((prev) => prev.map((slot) => (slot.id === id ? { ...slot, [key]: value } : slot)));
+  };
+
+  const handleSaveSlots = async () => {
+    if (!eventId || slotsSaving) return;
+    setSlotsSaving(true);
+    setError(null);
+
+    const payloads = slots.map((slot, index) => ({
+      id: slot.id,
+      event_id: eventId,
+      band_id: slot.slot_type === "band" ? slot.band_id ?? null : null,
+      slot_type: slot.slot_type,
+      order_in_event: slot.order_in_event ?? index + 1,
+      start_time: slot.start_time || null,
+      end_time: slot.end_time || null,
+      changeover_min:
+        slot.changeover_min == null || Number.isNaN(Number(slot.changeover_min))
+          ? null
+          : Number(slot.changeover_min),
+      note: slot.note || null,
+    }));
+
+    const { data, error } = await supabase
+      .from("event_slots")
+      .upsert(payloads, { onConflict: "id" })
+      .select(
+        "id, event_id, band_id, slot_type, order_in_event, start_time, end_time, changeover_min, note"
+      );
+
+    if (error || !data) {
+      console.error(error);
+      setError("タイムテーブルの保存に失敗しました。");
+      setSlotsSaving(false);
+      return;
+    }
+
+    setSlots((data ?? []) as EventSlot[]);
+    toast.success("タイムテーブルを保存しました。");
+    setSlotsSaving(false);
+  };
+
+  const handleDeleteSlot = async (slotId: string) => {
+    if (!slotId) return;
+    const { error } = await supabase.from("event_slots").delete().eq("id", slotId);
+    if (error) {
+      console.error(error);
+      setError("タイムテーブルの削除に失敗しました。");
+      return;
+    }
+    setSlots((prev) => prev.filter((slot) => slot.id !== slotId));
+    toast.success("スロットを削除しました。");
+  };
 
   useEffect(() => {
     if (!selectedBand) {
@@ -817,6 +945,132 @@ export default function AdminEventDetailPage() {
                       </Button>
                     </div>
                   </form>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-card/60 border-border">
+                <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <CardTitle className="text-xl">タイムテーブル（手動）</CardTitle>
+                    <CardDescription>イベントの進行スロットを管理します。</CardDescription>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button type="button" variant="outline" onClick={handleAddSlot}>
+                      <Plus className="w-4 h-4" />
+                      スロット追加
+                    </Button>
+                    <Button type="button" onClick={handleSaveSlots} disabled={slotsSaving || slotsLoading}>
+                      {slotsSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      保存
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {slotsLoading ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      読み込み中です...
+                    </div>
+                  ) : orderedSlots.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">スロットがまだありません。</div>
+                  ) : (
+                    <div className="space-y-3">
+                      {orderedSlots.map((slot) => (
+                        <div
+                          key={slot.id}
+                          className="grid gap-2 rounded-lg border border-border p-3 md:grid-cols-[70px,110px,1fr,120px,120px,120px,1fr,auto]"
+                        >
+                          <label className="space-y-1 text-xs">
+                            <span className="text-muted-foreground">順番</span>
+                            <Input
+                              type="number"
+                              min={1}
+                              value={slot.order_in_event ?? ""}
+                              onChange={(e) =>
+                                handleSlotChange(slot.id, "order_in_event", Number(e.target.value))
+                              }
+                            />
+                          </label>
+                          <label className="space-y-1 text-xs">
+                            <span className="text-muted-foreground">種別</span>
+                            <select
+                              className="h-10 w-full rounded-md border border-input bg-card px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                              value={slot.slot_type}
+                              onChange={(e) => handleSlotChange(slot.id, "slot_type", e.target.value)}
+                            >
+                              {slotTypeOptions.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="space-y-1 text-xs">
+                            <span className="text-muted-foreground">バンド</span>
+                            <select
+                              className="h-10 w-full rounded-md border border-input bg-card px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                              value={slot.band_id ?? ""}
+                              onChange={(e) => handleSlotChange(slot.id, "band_id", e.target.value || null)}
+                              disabled={slot.slot_type !== "band"}
+                            >
+                              <option value="">選択なし</option>
+                              {bands.map((band) => (
+                                <option key={band.id} value={band.id}>
+                                  {band.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="space-y-1 text-xs">
+                            <span className="text-muted-foreground">開始</span>
+                            <Input
+                              type="time"
+                              value={slot.start_time ?? ""}
+                              onChange={(e) => handleSlotChange(slot.id, "start_time", e.target.value || null)}
+                            />
+                          </label>
+                          <label className="space-y-1 text-xs">
+                            <span className="text-muted-foreground">終了</span>
+                            <Input
+                              type="time"
+                              value={slot.end_time ?? ""}
+                              onChange={(e) => handleSlotChange(slot.id, "end_time", e.target.value || null)}
+                            />
+                          </label>
+                          <label className="space-y-1 text-xs">
+                            <span className="text-muted-foreground">転換(分)</span>
+                            <Input
+                              type="number"
+                              min={0}
+                              value={slot.changeover_min ?? ""}
+                              onChange={(e) =>
+                                handleSlotChange(slot.id, "changeover_min", Number(e.target.value))
+                              }
+                            />
+                          </label>
+                          <label className="space-y-1 text-xs">
+                            <span className="text-muted-foreground">メモ</span>
+                            <Input
+                              value={slot.note ?? ""}
+                              onChange={(e) => handleSlotChange(slot.id, "note", e.target.value)}
+                              placeholder="MC / 休憩など"
+                            />
+                          </label>
+                          <div className="flex items-end">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDeleteSlot(slot.id)}
+                              className="text-muted-foreground hover:text-destructive"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 

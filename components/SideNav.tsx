@@ -5,24 +5,25 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  Bell,
   Calendar,
   ClipboardList,
-  Music,
-  Lightbulb,
-  Users,
-  User,
-  LogOut,
   Home,
+  Lightbulb,
+  LogOut,
   Menu,
-  X,
-  Bell,
+  MessageSquare,
+  Moon,
+  Music,
   Settings,
   Sun,
-  Moon,
+  User,
+  Users,
+  X,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { useTheme } from "next-themes";
-import { safeSignOut, supabase } from "@/lib/supabaseClient";
+import { cn } from "@/lib/utils";
+import { safeSignOut } from "@/lib/supabaseClient";
 import { useRoleFlags } from "@/lib/useRoleFlags";
 import { useAuth } from "@/contexts/AuthContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -34,6 +35,7 @@ const navItems = [
   { id: "lighting", href: "/lighting", label: "照明", icon: Lightbulb },
   { id: "maintenance", href: "/maintenance", label: "備品管理", icon: ClipboardList },
   { id: "announcements", href: "/announcements", label: "お知らせ", icon: Bell },
+  { id: "feedback", href: "/feedback", label: "フィードバック", icon: MessageSquare },
   { id: "members", href: "/members", label: "部員一覧", icon: Users },
 ];
 
@@ -41,6 +43,7 @@ const bottomNavItems = [
   { id: "profile", href: "/me/profile", label: "アカウント", icon: User },
   { id: "bands", href: "/me/bands", label: "マイバンド", icon: Music },
 ];
+
 const utilityNavItems = bottomNavItems;
 
 export function SideNav() {
@@ -263,7 +266,7 @@ export function SideNav() {
         />
       )}
 
-      {/* デスクトップ用サイドバー */}
+      {/* デスクトップサイドバー */}
       <aside
         ref={asideRef}
         onMouseEnter={() => updateExpanded(true)}
@@ -288,14 +291,14 @@ export function SideNav() {
         )}
       >
         {/* ロゴ */}
-        <div className="p-4 border-b border-border flex items-center h-20">
+        <div className="px-4 py-3 border-b border-border flex items-center h-16">
           <Link href="/" className="flex items-center gap-3 w-full">
-            <div className="w-12 h-12 flex items-center justify-center shrink-0">
+            <div className="w-10 h-10 flex items-center justify-center shrink-0">
               <Image
                 src="/images/e3-83-ad-e3-82-b42-20-281-29.png"
                 alt="Jacla logo"
-                width={40}
-                height={24}
+                width={36}
+                height={22}
                 className="object-contain"
               />
             </div>
@@ -312,7 +315,7 @@ export function SideNav() {
         </div>
 
         {/* メインナビゲーション */}
-        <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto no-scrollbar">
+        <nav className="flex-1 py-3 px-3 space-y-0.5 overflow-y-auto no-scrollbar">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive =
@@ -323,18 +326,18 @@ export function SideNav() {
                 key={item.id}
                 href={item.href}
                 className={cn(
-                  "flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 group relative",
+                  "flex items-center gap-2 px-3 py-2.5 rounded-lg transition-all duration-200 group relative",
                   isActive
                     ? "bg-foreground text-background"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
               >
                 <div className="w-6 h-6 flex items-center justify-center shrink-0">
-                  <Icon className="w-5 h-5" />
+                  <Icon className="w-6 h-6" />
                 </div>
                 <span
                   className={cn(
-                    "flex-1 font-medium text-sm whitespace-nowrap transition-all duration-300",
+                    "flex-1 font-medium text-[13px] whitespace-nowrap transition-all duration-300",
                     isExpanded ? "opacity-100" : "opacity-0 w-0 overflow-hidden"
                   )}
                 >
@@ -350,8 +353,8 @@ export function SideNav() {
           })}
         </nav>
 
-        {/* 下部ナビゲーション */}
-        <div className="py-4 px-3 border-t border-border space-y-3">
+        {/* 補助ナビゲーション */}
+        <div className="py-2 px-3 border-t border-border space-y-2">
           <div className="space-y-1">
             {utilityNavItems.map((item) => {
               const Icon = item.icon;
@@ -363,18 +366,18 @@ export function SideNav() {
                   key={item.id}
                   href={item.href}
                   className={cn(
-                    "flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 group relative",
+                    "flex items-center gap-2 px-3 py-2.5 rounded-lg transition-all duration-200 group relative",
                     isActive
                       ? "bg-foreground text-background"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   )}
                 >
                   <div className="w-6 h-6 flex items-center justify-center shrink-0">
-                    <Icon className="w-5 h-5" />
+                    <Icon className="w-6 h-6" />
                   </div>
                   <span
                     className={cn(
-                      "flex-1 font-medium text-sm whitespace-nowrap transition-all duration-300",
+                      "flex-1 font-medium text-[13px] whitespace-nowrap transition-all duration-300",
                       isExpanded ? "opacity-100" : "opacity-0 w-0 overflow-hidden"
                     )}
                   >
@@ -393,18 +396,18 @@ export function SideNav() {
               type="button"
               onClick={toggleTheme}
               className={cn(
-                "flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 group relative",
+                "flex items-center gap-2 px-3 py-2.5 rounded-lg transition-all duration-200 group relative",
                 "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
               aria-label="テーマを切り替える"
             >
               <div className="w-6 h-6 flex items-center justify-center shrink-0">
-                <Moon className="w-5 h-5 dark:hidden" />
-                <Sun className="w-5 h-5 hidden dark:block" />
+                <Moon className="w-6 h-6 dark:hidden" />
+                <Sun className="w-6 h-6 hidden dark:block" />
               </div>
               <span
                 className={cn(
-                  "flex-1 font-medium text-sm whitespace-nowrap transition-all duration-300",
+                  "flex-1 font-medium text-[13px] whitespace-nowrap transition-all duration-300",
                   isExpanded ? "opacity-100" : "opacity-0 w-0 overflow-hidden"
                 )}
               >
@@ -418,18 +421,18 @@ export function SideNav() {
             <Link
               href="/admin"
               className={cn(
-                "flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 group relative",
+                "flex items-center gap-2 px-3 py-2.5 rounded-lg transition-all duration-200 group relative",
                 pathname.startsWith("/admin")
                   ? "bg-primary text-primary-foreground"
                   : "text-primary hover:bg-primary/10"
               )}
             >
               <div className="w-6 h-6 flex items-center justify-center shrink-0">
-                <Settings className="w-5 h-5" />
+                <Settings className="w-6 h-6" />
               </div>
               <span
                 className={cn(
-                  "flex-1 font-medium text-sm whitespace-nowrap transition-all duration-300",
+                  "flex-1 font-medium text-[13px] whitespace-nowrap transition-all duration-300",
                   isExpanded ? "opacity-100" : "opacity-0 w-0 overflow-hidden"
                 )}
               >
@@ -446,14 +449,14 @@ export function SideNav() {
           <button
             type="button"
             onClick={handleLogout}
-            className="flex items-center gap-3 px-3 py-3 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all group relative"
+            className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all group relative"
           >
             <div className="w-6 h-6 flex items-center justify-center shrink-0">
-              <LogOut className="w-5 h-5" />
+              <LogOut className="w-6 h-6" />
             </div>
             <span
               className={cn(
-                "font-medium text-sm whitespace-nowrap transition-all duration-300",
+                "font-medium text-[13px] whitespace-nowrap transition-all duration-300",
                 isExpanded ? "opacity-100" : "opacity-0 w-0 overflow-hidden"
               )}
             >
@@ -515,7 +518,7 @@ export function SideNav() {
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   )}
                 >
-                  <Icon className="w-5 h-5 shrink-0" />
+                  <Icon className="w-6 h-6 shrink-0" />
                   <span className="text-sm font-medium truncate">{item.label}</span>
                 </Link>
               );
@@ -542,7 +545,7 @@ export function SideNav() {
                         : "text-muted-foreground hover:bg-muted hover:text-foreground"
                     )}
                   >
-                    <Icon className="w-5 h-5 shrink-0" />
+                    <Icon className="w-6 h-6 shrink-0" />
                     <span className="text-sm font-medium truncate">{item.label}</span>
                   </Link>
                 );
@@ -559,7 +562,7 @@ export function SideNav() {
                       : "text-primary hover:bg-primary/10"
                   )}
                 >
-                  <Settings className="w-5 h-5 shrink-0" />
+                  <Settings className="w-6 h-6 shrink-0" />
                   <span className="text-sm font-medium truncate">管理</span>
                 </Link>
               )}
@@ -578,9 +581,9 @@ export function SideNav() {
               className="flex items-center gap-3 px-5 py-3 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-all w-full"
               aria-label="テーマを切り替える"
             >
-              <div className="w-5 h-5 flex items-center justify-center shrink-0">
-                <Moon className="w-5 h-5 dark:hidden" />
-                <Sun className="w-5 h-5 hidden dark:block" />
+              <div className="w-6 h-6 flex items-center justify-center shrink-0">
+                <Moon className="w-6 h-6 dark:hidden" />
+                <Sun className="w-6 h-6 hidden dark:block" />
               </div>
               <span className="text-base font-medium">
                 <span className="dark:hidden">ダークモード</span>
@@ -594,7 +597,7 @@ export function SideNav() {
             onClick={handleLogout}
             className="flex items-center gap-3 px-5 py-3 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all w-full"
           >
-            <LogOut className="w-5 h-5 shrink-0" />
+            <LogOut className="w-6 h-6 shrink-0" />
             <span className="text-base font-medium">ログアウト</span>
           </button>
         </div>

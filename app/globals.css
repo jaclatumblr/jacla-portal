@@ -3,27 +3,27 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(0.965 0.01 280);
-  --foreground: oklch(0.2 0.02 280);
-  --card: oklch(0.98 0.0/*  */05 300);
-  --card-foreground: oklch(0.22 0.02 280);
-  --popover: oklch(0.98 0.005 300);
-  --popover-foreground: oklch(0.22 0.02 280);
+  --background: oklch(0.97 0.006 280);
+  --foreground: oklch(0.22 0.02 280);
+  --card: oklch(0.985 0.004 300);
+  --card-foreground: oklch(0.24 0.02 280);
+  --popover: oklch(0.985 0.004 300);
+  --popover-foreground: oklch(0.24 0.02 280);
   /* Magenta pink primary from Jacla logo */
-  --primary: oklch(0.63 0.23 330);
+  --primary: oklch(0.52 0.17 330);
   --primary-foreground: oklch(0.99 0.01 300);
   /* Gold accent from Jacla logo */
-  --secondary: oklch(0.82 0.1 80);
-  --secondary-foreground: oklch(0.28 0.04 80);
-  --muted: oklch(0.93 0.012 280);
-  --muted-foreground: oklch(0.5 0.02 300);
-  --accent: oklch(0.9 0.07 85);
-  --accent-foreground: oklch(0.3 0.05 85);
+  --secondary: oklch(0.6 0.09 80);
+  --secondary-foreground: oklch(0.28 0.03 80);
+  --muted: oklch(0.94 0.008 280);
+  --muted-foreground: oklch(0.48 0.015 300);
+  --accent: oklch(0.62 0.08 85);
+  --accent-foreground: oklch(0.3 0.04 85);
   --destructive: oklch(0.6 0.2 27);
   --destructive-foreground: oklch(0.99 0.01 300);
   --border: oklch(0.89 0.01 280);
   --input: oklch(0.89 0.01 280);
-  --ring: oklch(0.63 0.23 330);
+  --ring: oklch(0.52 0.17 330);
   --radius: 0.5rem;
   color-scheme: light;
 }
@@ -36,20 +36,20 @@
   --popover: oklch(0.15 0.02 280);
   --popover-foreground: oklch(0.97 0.005 300);
   /* Magenta pink primary from Jacla logo */
-  --primary: oklch(0.7 0.28 330);
+  --primary: oklch(0.66 0.22 330);
   --primary-foreground: oklch(0.1 0.02 300);
   /* Gold accent from Jacla logo */
-  --secondary: oklch(0.75 0.14 80);
-  --secondary-foreground: oklch(0.15 0.05 80);
+  --secondary: oklch(0.7 0.1 80);
+  --secondary-foreground: oklch(0.17 0.04 80);
   --muted: oklch(0.2 0.02 280);
   --muted-foreground: oklch(0.6 0.02 300);
-  --accent: oklch(0.75 0.14 85);
-  --accent-foreground: oklch(0.15 0.05 85);
+  --accent: oklch(0.7 0.1 85);
+  --accent-foreground: oklch(0.17 0.04 85);
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(1 0 0);
   --border: oklch(0.25 0.02 280);
   --input: oklch(0.2 0.02 280);
-  --ring: oklch(0.7 0.28 330);
+  --ring: oklch(0.66 0.22 330);
   --radius: 0.5rem;
   color-scheme: dark;
 }
@@ -92,6 +92,19 @@
   }
   main {
     min-width: 0;
+  }
+}
+
+.theme-transition,
+.theme-transition * {
+  transition: background-color 520ms ease, color 520ms ease, border-color 520ms ease,
+    text-decoration-color 520ms ease, fill 520ms ease, stroke 520ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-transition,
+  .theme-transition * {
+    transition: none !important;
   }
 }
 

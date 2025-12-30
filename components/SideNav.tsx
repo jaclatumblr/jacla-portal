@@ -88,7 +88,12 @@ export function SideNav() {
   };
 
   const toggleTheme = () => {
-    const isDark = document.documentElement.classList.contains("dark");
+    const root = document.documentElement;
+    root.classList.add("theme-transition");
+    window.setTimeout(() => {
+      root.classList.remove("theme-transition");
+    }, 520);
+    const isDark = root.classList.contains("dark");
     setTheme(isDark ? "light" : "dark");
   };
 

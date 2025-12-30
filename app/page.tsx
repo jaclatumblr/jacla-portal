@@ -387,28 +387,6 @@ export default function HomePage() {
             </div>
           </section>
 
-          <footer className="py-8 md:py-12 border-t border-border">
-            <div className="container mx-auto px-4 sm:px-6">
-              <div className="flex flex-col md:flex-row items-center justify-between gap-4 md:gap-6">
-                <div className="flex items-center gap-4">
-                  <Image
-                    src="/images/e3-83-ad-e3-82-b42-20-281-29.png"
-                    alt="Jacla logo"
-                    width={60}
-                    height={36}
-                    className="object-contain w-12 md:w-[60px]"
-                  />
-                  <div>
-                    <p className="text-sm font-medium">総合音楽部 Jacla</p>
-                    <p className="text-xs text-muted-foreground">部員ポータル</p>
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground text-center md:text-right">
-                  ©Tokyo University of Technology - 総合音楽部 Jacla. All rights reserved.
-                </p>
-              </div>
-            </div>
-          </footer>
         </main>
       </div>
     </AuthGuard>

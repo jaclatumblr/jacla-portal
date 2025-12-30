@@ -114,6 +114,12 @@ type ProfileOption = {
   leader: string | null;
 };
 
+type ProfilePartRow = {
+  profile_id: string;
+  part: string | null;
+  is_primary?: boolean | null;
+};
+
 type BandMemberRow = {
   id: string;
   band_id: string;
@@ -408,10 +414,12 @@ export default function RepertoireSubmitPage() {
   const [bandMembersLoading, setBandMembersLoading] = useState(false);
   const [savingStage, setSavingStage] = useState(false);
   const [profiles, setProfiles] = useState<ProfileOption[]>([]);
+  const [subPartsByProfileId, setSubPartsByProfileId] = useState<Record<string, string[]>>({});
   const [memberSearch, setMemberSearch] = useState("");
   const [addMemberId, setAddMemberId] = useState("");
   const [addMemberInstrument, setAddMemberInstrument] = useState("");
   const [addingMember, setAddingMember] = useState(false);
+  const prevAddMemberIdRef = useRef<string>("");
   const [draggingMemberId, setDraggingMemberId] = useState<string | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const dragState = useRef<
@@ -493,6 +501,24 @@ export default function RepertoireSubmitPage() {
 
     return groups.filter((group) => group.items.length > 0);
   }, [filteredProfiles]);
+
+  const addMemberInstrumentOptions = useMemo(() => {
+    if (!addMemberId) return [];
+    const selectedProfile = profiles.find((profile) => profile.id === addMemberId);
+    if (!selectedProfile) return [];
+    const options: string[] = [];
+    const mainPart = selectedProfile.part?.trim();
+    if (mainPart && mainPart !== "none") {
+      options.push(mainPart);
+    }
+    const subParts = subPartsByProfileId[selectedProfile.id] ?? [];
+    subParts.forEach((part) => {
+      const value = part?.trim();
+      if (!value || value === "none") return;
+      if (!options.includes(value)) options.push(value);
+    });
+    return options;
+  }, [addMemberId, profiles, subPartsByProfileId]);
 
   const bandCountLabel = (bandId: string) => songCounts[bandId] ?? 0;
 
@@ -751,6 +777,7 @@ export default function RepertoireSubmitPage() {
         console.error(error);
         toast.error("部員情報の取得に失敗しました。");
         setProfiles([]);
+        setSubPartsByProfileId({});
         return;
       }
       if (leaderError) {
@@ -760,12 +787,46 @@ export default function RepertoireSubmitPage() {
         (leaderRows ?? []).map((row) => (row as { profile_id?: string }).profile_id).filter(Boolean)
       );
       const nextProfiles = (data ?? []) as ProfileOption[];
-      setProfiles(
-        nextProfiles.filter(
-          (profile) =>
-            !adminIds.has(profile.id) && !adminLeaderSet.has(profile.leader ?? "")
-        )
+      const filtered = nextProfiles.filter(
+        (profile) => !adminIds.has(profile.id) && !adminLeaderSet.has(profile.leader ?? "")
       );
+      setProfiles(filtered);
+
+      if (filtered.length === 0) {
+        setSubPartsByProfileId({});
+        return;
+      }
+
+      const { data: partsData, error: partsError } = await supabase
+        .from("profile_parts")
+        .select("profile_id, part, is_primary")
+        .in(
+          "profile_id",
+          filtered.map((profile) => profile.id)
+        );
+
+      if (cancelled) return;
+
+      if (partsError) {
+        console.error(partsError);
+        setSubPartsByProfileId({});
+        return;
+      }
+
+      const nextMap: Record<string, string[]> = {};
+      (partsData ?? []).forEach((row) => {
+        const entry = row as ProfilePartRow;
+        if (!entry.profile_id) return;
+        const partValue = entry.part?.trim();
+        if (!partValue || partValue === "none") return;
+        if (entry.is_primary) return;
+        const bucket = nextMap[entry.profile_id] ?? [];
+        if (!bucket.includes(partValue)) {
+          bucket.push(partValue);
+        }
+        nextMap[entry.profile_id] = bucket;
+      });
+      setSubPartsByProfileId(nextMap);
     })();
 
     return () => {
@@ -932,14 +993,19 @@ export default function RepertoireSubmitPage() {
   useEffect(() => {
     if (!addMemberId) {
       setAddMemberInstrument("");
+      prevAddMemberIdRef.current = "";
       return;
     }
-    if (addMemberInstrument.trim()) return;
-    const selectedProfile = profiles.find((profile) => profile.id === addMemberId);
-    if (selectedProfile?.part) {
-      setAddMemberInstrument(selectedProfile.part);
+    const nextDefault = addMemberInstrumentOptions[0] ?? "";
+    if (prevAddMemberIdRef.current !== addMemberId) {
+      setAddMemberInstrument(nextDefault);
+      prevAddMemberIdRef.current = addMemberId;
+      return;
     }
-  }, [addMemberId, addMemberInstrument, profiles]);
+    if (!addMemberInstrument || !addMemberInstrumentOptions.includes(addMemberInstrument)) {
+      setAddMemberInstrument(nextDefault);
+    }
+  }, [addMemberId, addMemberInstrument, addMemberInstrumentOptions]);
 
   useEffect(() => {
     return () => {
@@ -1185,6 +1251,24 @@ export default function RepertoireSubmitPage() {
     setAddMemberInstrument("");
     setMemberSearch("");
     setAddingMember(false);
+  };
+
+  const handleRemoveMember = async (memberId: string) => {
+    if (!selectedBandId || !canEditBandMembers) return;
+    const target = bandMembers.find((member) => member.id === memberId);
+    if (!target) return;
+    const { error } = await supabase.from("band_members").delete().eq("id", memberId);
+    if (error) {
+      console.error(error);
+      toast.error("メンバーの削除に失敗しました。");
+      return;
+    }
+    setBandMembers((prev) => prev.filter((member) => member.id !== memberId));
+    if (addMemberId === target.userId) {
+      setAddMemberId("");
+      setAddMemberInstrument("");
+    }
+    toast.success("メンバーを削除しました。");
   };
 
   const saveBandMembers = async (showToast: boolean) => {
@@ -2091,22 +2175,6 @@ export default function RepertoireSubmitPage() {
                               )}
                               保存
                             </Button>
-                            {selectedBandId && canDeleteBand && (
-                              <Button
-                                type="button"
-                                variant="destructive"
-                                onClick={handleDeleteBand}
-                                disabled={deletingBand}
-                                className="gap-2"
-                              >
-                                {deletingBand ? (
-                                  <Loader2 className="w-4 h-4 animate-spin" />
-                                ) : (
-                                  <Trash2 className="w-4 h-4" />
-                                )}
-                                バンド削除
-                              </Button>
-                            )}
                           </div>
                           {selectedBandId && !canEditBandMembers && (
                             <p className="text-xs text-muted-foreground">
@@ -2155,6 +2223,24 @@ export default function RepertoireSubmitPage() {
                                   disabled={!canEditBandMembers}
                                 />
                               </label>
+                            </div>
+                          )}
+                          {selectedBandId && canDeleteBand && (
+                            <div className="pt-2 flex justify-end">
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                onClick={handleDeleteBand}
+                                disabled={deletingBand}
+                                className="gap-2"
+                              >
+                                {deletingBand ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="w-4 h-4" />
+                                )}
+                                バンド削除
+                              </Button>
                             </div>
                           )}
                         </CardContent>
@@ -2501,13 +2587,23 @@ export default function RepertoireSubmitPage() {
                                       ))}
                                     </select>
                                     <div className="flex flex-col sm:flex-row gap-2">
-                                      <Input
+                                      <select
                                         value={addMemberInstrument}
                                         onChange={(event) =>
                                           setAddMemberInstrument(event.target.value)
                                         }
-                                        placeholder="担当パート (自由入力)"
-                                      />
+                                        disabled={
+                                          !addMemberId || addMemberInstrumentOptions.length === 0
+                                        }
+                                        className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
+                                      >
+                                        <option value="">担当パートを選択</option>
+                                        {addMemberInstrumentOptions.map((part) => (
+                                          <option key={part} value={part}>
+                                            {part}
+                                          </option>
+                                        ))}
+                                      </select>
                                       <Button
                                         type="submit"
                                         disabled={
@@ -2537,13 +2633,14 @@ export default function RepertoireSubmitPage() {
                                         <TableHead>返しの希望</TableHead>
                                         <TableHead>備考</TableHead>
                                         <TableHead className="text-center">MC</TableHead>
+                                        <TableHead className="text-right">削除</TableHead>
                                       </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                       {bandMembers.length === 0 ? (
                                         <TableRow>
                                           <TableCell
-                                            colSpan={5}
+                                            colSpan={6}
                                             className="text-center text-sm text-muted-foreground"
                                           >
                                             メンバーが登録されていません。
@@ -2602,6 +2699,18 @@ export default function RepertoireSubmitPage() {
                                                 }
                                                 disabled={!canEditBandMembers}
                                               />
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => handleRemoveMember(member.id)}
+                                                disabled={!canEditBandMembers}
+                                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                              >
+                                                <Trash2 className="h-4 w-4" />
+                                              </Button>
                                             </TableCell>
                                           </TableRow>
                                         ))

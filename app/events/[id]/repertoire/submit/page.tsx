@@ -24,11 +24,16 @@ import {
   ArrowDown,
   ArrowLeft,
   ArrowUp,
+  Grid3x3,
   GripVertical,
+  Hand,
   Loader2,
   Plus,
+  RotateCcw,
   Save,
   Trash2,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { SideNav } from "@/components/SideNav";
@@ -127,6 +132,8 @@ type BandMemberRow = {
   instrument: string;
   position_x: number | null;
   position_y: number | null;
+  order_index?: number | null;
+  created_at?: string | null;
   monitor_request?: string | null;
   monitor_note?: string | null;
   is_mc?: boolean | null;
@@ -153,6 +160,7 @@ type StageMember = {
   instrument: string;
   x: number;
   y: number;
+  orderIndex?: number | null;
   monitorRequest: string;
   monitorNote: string;
   isMc: boolean;
@@ -165,6 +173,23 @@ type StageItem = {
   x: number;
   y: number;
   fixed?: boolean;
+};
+
+type RepertoireDraft = {
+  eventId: string;
+  bandId: string;
+  updatedAt: number;
+  bandName: string;
+  representativeName: string;
+  generalNote: string;
+  soundNote: string;
+  lightingNote: string;
+  lightingTotal: string;
+  repertoireStatus: RepertoireStatus;
+  songs: SongEntry[];
+  removedSongIds: string[];
+  stageItems: StageItem[];
+  bandMembers: StageMember[];
 };
 
 type DragHandleProps = Record<string, any>;
@@ -259,71 +284,88 @@ const isTemp = (id: string) => String(id).startsWith("temp-");
 type StageCategory = "drums" | "bass" | "guitar" | "keyboard" | "wind" | "vocal" | "other";
 
 const stageSlots: Record<StageCategory, { x: number; y: number }[]> = {
-  drums: [{ x: 50, y: 34 }],
-  bass: [{ x: 35, y: 48 }],
+  drums: [{ x: 52, y: 26 }],
+  bass: [{ x: 30, y: 52 }],
   guitar: [
-    { x: 65, y: 52 },
-    { x: 75, y: 46 },
+    { x: 72, y: 52 },
+    { x: 78, y: 44 },
   ],
-  keyboard: [{ x: 82, y: 60 }],
+  keyboard: [{ x: 70, y: 64 }],
   vocal: [
-    { x: 50, y: 82 },
-    { x: 40, y: 82 },
-    { x: 60, y: 82 },
+    { x: 50, y: 84 },
+    { x: 40, y: 84 },
+    { x: 60, y: 84 },
   ],
   wind: [
-    { x: 25, y: 28 },
-    { x: 40, y: 28 },
-    { x: 55, y: 28 },
-    { x: 70, y: 28 },
-    { x: 25, y: 40 },
-    { x: 40, y: 40 },
-    { x: 55, y: 40 },
-    { x: 70, y: 40 },
-    { x: 25, y: 52 },
-    { x: 40, y: 52 },
-    { x: 55, y: 52 },
-    { x: 70, y: 52 },
+    { x: 50, y: 64 },
+    { x: 42, y: 64 },
+    { x: 58, y: 64 },
+    { x: 46, y: 56 },
+    { x: 54, y: 56 },
+    { x: 40, y: 48 },
+    { x: 60, y: 48 },
+    { x: 34, y: 40 },
+    { x: 66, y: 40 },
+    { x: 30, y: 32 },
+    { x: 70, y: 32 },
+    { x: 24, y: 24 },
+    { x: 76, y: 24 },
   ],
   other: [
-    { x: 15, y: 60 },
-    { x: 85, y: 60 },
-    { x: 15, y: 72 },
-    { x: 85, y: 72 },
+    { x: 18, y: 60 },
+    { x: 82, y: 60 },
+    { x: 18, y: 72 },
+    { x: 82, y: 72 },
   ],
 };
 
 const stagePresets: { label: string; dashed: boolean }[] = [
-  { label: "Passive", dashed: true },
-  { label: "Hi・Low", dashed: true },
   { label: "Marshall", dashed: true },
   { label: "JC", dashed: true },
-  { label: "LINE1", dashed: true },
-  { label: "LINE2", dashed: true },
-  { label: "LINE3", dashed: true },
-  { label: "LINE4", dashed: true },
-  { label: "管1", dashed: true },
-  { label: "管2", dashed: true },
-  { label: "Gt.1", dashed: false },
-  { label: "Gt.2", dashed: false },
-  { label: "Ba.", dashed: false },
-  { label: "Dr.", dashed: false },
-  { label: "Key.", dashed: false },
-  { label: "W.syn", dashed: false },
+  { label: "Active", dashed: true },
+  { label: "Passive", dashed: true },
 ];
 
 const stagePresetPositions: Record<string, { x: number; y: number }> = {
-  Marshall: { x: 78, y: 36 },
-  JC: { x: 78, y: 52 },
+  Marshall: { x: 72, y: 40 },
+  JC: { x: 64, y: 40 },
+  Active: { x: 36, y: 40 },
+  Passive: { x: 28, y: 40 },
 };
 
 const clampPercent = (value: number) => Math.min(95, Math.max(5, value));
+const GRID_STEP = 2.5;
+const MIN_STAGE_ZOOM = 0.7;
+const MAX_STAGE_ZOOM = 2.4;
+
+const snapToGrid = (value: number) => Math.round(value / GRID_STEP) * GRID_STEP;
+
+const getCollisionRadius = (type: "member" | "item" | "fixed", id?: string) => {
+  if (type === "fixed") {
+    if (id?.startsWith("fixed-main")) return 8;
+    if (id?.startsWith("fixed-mon")) return 7;
+    return 7;
+  }
+  if (type === "item") return 6.5;
+  return 6;
+};
 
 const normalizePartText = (value: string | null | undefined) =>
   (value ?? "").toLowerCase().replace(/\s+/g, "");
 
 const includesAny = (value: string, keywords: string[]) =>
   keywords.some((keyword) => value.includes(keyword));
+
+const splitMemberLabel = (value: string | null | undefined) => {
+  const parts = (value ?? "")
+    .split("/")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return {
+    base: parts[0] ?? "",
+    suffix: parts.slice(1).join(" / "),
+  };
+};
 
 const getStageCategory = (value: string | null | undefined): StageCategory => {
   const text = normalizePartText(value);
@@ -374,6 +416,12 @@ const getAutoPosition = (category: StageCategory, index: number) => {
   return getFallbackPosition(index - slots.length);
 };
 
+const withMemberOrder = (members: StageMember[]) =>
+  members.map((member, index) => ({
+    ...member,
+    orderIndex: index + 1,
+  }));
+
 export default function RepertoireSubmitPage() {
   const params = useParams<{ id: string }>();
   const eventId = params?.id as string | undefined;
@@ -403,6 +451,7 @@ export default function RepertoireSubmitPage() {
   const [deletingBand, setDeletingBand] = useState(false);
   const [savingPaInfo, setSavingPaInfo] = useState(false);
   const [savingLightingInfo, setSavingLightingInfo] = useState(false);
+  const [savingAll, setSavingAll] = useState(false);
   const [newBandName, setNewBandName] = useState("");
   const [creatingBand, setCreatingBand] = useState(false);
   const [joinBandId, setJoinBandId] = useState("");
@@ -422,6 +471,9 @@ export default function RepertoireSubmitPage() {
   const prevAddMemberIdRef = useRef<string>("");
   const [draggingMemberId, setDraggingMemberId] = useState<string | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const stageWrapperRef = useRef<HTMLDivElement | null>(null);
+  const stageViewportRef = useRef<HTMLDivElement | null>(null);
+  const memberEditInputRef = useRef<HTMLInputElement | null>(null);
   const dragState = useRef<
     { id: string; type: "member" | "item"; offsetX: number; offsetY: number } | null
   >(null);
@@ -429,7 +481,40 @@ export default function RepertoireSubmitPage() {
   const dragPendingRef = useRef<
     { id: string; type: "member" | "item"; x: number; y: number } | null
   >(null);
+  const stagePointerMapRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchStateRef = useRef<{
+    startDistance: number;
+    startZoom: number;
+    startPan: { x: number; y: number };
+    stageCenter: { x: number; y: number };
+  } | null>(null);
+  const panStateRef = useRef<{
+    pointerId: number;
+    originX: number;
+    originY: number;
+    startX: number;
+    startY: number;
+  } | null>(null);
   const [stageItems, setStageItems] = useState<StageItem[]>([]);
+  const [selectedStageItemId, setSelectedStageItemId] = useState<string | null>(null);
+  const [stageEditPreset, setStageEditPreset] = useState("custom");
+  const [stageEditLabel, setStageEditLabel] = useState("");
+  const [isStageEditOpen, setIsStageEditOpen] = useState(false);
+  const [stageEditAnchor, setStageEditAnchor] = useState<{ left: number; top: number } | null>(
+    null
+  );
+  const [selectedMemberEditId, setSelectedMemberEditId] = useState<string | null>(null);
+  const [memberEditSuffix, setMemberEditSuffix] = useState("");
+  const [isMemberEditOpen, setIsMemberEditOpen] = useState(false);
+  const [memberEditAnchor, setMemberEditAnchor] = useState<{ left: number; top: number } | null>(
+    null
+  );
+  const [stageZoom, setStageZoom] = useState(1);
+  const [stagePan, setStagePan] = useState({ x: 0, y: 0 });
+  const [panMode, setPanMode] = useState(false);
+  const [snapEnabled, setSnapEnabled] = useState(true);
+  const [isCoarsePointer, setIsCoarsePointer] = useState(false);
+  const [isShiftPressed, setIsShiftPressed] = useState(false);
   const [stagePreset, setStagePreset] = useState(stagePresets[0]?.label ?? "");
   const [customStageLabel, setCustomStageLabel] = useState("");
   const [bandName, setBandName] = useState("");
@@ -439,12 +524,70 @@ export default function RepertoireSubmitPage() {
   const [generalNote, setGeneralNote] = useState("");
   const [lightingTotal, setLightingTotal] = useState("");
   const [printMode, setPrintMode] = useState<"pa" | "lighting" | null>(null);
+  const [currentUserName, setCurrentUserName] = useState("");
   const urlFetchTimers = useRef<Map<string, number>>(new Map());
+  const [autoSavedAt, setAutoSavedAt] = useState<number | null>(null);
+  const [autoSaveReadyKey, setAutoSaveReadyKey] = useState<string | null>(null);
+  const autoSaveTimerRef = useRef<number | null>(null);
+  const skipNextAutoSaveRef = useRef(false);
 
   const selectedBand = useMemo(
     () => bands.find((band) => band.id === selectedBandId) ?? null,
     [bands, selectedBandId]
   );
+
+  const autoSaveKey = useMemo(() => {
+    if (!eventId || !selectedBandId) return null;
+    return `repertoireDraft:${eventId}:${selectedBandId}`;
+  }, [eventId, selectedBandId]);
+
+  const autoSaveLabel = useMemo(() => {
+    if (!autoSavedAt) return "";
+    return new Date(autoSavedAt).toLocaleTimeString("ja-JP", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }, [autoSavedAt]);
+
+  const effectiveSnap = useMemo(
+    () => (isCoarsePointer ? true : snapEnabled && !isShiftPressed),
+    [isCoarsePointer, snapEnabled, isShiftPressed]
+  );
+
+  useEffect(() => {
+    setAutoSavedAt(null);
+  }, [autoSaveKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const media = window.matchMedia("(pointer: coarse)");
+    const update = () => setIsCoarsePointer(media.matches);
+    update();
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", update);
+      return () => media.removeEventListener("change", update);
+    }
+    media.addListener(update);
+    return () => media.removeListener(update);
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Shift") setIsShiftPressed(true);
+    };
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.key === "Shift") setIsShiftPressed(false);
+    };
+    const handleBlur = () => setIsShiftPressed(false);
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", handleBlur);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", handleBlur);
+    };
+  }, []);
 
   const canManageBands =
     event?.event_type === "live" || event?.event_type === "camp";
@@ -502,6 +645,22 @@ export default function RepertoireSubmitPage() {
     return groups.filter((group) => group.items.length > 0);
   }, [filteredProfiles]);
 
+  const selectedStageItem = useMemo(
+    () => stageItems.find((item) => item.id === selectedStageItemId) ?? null,
+    [stageItems, selectedStageItemId]
+  );
+
+  const selectedMemberEdit = useMemo(
+    () => bandMembers.find((member) => member.id === selectedMemberEditId) ?? null,
+    [bandMembers, selectedMemberEditId]
+  );
+  const memberEditBaseLabel = useMemo(() => {
+    if (!selectedMemberEdit) return "";
+    const raw = selectedMemberEdit.instrument || selectedMemberEdit.part || "";
+    const { base } = splitMemberLabel(raw);
+    return base || selectedMemberEdit.part || selectedMemberEdit.instrument || "Part";
+  }, [selectedMemberEdit]);
+
   const addMemberInstrumentOptions = useMemo(() => {
     if (!addMemberId) return [];
     const selectedProfile = profiles.find((profile) => profile.id === addMemberId);
@@ -524,10 +683,10 @@ export default function RepertoireSubmitPage() {
 
   const fixedStageItems = useMemo<StageItem[]>(() => {
     const items: StageItem[] = [
-      { id: "fixed-main-l", label: "MAIN L", dashed: true, x: 16, y: 82, fixed: true },
-      { id: "fixed-main-r", label: "MAIN R", dashed: true, x: 84, y: 82, fixed: true },
+      { id: "fixed-main-l", label: "MAIN L", dashed: true, x: 18, y: 84, fixed: true },
+      { id: "fixed-main-r", label: "MAIN R", dashed: true, x: 82, y: 84, fixed: true },
       { id: "fixed-mon-1", label: "MON1", dashed: true, x: 12, y: 68, fixed: true },
-      { id: "fixed-mon-2", label: "MON2", dashed: true, x: 72, y: 16, fixed: true },
+      { id: "fixed-mon-2", label: "MON2", dashed: true, x: 58, y: 22, fixed: true },
       { id: "fixed-mon-3", label: "MON3", dashed: true, x: 50, y: 82, fixed: true },
       { id: "fixed-mon-4", label: "MON4", dashed: true, x: 88, y: 68, fixed: true },
     ];
@@ -536,6 +695,44 @@ export default function RepertoireSubmitPage() {
     }
     return items;
   }, [bandMembers]);
+
+  const stageOccupants = useMemo(() => {
+    const occupants: Array<{
+      id: string;
+      type: "member" | "item" | "fixed";
+      x: number;
+      y: number;
+      radius: number;
+    }> = [];
+    fixedStageItems.forEach((item) => {
+      occupants.push({
+        id: item.id,
+        type: "fixed",
+        x: item.x,
+        y: item.y,
+        radius: getCollisionRadius("fixed", item.id),
+      });
+    });
+    stageItems.forEach((item) => {
+      occupants.push({
+        id: item.id,
+        type: "item",
+        x: item.x,
+        y: item.y,
+        radius: getCollisionRadius("item"),
+      });
+    });
+    bandMembers.forEach((member) => {
+      occupants.push({
+        id: member.id,
+        type: "member",
+        x: member.x,
+        y: member.y,
+        radius: getCollisionRadius("member"),
+      });
+    });
+    return occupants;
+  }, [bandMembers, fixedStageItems, stageItems]);
 
   const orderedSongs = useMemo(() => orderEntries(songs), [songs]);
   const totalDurationSec = useMemo(
@@ -592,7 +789,7 @@ export default function RepertoireSubmitPage() {
     const { data, error } = await supabase
       .from("band_members")
       .select(
-        "id, band_id, user_id, instrument, position_x, position_y, monitor_request, monitor_note, is_mc, profiles(display_name, real_name, part)"
+        "id, band_id, user_id, instrument, position_x, position_y, order_index, created_at, monitor_request, monitor_note, is_mc, profiles(display_name, real_name, part)"
       )
       .eq("band_id", bandId)
       .order("created_at", { ascending: true });
@@ -614,7 +811,15 @@ export default function RepertoireSubmitPage() {
       other: 0,
     };
 
-    const nextMembers = (data ?? []).map((row) => {
+    const rows = (data ?? []) as BandMemberRow[];
+    const sortedRows = [...rows].sort((a, b) => {
+      const orderA = a.order_index ?? Number.MAX_SAFE_INTEGER;
+      const orderB = b.order_index ?? Number.MAX_SAFE_INTEGER;
+      if (orderA !== orderB) return orderA - orderB;
+      return (a.created_at ?? "").localeCompare(b.created_at ?? "");
+    });
+
+    const nextMembers = sortedRows.map((row, index) => {
       const memberRow = row as BandMemberRow;
       const profile = Array.isArray(memberRow.profiles)
         ? memberRow.profiles[0] ?? null
@@ -622,8 +827,8 @@ export default function RepertoireSubmitPage() {
       const instrument = memberRow.instrument ?? "";
       const partLabel = instrument || profile?.part || "";
       const category = getStageCategory(partLabel);
-      const index = counters[category]++;
-      const fallback = getAutoPosition(category, index);
+      const categoryIndex = counters[category]++;
+      const fallback = getAutoPosition(category, categoryIndex);
       const x = memberRow.position_x ?? fallback.x;
       const y = memberRow.position_y ?? fallback.y;
       return {
@@ -635,13 +840,14 @@ export default function RepertoireSubmitPage() {
         instrument,
         x,
         y,
+        orderIndex: memberRow.order_index ?? index + 1,
         monitorRequest: memberRow.monitor_request ?? "",
         monitorNote: memberRow.monitor_note ?? "",
         isMc: Boolean(memberRow.is_mc),
       } satisfies StageMember;
     });
 
-    setBandMembers(nextMembers);
+    setBandMembers(withMemberOrder(nextMembers));
     setBandMembersLoading(false);
   }, []);
 
@@ -687,6 +893,7 @@ export default function RepertoireSubmitPage() {
           event_id: eventId,
           name,
           created_by: userId,
+          representative_name: currentUserName.trim() || null,
           is_approved: false,
         },
       ])
@@ -732,6 +939,7 @@ export default function RepertoireSubmitPage() {
         band_id: bandId,
         user_id: userId,
         instrument,
+        order_index: null,
       },
     ]);
     if (error) {
@@ -776,6 +984,12 @@ export default function RepertoireSubmitPage() {
       if (error) {
         console.error(error);
         toast.error("部員情報の取得に失敗しました。");
+        const fallbackName =
+          session.user.user_metadata?.full_name ??
+          session.user.user_metadata?.name ??
+          session.user.email ??
+          "";
+        setCurrentUserName(fallbackName);
         setProfiles([]);
         setSubPartsByProfileId({});
         return;
@@ -787,6 +1001,15 @@ export default function RepertoireSubmitPage() {
         (leaderRows ?? []).map((row) => (row as { profile_id?: string }).profile_id).filter(Boolean)
       );
       const nextProfiles = (data ?? []) as ProfileOption[];
+      const fallbackName =
+        session.user.user_metadata?.full_name ??
+        session.user.user_metadata?.name ??
+        session.user.email ??
+        "";
+      const currentProfile = nextProfiles.find((profile) => profile.id === session.user.id);
+      const resolvedName =
+        currentProfile?.real_name ?? currentProfile?.display_name ?? fallbackName;
+      setCurrentUserName(resolvedName);
       const filtered = nextProfiles.filter(
         (profile) => !adminIds.has(profile.id) && !adminLeaderSet.has(profile.leader ?? "")
       );
@@ -930,6 +1153,10 @@ export default function RepertoireSubmitPage() {
       setAddMemberId("");
       setAddMemberInstrument("");
       setMemberSearch("");
+      setSelectedStageItemId(null);
+      setIsStageEditOpen(false);
+      setSelectedMemberEditId(null);
+      setIsMemberEditOpen(false);
       return;
     }
     void loadBandMembers(selectedBandId);
@@ -954,7 +1181,18 @@ export default function RepertoireSubmitPage() {
       return;
     }
     setBandName(selectedBand.name ?? "");
-    setRepresentativeName(selectedBand.representative_name ?? "");
+    setSelectedStageItemId(null);
+    setIsStageEditOpen(false);
+    setSelectedMemberEditId(null);
+    setIsMemberEditOpen(false);
+    const saved = selectedBand.representative_name ?? "";
+    if (saved.trim()) {
+      setRepresentativeName(saved);
+    } else if (selectedBand.created_by === userId && currentUserName.trim()) {
+      setRepresentativeName(currentUserName);
+    } else {
+      setRepresentativeName("");
+    }
     setSoundNote(selectedBand.sound_note ?? "");
     setLightingNote(selectedBand.lighting_note ?? "");
     setGeneralNote(selectedBand.general_note ?? "");
@@ -988,7 +1226,209 @@ export default function RepertoireSubmitPage() {
     } else {
       setStageItems([]);
     }
-  }, [selectedBand]);
+  }, [selectedBand, currentUserName, userId]);
+
+  useEffect(() => {
+    if (!autoSaveKey || autoSaveReadyKey === autoSaveKey) return;
+    if (!selectedBandId || songsLoading || bandMembersLoading) return;
+    try {
+      const raw = localStorage.getItem(autoSaveKey);
+      if (raw) {
+        const draft = JSON.parse(raw) as Partial<RepertoireDraft>;
+        if (draft.bandId === selectedBandId) {
+          if (typeof draft.bandName === "string") setBandName(draft.bandName);
+          if (typeof draft.representativeName === "string") {
+            setRepresentativeName(draft.representativeName);
+          }
+          if (typeof draft.generalNote === "string") setGeneralNote(draft.generalNote);
+          if (typeof draft.soundNote === "string") setSoundNote(draft.soundNote);
+          if (typeof draft.lightingNote === "string") setLightingNote(draft.lightingNote);
+          if (typeof draft.lightingTotal === "string") setLightingTotal(draft.lightingTotal);
+          if (draft.repertoireStatus === "draft" || draft.repertoireStatus === "submitted") {
+            setRepertoireStatus(draft.repertoireStatus);
+          }
+          if (Array.isArray(draft.songs)) setSongs(draft.songs);
+          if (Array.isArray(draft.removedSongIds)) setRemovedIds(draft.removedSongIds);
+          if (Array.isArray(draft.stageItems)) setStageItems(draft.stageItems);
+          if (Array.isArray(draft.bandMembers)) setBandMembers(draft.bandMembers);
+          if (typeof draft.updatedAt === "number") setAutoSavedAt(draft.updatedAt);
+          toast.info("一時保存を復元しました。");
+        }
+      }
+    } catch {
+      // noop
+    }
+    setAutoSaveReadyKey(autoSaveKey);
+  }, [
+    autoSaveKey,
+    autoSaveReadyKey,
+    bandMembersLoading,
+    selectedBandId,
+    songsLoading,
+  ]);
+
+  useEffect(() => {
+    if (!autoSaveKey || autoSaveReadyKey !== autoSaveKey) return;
+    if (!selectedBandId || loading || songsLoading || bandMembersLoading || savingAll)
+      return;
+    if (skipNextAutoSaveRef.current) {
+      skipNextAutoSaveRef.current = false;
+      return;
+    }
+    if (autoSaveTimerRef.current) {
+      window.clearTimeout(autoSaveTimerRef.current);
+    }
+    const draft: RepertoireDraft = {
+      eventId: eventId ?? "",
+      bandId: selectedBandId,
+      updatedAt: Date.now(),
+      bandName,
+      representativeName,
+      generalNote,
+      soundNote,
+      lightingNote,
+      lightingTotal,
+      repertoireStatus,
+      songs,
+      removedSongIds: removedIds,
+      stageItems,
+      bandMembers,
+    };
+    autoSaveTimerRef.current = window.setTimeout(() => {
+      try {
+        localStorage.setItem(autoSaveKey, JSON.stringify(draft));
+        setAutoSavedAt(draft.updatedAt);
+      } catch {
+        // noop
+      }
+    }, 900);
+
+    return () => {
+      if (autoSaveTimerRef.current) {
+        window.clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, [
+    autoSaveKey,
+    autoSaveReadyKey,
+    bandMembers,
+    bandMembersLoading,
+    bandName,
+    eventId,
+    generalNote,
+    lightingNote,
+    lightingTotal,
+    loading,
+    removedIds,
+    repertoireStatus,
+    representativeName,
+    selectedBandId,
+    savingAll,
+    songs,
+    songsLoading,
+    soundNote,
+    stageItems,
+  ]);
+
+  useEffect(() => {
+    if (!selectedStageItemId) return;
+    if (!stageItems.some((item) => item.id === selectedStageItemId)) {
+      setSelectedStageItemId(null);
+      setIsStageEditOpen(false);
+    }
+  }, [stageItems, selectedStageItemId]);
+
+  useEffect(() => {
+    if (!selectedMemberEditId) return;
+    if (!bandMembers.some((member) => member.id === selectedMemberEditId)) {
+      setSelectedMemberEditId(null);
+      setIsMemberEditOpen(false);
+    }
+  }, [bandMembers, selectedMemberEditId]);
+
+  useEffect(() => {
+    if (
+      !isStageEditOpen ||
+      !selectedStageItem ||
+      !stageWrapperRef.current
+    ) {
+      setStageEditAnchor(null);
+      return;
+    }
+    const metrics = getStageMetrics();
+    if (!metrics) {
+      setStageEditAnchor(null);
+      return;
+    }
+    const wrapperRect = stageWrapperRef.current.getBoundingClientRect();
+    const anchorX =
+      (selectedStageItem.x / 100) * metrics.baseWidth * stageZoom +
+      stagePan.x +
+      (metrics.viewportRect.left - wrapperRect.left);
+    const anchorY =
+      (selectedStageItem.y / 100) * metrics.baseHeight * stageZoom +
+      stagePan.y +
+      (metrics.viewportRect.top - wrapperRect.top);
+    const panelWidth = 240;
+    const panelHeight = 190;
+    let left = anchorX + 16;
+    if (left + panelWidth > wrapperRect.width - 8) {
+      left = anchorX - panelWidth - 16;
+    }
+    if (left < 8) left = 8;
+    let top = anchorY - panelHeight / 2;
+    if (top < 8) top = 8;
+    if (top + panelHeight > wrapperRect.height - 8) {
+      top = wrapperRect.height - panelHeight - 8;
+    }
+    setStageEditAnchor({ left, top });
+  }, [isStageEditOpen, selectedStageItem, stagePan, stageZoom]);
+
+  useEffect(() => {
+    if (
+      !isMemberEditOpen ||
+      !selectedMemberEdit ||
+      !stageWrapperRef.current
+    ) {
+      setMemberEditAnchor(null);
+      return;
+    }
+    const metrics = getStageMetrics();
+    if (!metrics) {
+      setMemberEditAnchor(null);
+      return;
+    }
+    const wrapperRect = stageWrapperRef.current.getBoundingClientRect();
+    const anchorX =
+      (selectedMemberEdit.x / 100) * metrics.baseWidth * stageZoom +
+      stagePan.x +
+      (metrics.viewportRect.left - wrapperRect.left);
+    const anchorY =
+      (selectedMemberEdit.y / 100) * metrics.baseHeight * stageZoom +
+      stagePan.y +
+      (metrics.viewportRect.top - wrapperRect.top);
+    const panelWidth = 220;
+    const panelHeight = 170;
+    let left = anchorX + 16;
+    if (left + panelWidth > wrapperRect.width - 8) {
+      left = anchorX - panelWidth - 16;
+    }
+    if (left < 8) left = 8;
+    let top = anchorY - panelHeight / 2;
+    if (top < 8) top = 8;
+    if (top + panelHeight > wrapperRect.height - 8) {
+      top = wrapperRect.height - panelHeight - 8;
+    }
+    setMemberEditAnchor({ left, top });
+  }, [isMemberEditOpen, selectedMemberEdit, stagePan, stageZoom]);
+
+  useEffect(() => {
+    if (!isMemberEditOpen) return;
+    const id = window.setTimeout(() => {
+      memberEditInputRef.current?.focus();
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [isMemberEditOpen]);
 
   useEffect(() => {
     if (!addMemberId) {
@@ -1154,6 +1594,10 @@ export default function RepertoireSubmitPage() {
     });
   };
 
+  const moveBandMember = (fromIndex: number, toIndex: number) => {
+    setBandMembers((prev) => withMemberOrder(arrayMove(prev, fromIndex, toIndex)));
+  };
+
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(String(event.active.id));
   };
@@ -1204,6 +1648,8 @@ export default function RepertoireSubmitPage() {
     }
     setAddingMember(true);
     const position = getNextStagePosition(instrument);
+    const resolved = resolveStagePosition(position.x, position.y, "member");
+    const nextOrderIndex = bandMembers.length + 1;
     const { data, error } = await supabase
       .from("band_members")
       .insert([
@@ -1211,15 +1657,16 @@ export default function RepertoireSubmitPage() {
           band_id: selectedBandId,
           user_id: addMemberId,
           instrument,
-          position_x: position.x,
-          position_y: position.y,
+          order_index: nextOrderIndex,
+          position_x: resolved.x,
+          position_y: resolved.y,
           monitor_request: "",
           monitor_note: "",
           is_mc: false,
         },
       ])
       .select(
-        "id, band_id, user_id, instrument, position_x, position_y, monitor_request, monitor_note, is_mc, profiles(display_name, real_name, part)"
+        "id, band_id, user_id, instrument, position_x, position_y, order_index, monitor_request, monitor_note, is_mc, profiles(display_name, real_name, part)"
       )
       .maybeSingle();
     if (error || !data) {
@@ -1240,13 +1687,14 @@ export default function RepertoireSubmitPage() {
       realName: profile?.real_name ?? null,
       part: profile?.part ?? null,
       instrument: row.instrument,
-      x: row.position_x ?? position.x,
-      y: row.position_y ?? position.y,
+      x: row.position_x ?? resolved.x,
+      y: row.position_y ?? resolved.y,
+      orderIndex: row.order_index ?? nextOrderIndex,
       monitorRequest: row.monitor_request ?? "",
       monitorNote: row.monitor_note ?? "",
       isMc: Boolean(row.is_mc),
     };
-    setBandMembers((prev) => [...prev, nextMember]);
+    setBandMembers((prev) => withMemberOrder([...prev, nextMember]));
     setAddMemberId("");
     setAddMemberInstrument("");
     setMemberSearch("");
@@ -1263,13 +1711,45 @@ export default function RepertoireSubmitPage() {
       toast.error("メンバーの削除に失敗しました。");
       return;
     }
-    setBandMembers((prev) => prev.filter((member) => member.id !== memberId));
+    setBandMembers((prev) =>
+      withMemberOrder(prev.filter((member) => member.id !== memberId))
+    );
     if (addMemberId === target.userId) {
       setAddMemberId("");
       setAddMemberInstrument("");
     }
     toast.success("メンバーを削除しました。");
   };
+
+  useEffect(() => {
+    if (!canEditBandMembers) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Delete" && event.key !== "Backspace") return;
+      const target = event.target as HTMLElement | null;
+      if (target) {
+        const tagName = target.tagName;
+        if (tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT") {
+          return;
+        }
+        if (target.isContentEditable) return;
+      }
+      if (selectedStageItemId) {
+        event.preventDefault();
+        handleRemoveStageItem(selectedStageItemId);
+        setSelectedStageItemId(null);
+        setIsStageEditOpen(false);
+        return;
+      }
+      if (selectedMemberEditId) {
+        event.preventDefault();
+        void handleRemoveMember(selectedMemberEditId);
+        setSelectedMemberEditId(null);
+        setIsMemberEditOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [canEditBandMembers, selectedStageItemId, selectedMemberEditId]);
 
   const saveBandMembers = async (showToast: boolean) => {
     if (!selectedBandId || savingStage) return false;
@@ -1280,11 +1760,13 @@ export default function RepertoireSubmitPage() {
       return false;
     }
     setSavingStage(true);
-    const updates = bandMembers.map((member) => ({
+    const orderedMembers = withMemberOrder(bandMembers);
+    const updates = orderedMembers.map((member) => ({
       id: member.id,
       instrument: member.instrument,
       position_x: member.x,
       position_y: member.y,
+      order_index: member.orderIndex ?? null,
       monitor_request: member.monitorRequest.trim() || null,
       monitor_note: member.monitorNote.trim() || null,
       is_mc: member.isMc,
@@ -1300,6 +1782,7 @@ export default function RepertoireSubmitPage() {
       setSavingStage(false);
       return false;
     }
+    setBandMembers(orderedMembers);
     if (showToast) {
       toast.success("PA情報を保存しました。");
     }
@@ -1311,16 +1794,20 @@ export default function RepertoireSubmitPage() {
     await saveBandMembers(true);
   };
 
-  const handleSaveBandInfo = async () => {
-    if (!selectedBandId || savingBandInfo) return;
+  const saveBandInfo = async (showToast: boolean) => {
+    if (!selectedBandId || savingBandInfo) return false;
     if (!canEditBandMembers) {
-      toast.error("基本情報を保存する権限がありません。");
-      return;
+      if (showToast) {
+        toast.error("基本情報を保存する権限がありません。");
+      }
+      return false;
     }
     const nextBandName = bandName.trim();
     if (!nextBandName) {
-      toast.error("バンド名を入力してください。");
-      return;
+      if (showToast) {
+        toast.error("バンド名を入力してください。");
+      }
+      return false;
     }
     setSavingBandInfo(true);
     const { error } = await supabase
@@ -1333,9 +1820,11 @@ export default function RepertoireSubmitPage() {
       .eq("id", selectedBandId);
     if (error) {
       console.error(error);
-      toast.error("基本情報の保存に失敗しました。");
+      if (showToast) {
+        toast.error("基本情報の保存に失敗しました。");
+      }
       setSavingBandInfo(false);
-      return;
+      return false;
     }
     setBands((prev) =>
       prev.map((band) =>
@@ -1350,8 +1839,15 @@ export default function RepertoireSubmitPage() {
       )
     );
     setBandName(nextBandName);
-    toast.success("基本情報を保存しました。");
+    if (showToast) {
+      toast.success("基本情報を保存しました。");
+    }
     setSavingBandInfo(false);
+    return true;
+  };
+
+  const handleSaveBandInfo = async () => {
+    await saveBandInfo(true);
   };
 
   const handleDeleteBand = async () => {
@@ -1386,11 +1882,13 @@ export default function RepertoireSubmitPage() {
     setDeletingBand(false);
   };
 
-  const handleSavePaInfo = async () => {
-    if (!selectedBandId || savingPaInfo) return;
+  const savePaInfo = async (showToast: boolean) => {
+    if (!selectedBandId || savingPaInfo) return false;
     if (!canEditBandMembers) {
-      toast.error("PA情報を保存する権限がありません。");
-      return;
+      if (showToast) {
+        toast.error("PA情報を保存する権限がありません。");
+      }
+      return false;
     }
     setSavingPaInfo(true);
     const stagePayload = {
@@ -1411,9 +1909,11 @@ export default function RepertoireSubmitPage() {
       .eq("id", selectedBandId);
     if (error) {
       console.error(error);
-      toast.error("PA情報の保存に失敗しました。");
+      if (showToast) {
+        toast.error("PA情報の保存に失敗しました。");
+      }
       setSavingPaInfo(false);
-      return;
+      return false;
     }
     setBands((prev) =>
       prev.map((band) =>
@@ -1428,19 +1928,30 @@ export default function RepertoireSubmitPage() {
     );
     const savedMembers = await saveBandMembers(false);
     if (!savedMembers) {
-      toast.error("PA情報の保存に失敗しました。");
+      if (showToast) {
+        toast.error("PA情報の保存に失敗しました。");
+      }
       setSavingPaInfo(false);
-      return;
+      return false;
     }
-    toast.success("PA情報を保存しました。");
+    if (showToast) {
+      toast.success("PA情報を保存しました。");
+    }
     setSavingPaInfo(false);
+    return true;
   };
 
-  const handleSaveLightingInfo = async () => {
-    if (!selectedBandId || savingLightingInfo) return;
+  const handleSavePaInfo = async () => {
+    await savePaInfo(true);
+  };
+
+  const saveLightingInfo = async (showToast: boolean) => {
+    if (!selectedBandId || savingLightingInfo) return false;
     if (!canEditBandMembers) {
-      toast.error("照明情報を保存する権限がありません。");
-      return;
+      if (showToast) {
+        toast.error("照明情報を保存する権限がありません。");
+      }
+      return false;
     }
     setSavingLightingInfo(true);
     const totalValue = lightingTotal.trim();
@@ -1454,9 +1965,11 @@ export default function RepertoireSubmitPage() {
       .eq("id", selectedBandId);
     if (error) {
       console.error(error);
-      toast.error("照明情報の保存に失敗しました。");
+      if (showToast) {
+        toast.error("照明情報の保存に失敗しました。");
+      }
       setSavingLightingInfo(false);
-      return;
+      return false;
     }
     setBands((prev) =>
       prev.map((band) =>
@@ -1465,18 +1978,166 @@ export default function RepertoireSubmitPage() {
               ...band,
               lighting_note: lightingNote.trim() || null,
               lighting_total_min: Number.isFinite(totalMinutes) ? totalMinutes : null,
-            }
+          }
           : band
       )
     );
-    toast.success("照明情報を保存しました。");
+    if (showToast) {
+      toast.success("照明情報を保存しました。");
+    }
     setSavingLightingInfo(false);
+    return true;
+  };
+
+  const handleSaveLightingInfo = async () => {
+    await saveLightingInfo(true);
+  };
+
+  const resolveStagePosition = (
+    x: number,
+    y: number,
+    type: "member" | "item",
+    excludeId?: string
+  ) => {
+    let baseX = clampPercent(x);
+    let baseY = clampPercent(y);
+    if (effectiveSnap) {
+      baseX = clampPercent(snapToGrid(baseX));
+      baseY = clampPercent(snapToGrid(baseY));
+    }
+    const radius = getCollisionRadius(type, excludeId);
+    const occupants = stageOccupants.filter(
+      (entry) => !(entry.type === type && entry.id === excludeId)
+    );
+    const isOverlapping = (posX: number, posY: number) =>
+      occupants.some((entry) => {
+        const distance = Math.hypot(entry.x - posX, entry.y - posY);
+        return distance < entry.radius + radius;
+      });
+    if (!isOverlapping(baseX, baseY)) {
+      return { x: baseX, y: baseY };
+    }
+    const maxOffset = 30;
+    const step = GRID_STEP;
+    const candidates: Array<{ x: number; y: number; distance: number }> = [];
+    for (let dx = -maxOffset; dx <= maxOffset; dx += step) {
+      for (let dy = -maxOffset; dy <= maxOffset; dy += step) {
+        const candidateX = clampPercent(
+          effectiveSnap ? snapToGrid(baseX + dx) : baseX + dx
+        );
+        const candidateY = clampPercent(
+          effectiveSnap ? snapToGrid(baseY + dy) : baseY + dy
+        );
+        candidates.push({
+          x: candidateX,
+          y: candidateY,
+          distance: Math.hypot(dx, dy),
+        });
+      }
+    }
+    candidates.sort((a, b) => a.distance - b.distance);
+    for (const candidate of candidates) {
+      if (!isOverlapping(candidate.x, candidate.y)) {
+        return { x: candidate.x, y: candidate.y };
+      }
+    }
+    return { x: baseX, y: baseY };
+  };
+
+  const getStageMetrics = () => {
+    if (!stageViewportRef.current || !stageRef.current) return null;
+    const viewportRect = stageViewportRef.current.getBoundingClientRect();
+    const baseWidth = stageRef.current.offsetWidth || viewportRect.width;
+    const baseHeight = stageRef.current.offsetHeight || viewportRect.height;
+    return { viewportRect, baseWidth, baseHeight };
+  };
+
+  const applyStageZoom = (nextZoom: number, center?: { x: number; y: number }) => {
+    const metrics = getStageMetrics();
+    if (!metrics) return;
+    const zoom = Math.min(MAX_STAGE_ZOOM, Math.max(MIN_STAGE_ZOOM, nextZoom));
+    const centerPoint = center ?? {
+      x: metrics.viewportRect.width / 2,
+      y: metrics.viewportRect.height / 2,
+    };
+    const stageCenterX = (centerPoint.x - stagePan.x) / stageZoom;
+    const stageCenterY = (centerPoint.y - stagePan.y) / stageZoom;
+    const nextPan = {
+      x: centerPoint.x - stageCenterX * zoom,
+      y: centerPoint.y - stageCenterY * zoom,
+    };
+    setStageZoom(zoom);
+    setStagePan(nextPan);
+  };
+
+  const handleStageViewportPointerDown = (
+    event: React.PointerEvent<HTMLDivElement>
+  ) => {
+    if (event.pointerType === "touch") {
+      stagePointerMapRef.current.set(event.pointerId, {
+        x: event.clientX,
+        y: event.clientY,
+      });
+      if (stagePointerMapRef.current.size === 2) {
+        const metrics = getStageMetrics();
+        const points = Array.from(stagePointerMapRef.current.values());
+        if (metrics && points.length >= 2) {
+          const centerX =
+            (points[0].x + points[1].x) / 2 - metrics.viewportRect.left;
+          const centerY =
+            (points[0].y + points[1].y) / 2 - metrics.viewportRect.top;
+          const distance = Math.hypot(
+            points[0].x - points[1].x,
+            points[0].y - points[1].y
+          );
+          pinchStateRef.current = {
+            startDistance: distance,
+            startZoom: stageZoom,
+            startPan: stagePan,
+            stageCenter: {
+              x: (centerX - stagePan.x) / stageZoom,
+              y: (centerY - stagePan.y) / stageZoom,
+            },
+          };
+          panStateRef.current = null;
+          dragState.current = null;
+          setDraggingMemberId(null);
+        }
+      }
+    }
+
+    if (event.target !== event.currentTarget) return;
+    if (event.pointerType !== "touch" && !panMode) return;
+    panStateRef.current = {
+      pointerId: event.pointerId,
+      originX: stagePan.x,
+      originY: stagePan.y,
+      startX: event.clientX,
+      startY: event.clientY,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleStageWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    if (!event.ctrlKey && !event.metaKey) return;
+    event.preventDefault();
+    const metrics = getStageMetrics();
+    if (!metrics) return;
+    const center = {
+      x: event.clientX - metrics.viewportRect.left,
+      y: event.clientY - metrics.viewportRect.top,
+    };
+    const nextZoom = stageZoom + (event.deltaY < 0 ? 0.1 : -0.1);
+    applyStageZoom(nextZoom, center);
   };
 
   const handleMarkerPointerDown = (
     event: React.PointerEvent<HTMLButtonElement>,
     memberId: string
   ) => {
+    setSelectedMemberEditId(memberId);
+    setSelectedStageItemId(null);
+    setIsStageEditOpen(false);
     if (!canEditBandMembers) return;
     const target = event.currentTarget;
     const rect = target.getBoundingClientRect();
@@ -1496,6 +2157,15 @@ export default function RepertoireSubmitPage() {
     event: React.PointerEvent<HTMLButtonElement>,
     itemId: string
   ) => {
+    const currentItem = stageItems.find((item) => item.id === itemId);
+    if (currentItem) {
+      setSelectedStageItemId(itemId);
+      setSelectedMemberEditId(null);
+      setIsMemberEditOpen(false);
+      const presetMatch = stagePresets.find((preset) => preset.label === currentItem.label);
+      setStageEditPreset(presetMatch ? presetMatch.label : "custom");
+      setStageEditLabel(currentItem.label);
+    }
     if (!canEditBandMembers) return;
     const target = event.currentTarget;
     const rect = target.getBoundingClientRect();
@@ -1510,15 +2180,109 @@ export default function RepertoireSubmitPage() {
     target.setPointerCapture(event.pointerId);
   };
 
+  const handleStageItemDoubleClick = (itemId: string) => {
+    const currentItem = stageItems.find((item) => item.id === itemId);
+    if (!currentItem) return;
+    setSelectedStageItemId(itemId);
+    const presetMatch = stagePresets.find((preset) => preset.label === currentItem.label);
+    setStageEditPreset(presetMatch ? presetMatch.label : "custom");
+    setStageEditLabel(currentItem.label);
+    setIsStageEditOpen(true);
+    setSelectedMemberEditId(null);
+    setIsMemberEditOpen(false);
+  };
+
+  const handleMemberDoubleClick = (memberId: string) => {
+    const currentMember = bandMembers.find((member) => member.id === memberId);
+    if (!currentMember) return;
+    setSelectedMemberEditId(memberId);
+    const raw = currentMember.instrument || currentMember.part || "";
+    const { suffix } = splitMemberLabel(raw);
+    setMemberEditSuffix(suffix);
+    setIsMemberEditOpen(true);
+    setSelectedStageItemId(null);
+    setIsStageEditOpen(false);
+  };
+
+  const appendMemberEditValue = (value: string) => {
+    const nextValue = value.trim();
+    if (!nextValue) return;
+    setMemberEditSuffix((currentValue) => {
+      const current = currentValue.trim();
+      if (!current) return nextValue;
+      const parts = current
+        .split("/")
+        .map((part) => part.trim())
+        .filter(Boolean);
+      if (parts.includes(nextValue)) return currentValue;
+      return [...parts, nextValue].join(" / ");
+    });
+  };
+
   const handleStagePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragState.current || !stageRef.current) return;
-    const rect = stageRef.current.getBoundingClientRect();
-    const nextX =
-      ((event.clientX - dragState.current.offsetX - rect.left) / rect.width) * 100;
-    const nextY =
-      ((event.clientY - dragState.current.offsetY - rect.top) / rect.height) * 100;
-    const clampedX = clampPercent(nextX);
-    const clampedY = clampPercent(nextY);
+    if (event.pointerType === "touch") {
+      stagePointerMapRef.current.set(event.pointerId, {
+        x: event.clientX,
+        y: event.clientY,
+      });
+      const pinchState = pinchStateRef.current;
+      const metrics = getStageMetrics();
+      if (pinchState && metrics && stagePointerMapRef.current.size >= 2) {
+        const points = Array.from(stagePointerMapRef.current.values());
+        const centerX =
+          (points[0].x + points[1].x) / 2 - metrics.viewportRect.left;
+        const centerY =
+          (points[0].y + points[1].y) / 2 - metrics.viewportRect.top;
+        const distance = Math.hypot(
+          points[0].x - points[1].x,
+          points[0].y - points[1].y
+        );
+        const scale = distance / pinchState.startDistance;
+        const nextZoom = Math.min(
+          MAX_STAGE_ZOOM,
+          Math.max(MIN_STAGE_ZOOM, pinchState.startZoom * scale)
+        );
+        const nextPan = {
+          x: centerX - pinchState.stageCenter.x * nextZoom,
+          y: centerY - pinchState.stageCenter.y * nextZoom,
+        };
+        panStateRef.current = null;
+        dragState.current = null;
+        setDraggingMemberId(null);
+        setStageZoom(nextZoom);
+        setStagePan(nextPan);
+        return;
+      }
+    }
+
+    if (panStateRef.current && panStateRef.current.pointerId === event.pointerId) {
+      const nextPan = {
+        x: panStateRef.current.originX + (event.clientX - panStateRef.current.startX),
+        y: panStateRef.current.originY + (event.clientY - panStateRef.current.startY),
+      };
+      setStagePan(nextPan);
+      return;
+    }
+
+    if (!dragState.current) return;
+    const metrics = getStageMetrics();
+    if (!metrics) return;
+    const centerX = event.clientX - dragState.current.offsetX;
+    const centerY = event.clientY - dragState.current.offsetY;
+    const stageX =
+      (centerX - metrics.viewportRect.left - stagePan.x) / stageZoom;
+    const stageY =
+      (centerY - metrics.viewportRect.top - stagePan.y) / stageZoom;
+    const nextX = (stageX / metrics.baseWidth) * 100;
+    const nextY = (stageY / metrics.baseHeight) * 100;
+    const resolved = resolveStagePosition(
+      nextX,
+      nextY,
+      dragState.current.type,
+      dragState.current.id
+    );
+    const clampedX = resolved.x;
+    const clampedY = resolved.y;
     dragPendingRef.current = {
       id: dragState.current.id,
       type: dragState.current.type,
@@ -1533,24 +2297,41 @@ export default function RepertoireSubmitPage() {
           return;
         }
         if (pending.type === "member") {
-          setBandMembers((prev) =>
-            prev.map((member) =>
-              member.id === pending.id ? { ...member, x: pending.x, y: pending.y } : member
-            )
-          );
+          setBandMembers((prev) => {
+            const index = prev.findIndex((member) => member.id === pending.id);
+            if (index < 0) return prev;
+            const target = prev[index];
+            if (target.x === pending.x && target.y === pending.y) return prev;
+            const next = [...prev];
+            next[index] = { ...target, x: pending.x, y: pending.y };
+            return next;
+          });
         } else {
-          setStageItems((prev) =>
-            prev.map((item) =>
-              item.id === pending.id ? { ...item, x: pending.x, y: pending.y } : item
-            )
-          );
+          setStageItems((prev) => {
+            const index = prev.findIndex((item) => item.id === pending.id);
+            if (index < 0) return prev;
+            const target = prev[index];
+            if (target.x === pending.x && target.y === pending.y) return prev;
+            const next = [...prev];
+            next[index] = { ...target, x: pending.x, y: pending.y };
+            return next;
+          });
         }
         dragRafRef.current = null;
       });
     }
   };
 
-  const handleStagePointerUp = () => {
+  const handleStagePointerUp = (event?: React.PointerEvent<HTMLDivElement>) => {
+    if (event?.pointerType === "touch") {
+      stagePointerMapRef.current.delete(event.pointerId);
+      if (stagePointerMapRef.current.size < 2) {
+        pinchStateRef.current = null;
+      }
+    }
+    if (event && panStateRef.current?.pointerId === event.pointerId) {
+      panStateRef.current = null;
+    }
     dragState.current = null;
     setDraggingMemberId(null);
     dragPendingRef.current = null;
@@ -1569,14 +2350,15 @@ export default function RepertoireSubmitPage() {
     const index = stageItems.length;
     const presetPosition = preset ? stagePresetPositions[preset.label] : undefined;
     const position = presetPosition ?? getFallbackPosition(index);
+    const resolved = resolveStagePosition(position.x, position.y, "item");
     setStageItems((prev) => [
       ...prev,
       {
         id: crypto.randomUUID(),
         label,
         dashed,
-        x: position.x,
-        y: position.y,
+        x: resolved.x,
+        y: resolved.y,
       },
     ]);
     setCustomStageLabel("");
@@ -1585,10 +2367,75 @@ export default function RepertoireSubmitPage() {
   const handleRemoveStageItem = (itemId: string) => {
     if (!canEditBandMembers) return;
     setStageItems((prev) => prev.filter((item) => item.id !== itemId));
+    if (selectedStageItemId === itemId) {
+      setSelectedStageItemId(null);
+      setIsStageEditOpen(false);
+    }
   };
 
-  const handleSave = async () => {
-    if (!selectedBandId || saving) return;
+  const handleStageEditPresetChange = (value: string) => {
+    setStageEditPreset(value);
+    if (value !== "custom") {
+      setStageEditLabel(value);
+    }
+  };
+
+  const handleStageEditLabelChange = (value: string) => {
+    setStageEditLabel(value);
+    if (stageEditPreset !== "custom" && value !== stageEditPreset) {
+      setStageEditPreset("custom");
+    }
+  };
+
+  const handleUpdateStageItem = () => {
+    if (!selectedStageItemId || !canEditBandMembers) return;
+    const nextLabel = stageEditLabel.trim();
+    if (!nextLabel) return;
+    const presetMatch =
+      stagePresets.find((preset) => preset.label === stageEditPreset) ??
+      stagePresets.find((preset) => preset.label === nextLabel);
+    setStageItems((prev) =>
+      prev.map((item) =>
+        item.id === selectedStageItemId
+          ? {
+              ...item,
+              label: nextLabel,
+              dashed: presetMatch ? presetMatch.dashed : item.dashed,
+            }
+          : item
+      )
+    );
+    setIsStageEditOpen(false);
+    setSelectedStageItemId(null);
+  };
+
+  const handleApplyMemberEdit = () => {
+    if (!selectedMemberEditId || !canEditBandMembers) return;
+    const baseLabel = memberEditBaseLabel.trim();
+    if (!baseLabel) return;
+    const suffix = memberEditSuffix.trim();
+    const nextLabel = suffix ? `${baseLabel} / ${suffix}` : baseLabel;
+    setBandMembers((prev) =>
+      prev.map((member) =>
+        member.id === selectedMemberEditId ? { ...member, instrument: nextLabel } : member
+      )
+    );
+    setIsMemberEditOpen(false);
+    setSelectedMemberEditId(null);
+  };
+
+  const clearAutoSaveDraft = useCallback(() => {
+    if (!autoSaveKey) return;
+    try {
+      localStorage.removeItem(autoSaveKey);
+      setAutoSavedAt(null);
+    } catch {
+      // noop
+    }
+  }, [autoSaveKey]);
+
+  const saveSongs = async (showToast: boolean) => {
+    if (!selectedBandId || saving) return false;
     setSaving(true);
     const payloads = orderedSongs.map((entry, index) => ({
       id: entry.id,
@@ -1619,9 +2466,11 @@ export default function RepertoireSubmitPage() {
       const { error } = await supabase.from("songs").delete().in("id", removedIds);
       if (error) {
         console.error(error);
-        toast.error("削除に失敗しました。");
+        if (showToast) {
+          toast.error("削除に失敗しました。");
+        }
         setSaving(false);
-        return;
+        return false;
       }
     }
 
@@ -1629,9 +2478,11 @@ export default function RepertoireSubmitPage() {
       const { error } = await supabase.from("songs").upsert(updates, { onConflict: "id" });
       if (error) {
         console.error(error);
-        toast.error("更新に失敗しました。");
+        if (showToast) {
+          toast.error("更新に失敗しました。");
+        }
         setSaving(false);
-        return;
+        return false;
       }
     }
 
@@ -1639,9 +2490,11 @@ export default function RepertoireSubmitPage() {
       const { error } = await supabase.from("songs").insert(inserts);
       if (error) {
         console.error(error);
-        toast.error("追加に失敗しました。");
+        if (showToast) {
+          toast.error("追加に失敗しました。");
+        }
         setSaving(false);
-        return;
+        return false;
       }
     }
 
@@ -1652,9 +2505,11 @@ export default function RepertoireSubmitPage() {
         .eq("id", selectedBand.id);
       if (error) {
         console.error(error);
-        toast.error("提出状態の更新に失敗しました。");
+        if (showToast) {
+          toast.error("提出状態の更新に失敗しました。");
+        }
         setSaving(false);
-        return;
+        return false;
       }
       setBands((prev) =>
         prev.map((band) =>
@@ -1667,8 +2522,37 @@ export default function RepertoireSubmitPage() {
 
     await loadSongs(selectedBandId);
     await refreshCounts(bands.map((band) => band.id));
-    toast.success("保存しました。");
+    if (showToast) {
+      toast.success("保存しました。");
+    }
     setSaving(false);
+    return true;
+  };
+
+  const handleSave = async () => {
+    await saveSongs(true);
+  };
+
+  const handleSaveAll = async () => {
+    if (!selectedBandId || savingAll) return;
+    if (!canEditBandMembers) {
+      toast.error("保存する権限がありません。");
+      return;
+    }
+    setSavingAll(true);
+    const bandInfoOk = await saveBandInfo(false);
+    const songsOk = await saveSongs(false);
+    const paOk = await savePaInfo(false);
+    const lightingOk = await saveLightingInfo(false);
+    const succeeded = bandInfoOk && songsOk && paOk && lightingOk;
+    if (succeeded) {
+      toast.success("保存しました。");
+      skipNextAutoSaveRef.current = true;
+      clearAutoSaveDraft();
+    } else {
+      toast.error("保存に失敗しました。");
+    }
+    setSavingAll(false);
   };
 
   const SongCard = ({
@@ -1794,7 +2678,7 @@ export default function RepertoireSubmitPage() {
                 }}
                 onPointerDown={(event) => event.stopPropagation()}
                 disabled={!isSong || readOnly}
-                placeholder={isSong ? "YouTube / Spotify / Apple Music" : "-"}
+                placeholder={isSong ? "URLを貼ると自動で曲名やアーティストが入力されます" : "-"}
               />
               {fetchingMeta[entry.id] && (
                 <Loader2 className="absolute right-2 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />
@@ -2151,30 +3035,39 @@ export default function RepertoireSubmitPage() {
 
 ﻿
                   <Tabs defaultValue="common" className="space-y-4">
-                    <TabsList className="w-full sm:w-auto">
-                      <TabsTrigger value="common">共通</TabsTrigger>
-                      <TabsTrigger value="pa">PA</TabsTrigger>
-                      <TabsTrigger value="lighting">照明</TabsTrigger>
-                    </TabsList>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <TabsList className="w-full sm:w-auto">
+                        <TabsTrigger value="common">共通</TabsTrigger>
+                        <TabsTrigger value="pa">PA</TabsTrigger>
+                        <TabsTrigger value="lighting">照明</TabsTrigger>
+                      </TabsList>
+                      <div className="flex flex-wrap items-center gap-3">
+                        {autoSaveLabel ? (
+                          <span className="text-xs text-muted-foreground">
+                            一時保存: {autoSaveLabel}
+                          </span>
+                        ) : null}
+                        <Button
+                          type="button"
+                          onClick={handleSaveAll}
+                          disabled={!selectedBandId || savingAll}
+                          className="gap-2"
+                        >
+                          {savingAll ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Save className="w-4 h-4" />
+                          )}
+                          保存
+                        </Button>
+                      </div>
+                    </div>
 
                     <TabsContent value="common" className="space-y-6">
                       <Card className="bg-card/60 border-border">
                         <CardHeader className="space-y-3">
                           <div className="flex flex-wrap items-center justify-between gap-3">
                             <CardTitle className="text-lg">基本情報</CardTitle>
-                            <Button
-                              type="button"
-                              onClick={handleSaveBandInfo}
-                              disabled={!selectedBandId || savingBandInfo || !canEditBandMembers}
-                              className="gap-2"
-                            >
-                              {savingBandInfo ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <Save className="w-4 h-4" />
-                              )}
-                              保存
-                            </Button>
                           </div>
                           {selectedBandId && !canEditBandMembers && (
                             <p className="text-xs text-muted-foreground">
@@ -2255,35 +3148,20 @@ export default function RepertoireSubmitPage() {
                                 自動合計: {formatDuration(totalDurationSec)}
                               </p>
                             </div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <select
-                                value={repertoireStatus}
-                                onChange={(event) =>
-                                  setRepertoireStatus(event.target.value as RepertoireStatus)
-                                }
-                                className="h-9 rounded-md border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-                                disabled={!selectedBandId}
-                              >
-                                {statusOptions.map((option) => (
-                                  <option key={option.value} value={option.value}>
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </select>
-                              <Button
-                                type="button"
-                                onClick={handleSave}
-                                disabled={!selectedBandId || saving}
-                                className="gap-2"
-                              >
-                                {saving ? (
-                                  <Loader2 className="w-4 h-4 animate-spin" />
-                                ) : (
-                                  <Save className="w-4 h-4" />
-                                )}
-                                保存
-                              </Button>
-                            </div>
+                            <select
+                              value={repertoireStatus}
+                              onChange={(event) =>
+                                setRepertoireStatus(event.target.value as RepertoireStatus)
+                              }
+                              className="h-9 rounded-md border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                              disabled={!selectedBandId}
+                            >
+                              {statusOptions.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
                           </div>
                           <div className="flex flex-wrap gap-2">
                             <Button
@@ -2368,19 +3246,6 @@ export default function RepertoireSubmitPage() {
                             <div className="flex flex-wrap items-center gap-2">
                               <Button
                                 type="button"
-                                onClick={handleSavePaInfo}
-                                disabled={!selectedBandId || savingPaInfo || !canEditBandMembers}
-                                className="gap-2"
-                              >
-                                {savingPaInfo ? (
-                                  <Loader2 className="w-4 h-4 animate-spin" />
-                                ) : (
-                                  <Save className="w-4 h-4" />
-                                )}
-                                PA情報を保存
-                              </Button>
-                              <Button
-                                type="button"
                                 variant="outline"
                                 onClick={() => setPrintMode("pa")}
                                 disabled={!selectedBandId}
@@ -2408,94 +3273,392 @@ export default function RepertoireSubmitPage() {
                           ) : (
                             <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr,1fr]">
                               <div className="space-y-3">
-                                <div
-                                  ref={stageRef}
-                                  onPointerMove={handleStagePointerMove}
-                                  onPointerUp={handleStagePointerUp}
-                                  onPointerLeave={handleStagePointerUp}
-                                  onPointerCancel={handleStagePointerUp}
-                                  className="relative w-full h-[280px] sm:h-[360px] rounded-lg border border-border bg-gradient-to-b from-muted/20 to-muted/40 overflow-hidden"
-                                >
-                                  <div className="absolute top-2 left-1/2 -translate-x-1/2 text-[10px] text-muted-foreground">
-                                    STAGE
-                                  </div>
-                                  <div className="absolute top-2 left-3 text-[10px] text-muted-foreground">
-                                    舞台奥
-                                  </div>
-                                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] text-muted-foreground z-10 bg-background/80 px-1 rounded">
-                                    客席
-                                  </div>
-                                  {fixedStageItems.map((item) => (
-                                    <div
-                                      key={item.id}
-                                      className={cn(
-                                        "absolute -translate-x-1/2 -translate-y-1/2 border text-[11px] font-semibold shadow-sm bg-muted/60 text-muted-foreground pointer-events-none",
-                                        item.id === "fixed-drums"
-                                          ? "h-40 w-44 rounded-2xl flex items-center justify-center"
-                                          : "rounded-md px-3 py-2",
-                                        item.dashed ? "border-dashed" : "border-solid"
+                                <div ref={stageWrapperRef} className="relative">
+                                  <div
+                                    ref={stageViewportRef}
+                                    onPointerDown={handleStageViewportPointerDown}
+                                    onPointerMove={handleStagePointerMove}
+                                    onPointerUp={handleStagePointerUp}
+                                    onPointerLeave={handleStagePointerUp}
+                                    onPointerCancel={handleStagePointerUp}
+                                    onWheel={handleStageWheel}
+                                    className={cn(
+                                      "relative w-full h-[280px] sm:h-[360px] rounded-lg border border-border overflow-hidden touch-none",
+                                      panMode ? "cursor-grab" : "cursor-default"
+                                    )}
+                                  >
+                                    <div className="absolute right-2 top-2 z-20 flex items-center gap-1 rounded-md border border-border bg-background/80 p-1 text-[10px] text-muted-foreground shadow-sm">
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() =>
+                                          applyStageZoom(stageZoom - 0.1)
+                                        }
+                                        className="h-7 w-7"
+                                        aria-label="ズームアウト"
+                                      >
+                                        <ZoomOut className="h-4 w-4" />
+                                      </Button>
+                                      <span className="min-w-[38px] text-center">
+                                        {Math.round(stageZoom * 100)}%
+                                      </span>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() =>
+                                          applyStageZoom(stageZoom + 0.1)
+                                        }
+                                        className="h-7 w-7"
+                                        aria-label="ズームイン"
+                                      >
+                                        <ZoomIn className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => {
+                                          setStagePan({ x: 0, y: 0 });
+                                          setStageZoom(1);
+                                        }}
+                                        className="h-7 w-7"
+                                        aria-label="リセット"
+                                      >
+                                        <RotateCcw className="h-4 w-4" />
+                                      </Button>
+                                      {!isCoarsePointer && (
+                                        <Button
+                                          type="button"
+                                          variant={panMode ? "secondary" : "ghost"}
+                                          size="icon"
+                                          onClick={() =>
+                                            setPanMode((prev) => !prev)
+                                          }
+                                          className="h-7 w-7"
+                                          aria-label="パン"
+                                        >
+                                          <Hand className="h-4 w-4" />
+                                        </Button>
                                       )}
-                                      style={{ left: `${item.x}%`, top: `${item.y}%` }}
-                                    >
-                                      {item.label}
+                                      {!isCoarsePointer && (
+                                        <Button
+                                          type="button"
+                                          variant={snapEnabled ? "secondary" : "ghost"}
+                                          size="icon"
+                                          onClick={() =>
+                                            setSnapEnabled((prev) => !prev)
+                                          }
+                                          className="h-7 w-7"
+                                          aria-label="スナップ"
+                                          title="Shiftで一時解除"
+                                        >
+                                          <Grid3x3 className="h-4 w-4" />
+                                        </Button>
+                                      )}
                                     </div>
-                                  ))}
-                                  {stageItems.map((item) => (
-                                    <button
-                                      key={item.id}
-                                      type="button"
-                                      onPointerDown={(event) =>
-                                        handleStageItemPointerDown(event, item.id)
-                                      }
-                                      className={cn(
-                                        "absolute -translate-x-1/2 -translate-y-1/2 rounded-md border px-3 py-2 text-[12px] font-semibold shadow-sm touch-none bg-card/90",
-                                        item.dashed ? "border-dashed" : "border-solid",
-                                        canEditBandMembers
-                                          ? "cursor-grab active:cursor-grabbing"
-                                          : "cursor-default"
-                                      )}
-                                      style={{ left: `${item.x}%`, top: `${item.y}%` }}
+                                    <div
+                                      className="absolute inset-0"
+                                      style={{
+                                        transform: `translate(${stagePan.x}px, ${stagePan.y}px)`,
+                                      }}
                                     >
-                                      {item.label}
-                                    </button>
-                                  ))}
-                                  {bandMembers.map((member) => (
-                                    <button
-                                      key={member.id}
-                                      type="button"
-                                      onPointerDown={(event) =>
-                                        handleMarkerPointerDown(event, member.id)
-                                      }
-                                      className={cn(
-                                        "absolute -translate-x-1/2 -translate-y-1/2 rounded-md border border-border bg-card/90 px-3 py-2 text-left shadow-sm touch-none",
-                                        canEditBandMembers
-                                          ? "cursor-grab active:cursor-grabbing"
-                                          : "cursor-default",
-                                        draggingMemberId === member.id
-                                          ? "ring-2 ring-primary"
-                                          : "hover:border-primary/40"
-                                      )}
-                                      style={{ left: `${member.x}%`, top: `${member.y}%` }}
-                                    >
-                                      <span className="block text-[12px] font-semibold leading-tight">
+                                      <div
+                                        className="absolute inset-0"
+                                        style={{
+                                          transform: `scale(${stageZoom})`,
+                                          transformOrigin: "0 0",
+                                        }}
+                                      >
+                                        <div
+                                          ref={stageRef}
+                                          className="relative w-full h-full bg-gradient-to-b from-muted/20 to-muted/40"
+                                        >
+                                          <div className="absolute top-2 left-1/2 -translate-x-1/2 text-[10px] text-muted-foreground">
+                                            STAGE
+                                          </div>
+                                          <div className="absolute top-2 left-3 text-[10px] text-muted-foreground">
+                                            舞台奥
+                                          </div>
+                                          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] text-muted-foreground z-10 bg-background/80 px-1 rounded">
+                                            客席
+                                          </div>
+                                          {fixedStageItems.map((item) => (
+                                            <div
+                                              key={item.id}
+                                              className={cn(
+                                                "absolute -translate-x-1/2 -translate-y-1/2 border text-[11px] font-semibold shadow-sm bg-muted/60 text-muted-foreground pointer-events-none",
+                                                item.id === "fixed-drums"
+                                                  ? "h-40 w-44 rounded-2xl flex items-center justify-center"
+                                                  : "rounded-md px-2 py-1",
+                                                item.dashed ? "border-dashed" : "border-solid"
+                                              )}
+                                              style={{
+                                                left: `${item.x}%`,
+                                                top: `${item.y}%`,
+                                              }}
+                                            >
+                                              {item.label}
+                                            </div>
+                                          ))}
+                                          {stageItems.map((item) => (
+                                            <button
+                                              key={item.id}
+                                              type="button"
+                                              onPointerDown={(event) =>
+                                                handleStageItemPointerDown(
+                                                  event,
+                                                  item.id
+                                                )
+                                              }
+                                              onDoubleClick={() =>
+                                                handleStageItemDoubleClick(item.id)
+                                              }
+                                              className={cn(
+                                                "absolute -translate-x-1/2 -translate-y-1/2 rounded-md border px-2 py-1 text-[11px] font-semibold shadow-sm touch-none bg-card/90",
+                                                item.dashed
+                                                  ? "border-dashed"
+                                                  : "border-solid",
+                                                canEditBandMembers
+                                                  ? "cursor-grab active:cursor-grabbing"
+                                                  : "cursor-default",
+                                                selectedStageItemId === item.id
+                                                  ? "ring-2 ring-primary"
+                                                  : "hover:border-primary/40"
+                                              )}
+                                              style={{
+                                                left: `${item.x}%`,
+                                                top: `${item.y}%`,
+                                              }}
+                                            >
+                                              {item.label}
+                                            </button>
+                                          ))}
+                                          {bandMembers.map((member) => (
+                                            <button
+                                              key={member.id}
+                                              type="button"
+                                              onPointerDown={(event) =>
+                                                handleMarkerPointerDown(
+                                                  event,
+                                                  member.id
+                                                )
+                                              }
+                                              onDoubleClick={() =>
+                                                handleMemberDoubleClick(member.id)
+                                              }
+                                              className={cn(
+                                                "absolute -translate-x-1/2 -translate-y-1/2 rounded-md border border-border bg-card/90 px-2 py-1 text-left shadow-sm touch-none",
+                                                canEditBandMembers
+                                                  ? "cursor-grab active:cursor-grabbing"
+                                                  : "cursor-default",
+                                                draggingMemberId === member.id ||
+                                                selectedMemberEditId === member.id
+                                                  ? "ring-2 ring-primary"
+                                                  : "hover:border-primary/40"
+                                              )}
+                                              style={{
+                                                left: `${member.x}%`,
+                                                top: `${member.y}%`,
+                                              }}
+                                            >
+                                      <span className="block text-[11px] font-semibold leading-tight">
                                         {member.instrument || member.part || "Part"}
                                       </span>
-                                      <span className="block text-[12px] text-muted-foreground leading-tight">
+                                      <span className="block text-[11px] text-muted-foreground leading-tight">
                                         {member.name}
                                       </span>
-                                    </button>
-                                  ))}
-                                  <div className="absolute bottom-2 left-3 text-[10px] text-muted-foreground">
-                                    下手
+                                            </button>
+                                          ))}
+                                          <div className="absolute bottom-2 left-3 text-[10px] text-muted-foreground">
+                                            下手
+                                          </div>
+                                          <div className="absolute bottom-2 right-3 text-[10px] text-muted-foreground">
+                                            上手
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
                                   </div>
-                                  <div className="absolute bottom-2 right-3 text-[10px] text-muted-foreground">
-                                    上手
-                                  </div>
-                                </div>
-                                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                                  <span>左が下手 / 右が上手</span>
-                                  <span>メンバー数: {bandMembers.length}人</span>
-                                </div>
+                                {selectedStageItem &&
+                                  isStageEditOpen &&
+                                  stageEditAnchor && (
+                                    <div
+                                      className="absolute z-30 w-60 rounded-lg border border-border bg-card/95 p-3 shadow-lg"
+                                      style={{
+                                        left: `${stageEditAnchor.left}px`,
+                                        top: `${stageEditAnchor.top}px`,
+                                      }}
+                                    >
+                                      <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <p className="text-xs font-medium text-foreground">
+                                          編集
+                                        </p>
+                                        <Badge variant="secondary">箱</Badge>
+                                      </div>
+                                      <div className="mt-2 space-y-2">
+                                        <div className="space-y-1 text-[11px] text-muted-foreground">
+                                          <span>プリセット</span>
+                                          <select
+                                            value={stageEditPreset}
+                                            onChange={(event) =>
+                                              handleStageEditPresetChange(event.target.value)
+                                            }
+                                            disabled={!canEditBandMembers}
+                                            className="h-8 w-full rounded-md border border-input bg-card px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
+                                          >
+                                            <option value="custom">カスタム</option>
+                                            {stagePresets.map((preset) => (
+                                              <option key={preset.label} value={preset.label}>
+                                                {preset.label}
+                                              </option>
+                                            ))}
+                                          </select>
+                                        </div>
+                                        <div className="space-y-1 text-[11px] text-muted-foreground">
+                                          <span>表示名</span>
+                                          <Input
+                                            value={stageEditLabel}
+                                            onChange={(event) =>
+                                              handleStageEditLabelChange(event.target.value)
+                                            }
+                                            disabled={!canEditBandMembers}
+                                            placeholder="表示名を入力"
+                                            className="h-8 text-xs"
+                                          />
+                                        </div>
+                                      </div>
+                                      <div className="mt-3 flex flex-wrap gap-2 justify-end">
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => {
+                                            setSelectedStageItemId(null);
+                                            setIsStageEditOpen(false);
+                                          }}
+                                        >
+                                          閉じる
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          onClick={handleUpdateStageItem}
+                                          disabled={!canEditBandMembers}
+                                        >
+                                          適用
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="destructive"
+                                          onClick={() =>
+                                            handleRemoveStageItem(selectedStageItem.id)
+                                          }
+                                          disabled={!canEditBandMembers}
+                                        >
+                                          削除
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  )}
+                                {selectedMemberEdit &&
+                                  isMemberEditOpen &&
+                                  memberEditAnchor && (
+                                    <div
+                                      className="absolute z-30 w-56 rounded-lg border border-border bg-card/95 p-3 shadow-lg"
+                                      style={{
+                                        left: `${memberEditAnchor.left}px`,
+                                        top: `${memberEditAnchor.top}px`,
+                                      }}
+                                    >
+                                      <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <p className="text-xs font-medium text-foreground">
+                                          メンバー表示
+                                        </p>
+                                        <Badge variant="secondary">編集</Badge>
+                                      </div>
+                                      <div className="mt-2 space-y-2">
+                                        <div className="space-y-1 text-[11px] text-muted-foreground">
+                                          <span>表示内容</span>
+                                          <div className="flex items-center gap-2 rounded-md border border-input bg-card px-2 py-1">
+                                            <span className="text-xs font-semibold text-foreground">
+                                              {memberEditBaseLabel}
+                                            </span>
+                                            <span className="text-xs text-muted-foreground">/</span>
+                                            <Input
+                                              ref={memberEditInputRef}
+                                              value={memberEditSuffix}
+                                              onChange={(event) =>
+                                                setMemberEditSuffix(event.target.value)
+                                              }
+                                              disabled={!canEditBandMembers}
+                                              placeholder="LINE1 / 管1 など"
+                                              className="h-7 border-0 bg-transparent px-0 text-xs focus-visible:ring-0"
+                                              autoFocus
+                                            />
+                                          </div>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2">
+                                          {["LINE1", "LINE2", "LINE3", "LINE4"].map((value) => (
+                                            <button
+                                              key={value}
+                                              type="button"
+                                              className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground"
+                                              onMouseDown={(event) => event.preventDefault()}
+                                              onClick={() => {
+                                                appendMemberEditValue(value);
+                                                memberEditInputRef.current?.focus();
+                                              }}
+                                            >
+                                              {value}
+                                            </button>
+                                          ))}
+                                          {["管1", "管2", "管3", "管4"].map((value) => (
+                                            <button
+                                              key={value}
+                                              type="button"
+                                              className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground"
+                                              onMouseDown={(event) => event.preventDefault()}
+                                              onClick={() => {
+                                                appendMemberEditValue(value);
+                                                memberEditInputRef.current?.focus();
+                                              }}
+                                            >
+                                              {value}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </div>
+                                      <div className="mt-3 flex flex-wrap justify-end gap-2">
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => {
+                                            setSelectedMemberEditId(null);
+                                            setIsMemberEditOpen(false);
+                                          }}
+                                        >
+                                          閉じる
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          onClick={handleApplyMemberEdit}
+                                          disabled={!canEditBandMembers}
+                                        >
+                                          適用
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  )}
+                              </div>
+                              <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                                <span>左が下手 / 右が上手</span>
+                                <span>メンバー数: {bandMembers.length}人</span>
+                              </div>
                                 {canEditBandMembers && (
                                   <div className="space-y-2">
                                     <p className="text-sm font-medium text-foreground">
@@ -2624,6 +3787,28 @@ export default function RepertoireSubmitPage() {
                                   </form>
                                 )}
 
+                                <div className="rounded-lg border border-border bg-card/40 p-3 space-y-4">
+                                  <div className="text-sm font-medium text-foreground">PA要望</div>
+                                  <label className="space-y-1 text-sm">
+                                    <span className="text-muted-foreground">
+                                      PA機材・返しの要望
+                                    </span>
+                                    <Textarea
+                                      rows={4}
+                                      value={soundNote}
+                                      onChange={(event) => setSoundNote(event.target.value)}
+                                      placeholder="返し/PA機材などの要望を入力"
+                                      disabled={!canEditBandMembers}
+                                    />
+                                  </label>
+                                  <div className="space-y-1 text-sm">
+                                    <span className="text-muted-foreground">全体メモ（共通）</span>
+                                    <div className="rounded-md border border-border bg-card/40 px-3 py-2 text-xs text-muted-foreground whitespace-pre-wrap">
+                                      {generalNote.trim() ? generalNote : "未入力"}
+                                    </div>
+                                  </div>
+                                </div>
+
                                 <div className="rounded-lg border border-border bg-card/40 overflow-x-auto max-w-full">
                                   <Table className="min-w-[520px] w-full">
                                     <TableHeader>
@@ -2633,6 +3818,7 @@ export default function RepertoireSubmitPage() {
                                         <TableHead>返しの希望</TableHead>
                                         <TableHead>備考</TableHead>
                                         <TableHead className="text-center">MC</TableHead>
+                                        <TableHead className="text-center w-[90px]">並び</TableHead>
                                         <TableHead className="text-right">削除</TableHead>
                                       </TableRow>
                                     </TableHeader>
@@ -2640,14 +3826,14 @@ export default function RepertoireSubmitPage() {
                                       {bandMembers.length === 0 ? (
                                         <TableRow>
                                           <TableCell
-                                            colSpan={6}
+                                            colSpan={7}
                                             className="text-center text-sm text-muted-foreground"
                                           >
                                             メンバーが登録されていません。
                                           </TableCell>
                                         </TableRow>
                                       ) : (
-                                        bandMembers.map((member) => (
+                                        bandMembers.map((member, index) => (
                                           <TableRow key={member.id}>
                                             <TableCell className="text-xs font-medium">
                                               {member.instrument || member.part || "Part"}
@@ -2700,6 +3886,42 @@ export default function RepertoireSubmitPage() {
                                                 disabled={!canEditBandMembers}
                                               />
                                             </TableCell>
+                                            <TableCell className="text-center">
+                                              <div className="inline-flex items-center justify-center gap-1">
+                                                <Button
+                                                  type="button"
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  onClick={() =>
+                                                    moveBandMember(index, Math.max(0, index - 1))
+                                                  }
+                                                  disabled={
+                                                    !canEditBandMembers || index === 0
+                                                  }
+                                                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                                >
+                                                  <ArrowUp className="h-4 w-4" />
+                                                </Button>
+                                                <Button
+                                                  type="button"
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  onClick={() =>
+                                                    moveBandMember(
+                                                      index,
+                                                      Math.min(bandMembers.length - 1, index + 1)
+                                                    )
+                                                  }
+                                                  disabled={
+                                                    !canEditBandMembers ||
+                                                    index === bandMembers.length - 1
+                                                  }
+                                                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                                >
+                                                  <ArrowDown className="h-4 w-4" />
+                                                </Button>
+                                              </div>
+                                            </TableCell>
                                             <TableCell className="text-right">
                                               <Button
                                                 type="button"
@@ -2723,32 +3945,6 @@ export default function RepertoireSubmitPage() {
                           )}
                         </CardContent>
                       </Card>
-
-                      <Card className="bg-card/60 border-border">
-                        <CardHeader>
-                          <CardTitle className="text-lg">PA要望</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          <label className="space-y-1 text-sm">
-                            <span className="text-muted-foreground">
-                              PA機材・返しの要望
-                            </span>
-                            <Textarea
-                              rows={4}
-                              value={soundNote}
-                              onChange={(event) => setSoundNote(event.target.value)}
-                              placeholder="返し/PA機材などの要望を入力"
-                              disabled={!canEditBandMembers}
-                            />
-                          </label>
-                          <div className="space-y-1 text-sm">
-                            <span className="text-muted-foreground">全体メモ（共通）</span>
-                            <div className="rounded-md border border-border bg-card/40 px-3 py-2 text-xs text-muted-foreground whitespace-pre-wrap">
-                              {generalNote.trim() ? generalNote : "未入力"}
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
                     </TabsContent>
 
                     <TabsContent value="lighting" className="space-y-6">
@@ -2756,19 +3952,6 @@ export default function RepertoireSubmitPage() {
                         <CardHeader className="space-y-3">
                           <div className="flex flex-wrap items-center justify-between gap-3">
                             <CardTitle className="text-lg">照明セットリスト</CardTitle>
-                            <Button
-                              type="button"
-                              onClick={handleSave}
-                              disabled={!selectedBandId || saving}
-                              className="gap-2"
-                            >
-                              {saving ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <Save className="w-4 h-4" />
-                              )}
-                              セットリスト保存
-                            </Button>
                           </div>
                           <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
                             <span>自動合計: {formatDuration(totalDurationSec)}</span>
@@ -3019,21 +4202,6 @@ export default function RepertoireSubmitPage() {
                           <div className="flex flex-wrap items-center justify-between gap-3">
                             <CardTitle className="text-lg">照明メモ</CardTitle>
                             <div className="flex flex-wrap items-center gap-2">
-                              <Button
-                                type="button"
-                                onClick={handleSaveLightingInfo}
-                                disabled={
-                                  !selectedBandId || savingLightingInfo || !canEditBandMembers
-                                }
-                                className="gap-2"
-                              >
-                                {savingLightingInfo ? (
-                                  <Loader2 className="w-4 h-4 animate-spin" />
-                                ) : (
-                                  <Save className="w-4 h-4" />
-                                )}
-                                照明情報を保存
-                              </Button>
                               <Button
                                 type="button"
                                 variant="outline"

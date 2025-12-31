@@ -192,21 +192,17 @@ using (
   created_by = auth.uid()
   or public.is_admin_or_supervisor(auth.uid())
   or public.is_band_member(id, auth.uid())
-  or exists (
-    select 1 from public.profile_leaders pl
-    where pl.profile_id = auth.uid()
-      and pl.leader in ('Part Leader', 'PA Leader', 'Lighting Leader')
-  )
+  or public.is_part_leader(auth.uid())
+  or public.is_pa_leader(auth.uid())
+  or public.is_lighting_leader(auth.uid())
 )
 with check (
   created_by = auth.uid()
   or public.is_admin_or_supervisor(auth.uid())
   or public.is_band_member(id, auth.uid())
-  or exists (
-    select 1 from public.profile_leaders pl
-    where pl.profile_id = auth.uid()
-      and pl.leader in ('Part Leader', 'PA Leader', 'Lighting Leader')
-  )
+  or public.is_part_leader(auth.uid())
+  or public.is_pa_leader(auth.uid())
+  or public.is_lighting_leader(auth.uid())
 );
 
 create policy "bands_delete_owner_or_admin"
@@ -215,11 +211,8 @@ to authenticated
 using (
   created_by = auth.uid()
   or public.is_admin_or_supervisor(auth.uid())
-  or exists (
-    select 1 from public.profile_leaders pl
-    where pl.profile_id = auth.uid()
-      and pl.leader in ('PA Leader', 'Lighting Leader')
-  )
+  or public.is_pa_leader(auth.uid())
+  or public.is_lighting_leader(auth.uid())
 );
 
 create or replace function public.bands_block_member_update()
@@ -244,11 +237,10 @@ begin
     return new;
   end if;
 
-  actor_is_leader := exists (
-    select 1 from public.profile_leaders pl
-    where pl.profile_id = actor
-      and pl.leader in ('Part Leader', 'PA Leader', 'Lighting Leader')
-  );
+  actor_is_leader :=
+    public.is_part_leader(actor)
+    or public.is_pa_leader(actor)
+    or public.is_lighting_leader(actor);
 
   actor_is_owner := old.created_by = actor;
   if actor_is_owner then
@@ -301,6 +293,7 @@ create table if not exists public.band_members (
   band_id uuid not null references public.bands(id) on delete cascade,
   user_id uuid not null references public.profiles(id) on delete cascade,
   instrument text not null,          -- このバンドでの担当（例: "Sax", "Key"）
+  order_index integer,              -- 表示順
   position_x numeric,                -- 立ち位置 X(0-100)
   position_y numeric,                -- 立ち位置 Y(0-100)
   monitor_request text,
@@ -310,6 +303,7 @@ create table if not exists public.band_members (
 );
 
 alter table public.band_members
+  add column if not exists order_index integer,
   add column if not exists position_x numeric,
   add column if not exists position_y numeric,
   add column if not exists monitor_request text,
@@ -345,11 +339,9 @@ using (
         b.created_by = auth.uid()
         or public.is_admin_or_supervisor(auth.uid())
         or public.is_band_member(b.id, auth.uid())
-        or exists (
-          select 1 from public.profile_leaders pl
-          where pl.profile_id = auth.uid()
-            and pl.leader in ('Part Leader', 'PA Leader', 'Lighting Leader')
-        )
+        or public.is_part_leader(auth.uid())
+        or public.is_pa_leader(auth.uid())
+        or public.is_lighting_leader(auth.uid())
       )
   )
   or user_id = auth.uid()
@@ -362,11 +354,9 @@ with check (
         b.created_by = auth.uid()
         or public.is_admin_or_supervisor(auth.uid())
         or public.is_band_member(b.id, auth.uid())
-        or exists (
-          select 1 from public.profile_leaders pl
-          where pl.profile_id = auth.uid()
-            and pl.leader in ('Part Leader', 'PA Leader', 'Lighting Leader')
-        )
+        or public.is_part_leader(auth.uid())
+        or public.is_pa_leader(auth.uid())
+        or public.is_lighting_leader(auth.uid())
       )
   )
   or user_id = auth.uid()
@@ -478,11 +468,9 @@ using (
         b.created_by = auth.uid()
         or public.is_admin_or_supervisor(auth.uid())
         or public.is_band_member(b.id, auth.uid())
-        or exists (
-          select 1 from public.profile_leaders pl
-          where pl.profile_id = auth.uid()
-            and pl.leader in ('Part Leader', 'PA Leader', 'Lighting Leader')
-        )
+        or public.is_part_leader(auth.uid())
+        or public.is_pa_leader(auth.uid())
+        or public.is_lighting_leader(auth.uid())
       )
   )
 )
@@ -494,11 +482,9 @@ with check (
         b.created_by = auth.uid()
         or public.is_admin_or_supervisor(auth.uid())
         or public.is_band_member(b.id, auth.uid())
-        or exists (
-          select 1 from public.profile_leaders pl
-          where pl.profile_id = auth.uid()
-            and pl.leader in ('Part Leader', 'PA Leader', 'Lighting Leader')
-        )
+        or public.is_part_leader(auth.uid())
+        or public.is_pa_leader(auth.uid())
+        or public.is_lighting_leader(auth.uid())
       )
   )
 );

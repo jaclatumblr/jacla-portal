@@ -322,6 +322,12 @@ as $$
     from public.profiles p
     where p.id = uid
       and p.leader in ('Administrator'::leader_role, 'Supervisor'::leader_role)
+  )
+  or exists (
+    select 1
+    from public.profile_leaders pl
+    where pl.profile_id = uid
+      and pl.leader in ('Administrator', 'Supervisor')
   );
 $$;
 
@@ -337,6 +343,12 @@ as $$
     from public.profiles p
     where p.id = uid
       and p.leader = 'PA Leader'::leader_role
+  )
+  or exists (
+    select 1
+    from public.profile_leaders pl
+    where pl.profile_id = uid
+      and pl.leader = 'PA Leader'
   );
 $$;
 
@@ -352,6 +364,33 @@ as $$
     from public.profiles p
     where p.id = uid
       and p.leader = 'Lighting Leader'::leader_role
+  )
+  or exists (
+    select 1
+    from public.profile_leaders pl
+    where pl.profile_id = uid
+      and pl.leader = 'Lighting Leader'
+  );
+$$;
+
+create or replace function public.is_part_leader(uid uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.id = uid
+      and p.leader = 'Part Leader'::leader_role
+  )
+  or exists (
+    select 1
+    from public.profile_leaders pl
+    where pl.profile_id = uid
+      and pl.leader = 'Part Leader'
   );
 $$;
 

@@ -11,29 +11,49 @@ import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/lib/toast";
 
+type AssignmentEventSlot = {
+  id: string;
+  event_id: string;
+  slot_type: "band" | "break" | "mc" | "other";
+  order_in_event: number | null;
+  start_time: string | null;
+  end_time: string | null;
+  note: string | null;
+  bands: { name: string | null } | { name: string | null }[] | null;
+  events: { name: string; date: string } | { name: string; date: string }[] | null;
+};
+
 type AssignmentRow = {
   id: string;
   role: "pa" | "light";
   is_fixed: boolean;
   note: string | null;
-  event_slots: {
-    id: string;
-    event_id: string;
-    slot_type: "band" | "break" | "mc" | "other";
-    order_in_event: number | null;
-    start_time: string | null;
-    end_time: string | null;
-    note: string | null;
-    bands: { name: string | null } | null;
-    events: { name: string; date: string } | null;
-  } | null;
+  event_slots: AssignmentEventSlot | AssignmentEventSlot[] | null;
 };
 
 const roleLabel = (role: AssignmentRow["role"]) => (role === "pa" ? "PA" : "照明");
 
-const slotLabel = (slot: AssignmentRow["event_slots"]) => {
+const resolveSlot = (slot: AssignmentRow["event_slots"]) =>
+  Array.isArray(slot) ? slot[0] ?? null : slot;
+
+const resolveBandName = (slot: AssignmentEventSlot | null) => {
+  if (!slot) return null;
+  const bands = slot.bands;
+  if (Array.isArray(bands)) return bands[0]?.name ?? null;
+  return bands?.name ?? null;
+};
+
+const resolveEventMeta = (slot: AssignmentEventSlot | null) => {
+  if (!slot) return null;
+  const events = slot.events;
+  if (Array.isArray(events)) return events[0] ?? null;
+  return events ?? null;
+};
+
+const slotLabel = (slotInput: AssignmentRow["event_slots"]) => {
+  const slot = resolveSlot(slotInput);
   if (!slot) return "不明なスロット";
-  if (slot.slot_type === "band") return slot.bands?.name ?? "バンド未設定";
+  if (slot.slot_type === "band") return resolveBandName(slot) ?? "バンド未設定";
   if (slot.slot_type === "break") return "休憩";
   if (slot.slot_type === "mc") return "MC";
   return slot.note?.trim() || "その他";
@@ -97,11 +117,12 @@ export default function MyTasksPage() {
     >();
 
     assignments.forEach((assignment) => {
-      const slot = assignment.event_slots;
+      const slot = resolveSlot(assignment.event_slots);
       if (!slot?.event_id) return;
       const eventId = slot.event_id;
-      const eventName = slot.events?.name ?? "イベント名未設定";
-      const eventDate = slot.events?.date ?? null;
+      const eventMeta = resolveEventMeta(slot);
+      const eventName = eventMeta?.name ?? "イベント名未設定";
+      const eventDate = eventMeta?.date ?? null;
       const entry = map.get(eventId) ?? { eventId, eventName, eventDate, items: [] };
       entry.items.push(assignment);
       map.set(eventId, entry);
@@ -181,7 +202,7 @@ export default function MyTasksPage() {
                         </CardHeader>
                         <CardContent className="space-y-3">
                           {ordered.map((assignment) => {
-                            const slot = assignment.event_slots;
+                            const slot = resolveSlot(assignment.event_slots);
                             return (
                               <div
                                 key={assignment.id}

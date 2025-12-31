@@ -387,87 +387,213 @@ export default function LightingInstructionsPage() {
                                       セトリは未入力です。
                                     </p>
                                   ) : (
-                                    <div className="overflow-x-auto rounded-md border border-border bg-background/40">
-                                      <Table className="min-w-[860px]">
-                                        <TableHeader>
-                                          <TableRow>
-                                            <TableHead className="w-[48px]">#</TableHead>
-                                            <TableHead>曲名 / アーティスト / URL</TableHead>
-                                            <TableHead className="w-[120px]">時間</TableHead>
-                                            <TableHead className="w-[180px]">アレンジ等</TableHead>
-                                            <TableHead className="w-[200px]">ライト要望</TableHead>
-                                            <TableHead className="w-[180px]">色要望</TableHead>
-                                            <TableHead className="w-[180px]">備考</TableHead>
-                                          </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                          {bandSongs.map((song, index) => {
-                                            const isSong = song.entry_type !== "mc";
-                                            const title = song.title?.trim()
-                                              ? song.title
-                                              : song.entry_type === "mc"
-                                                ? "MC"
-                                                : "-";
-                                            const artist = isSong ? song.artist?.trim() : null;
-                                            return (
-                                              <TableRow key={song.id}>
-                                                <TableCell className="text-xs text-muted-foreground">
-                                                  {String(index + 1).padStart(2, "0")}
-                                                </TableCell>
-                                                <TableCell className="min-w-[220px]">
-                                                  <div className="space-y-1">
-                                                    <div className="text-sm font-medium">
-                                                      {artist ? `${title} / ${artist}` : title}
+                                    <div className="space-y-3">
+                                      <div className="space-y-2 md:hidden">
+                                        {bandSongs.map((song, index) => {
+                                          const isSong = song.entry_type !== "mc";
+                                          const title = song.title?.trim()
+                                            ? song.title
+                                            : song.entry_type === "mc"
+                                              ? "MC"
+                                              : "-";
+                                          const artist = isSong ? song.artist?.trim() : null;
+                                          return (
+                                            <div
+                                              key={song.id}
+                                              className="rounded-md border border-border bg-background/50 p-3"
+                                            >
+                                              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                                <span>
+                                                  #{String(index + 1).padStart(2, "0")}
+                                                </span>
+                                                <span>{formatDuration(song.duration_sec)}</span>
+                                              </div>
+                                              <div className="mt-1 text-sm font-semibold">
+                                                {artist ? `${title} / ${artist}` : title}
+                                              </div>
+                                              {song.url && (
+                                                <a
+                                                  href={song.url}
+                                                  className="mt-1 block text-xs text-primary underline break-all"
+                                                  target="_blank"
+                                                  rel="noreferrer"
+                                                >
+                                                  {song.url}
+                                                </a>
+                                              )}
+                                              <div className="mt-2 space-y-2 text-xs">
+                                                <div className="flex gap-2">
+                                                  <span className="min-w-[72px] text-muted-foreground">
+                                                    アレンジ
+                                                  </span>
+                                                  <span className="text-foreground whitespace-pre-wrap">
+                                                    {isSong
+                                                      ? song.arrangement_note || "-"
+                                                      : "-"}
+                                                  </span>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                  <span className="min-w-[72px] text-muted-foreground">
+                                                    ライト要望
+                                                  </span>
+                                                  <div className="text-foreground space-y-1">
+                                                    <div>
+                                                      スポット:{" "}
+                                                      {isSong
+                                                        ? formatLightingChoice(
+                                                            song.lighting_spot
+                                                          )
+                                                        : "-"}
                                                     </div>
-                                                    {song.url && (
-                                                      <a
-                                                        href={song.url}
-                                                        className="text-xs text-primary underline break-all"
-                                                        target="_blank"
-                                                        rel="noreferrer"
-                                                      >
-                                                        {song.url}
-                                                      </a>
-                                                    )}
+                                                    <div>
+                                                      ストロボ:{" "}
+                                                      {isSong
+                                                        ? formatLightingChoice(
+                                                            song.lighting_strobe
+                                                          )
+                                                        : "-"}
+                                                    </div>
+                                                    <div>
+                                                      ムービング:{" "}
+                                                      {isSong
+                                                        ? formatLightingChoice(
+                                                            song.lighting_moving
+                                                          )
+                                                        : "-"}
+                                                    </div>
                                                   </div>
-                                                </TableCell>
-                                                <TableCell className="text-xs">
-                                                  {formatDuration(song.duration_sec)}
-                                                </TableCell>
-                                                <TableCell className="text-xs whitespace-pre-wrap">
-                                                  {isSong ? song.arrangement_note || "-" : "-"}
-                                                </TableCell>
-                                                <TableCell className="text-xs space-y-1">
-                                                  <div>
-                                                    スポット:{" "}
-                                                    {isSong
-                                                      ? formatLightingChoice(song.lighting_spot)
-                                                      : "-"}
-                                                  </div>
-                                                  <div>
-                                                    ストロボ:{" "}
-                                                    {isSong
-                                                      ? formatLightingChoice(song.lighting_strobe)
-                                                      : "-"}
-                                                  </div>
-                                                  <div>
-                                                    ムービング:{" "}
-                                                    {isSong
-                                                      ? formatLightingChoice(song.lighting_moving)
-                                                      : "-"}
-                                                  </div>
-                                                </TableCell>
-                                                <TableCell className="text-xs whitespace-pre-wrap">
-                                                  {isSong ? song.lighting_color || "-" : "-"}
-                                                </TableCell>
-                                                <TableCell className="text-xs whitespace-pre-wrap">
-                                                  {song.memo || "-"}
-                                                </TableCell>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                  <span className="min-w-[72px] text-muted-foreground">
+                                                    色要望
+                                                  </span>
+                                                  <span className="text-foreground whitespace-pre-wrap">
+                                                    {isSong ? song.lighting_color || "-" : "-"}
+                                                  </span>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                  <span className="min-w-[72px] text-muted-foreground">
+                                                    備考
+                                                  </span>
+                                                  <span className="text-foreground whitespace-pre-wrap">
+                                                    {song.memo || "-"}
+                                                  </span>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                      <div className="hidden md:block">
+                                        <div className="overflow-x-auto rounded-md border border-border bg-background/40">
+                                          <Table className="min-w-[860px]">
+                                            <TableHeader>
+                                              <TableRow>
+                                                <TableHead className="w-[48px]">#</TableHead>
+                                                <TableHead>
+                                                  曲名 / アーティスト / URL
+                                                </TableHead>
+                                                <TableHead className="w-[120px]">
+                                                  時間
+                                                </TableHead>
+                                                <TableHead className="w-[180px]">
+                                                  アレンジ等
+                                                </TableHead>
+                                                <TableHead className="w-[200px]">
+                                                  ライト要望
+                                                </TableHead>
+                                                <TableHead className="w-[180px]">
+                                                  色要望
+                                                </TableHead>
+                                                <TableHead className="w-[180px]">
+                                                  備考
+                                                </TableHead>
                                               </TableRow>
-                                            );
-                                          })}
-                                        </TableBody>
-                                      </Table>
+                                            </TableHeader>
+                                            <TableBody>
+                                              {bandSongs.map((song, index) => {
+                                                const isSong = song.entry_type !== "mc";
+                                                const title = song.title?.trim()
+                                                  ? song.title
+                                                  : song.entry_type === "mc"
+                                                    ? "MC"
+                                                    : "-";
+                                                const artist = isSong
+                                                  ? song.artist?.trim()
+                                                  : null;
+                                                return (
+                                                  <TableRow key={song.id}>
+                                                    <TableCell className="text-xs text-muted-foreground">
+                                                      {String(index + 1).padStart(2, "0")}
+                                                    </TableCell>
+                                                    <TableCell className="min-w-[220px]">
+                                                      <div className="space-y-1">
+                                                        <div className="text-sm font-medium">
+                                                          {artist
+                                                            ? `${title} / ${artist}`
+                                                            : title}
+                                                        </div>
+                                                        {song.url && (
+                                                          <a
+                                                            href={song.url}
+                                                            className="text-xs text-primary underline break-all"
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                          >
+                                                            {song.url}
+                                                          </a>
+                                                        )}
+                                                      </div>
+                                                    </TableCell>
+                                                    <TableCell className="text-xs">
+                                                      {formatDuration(song.duration_sec)}
+                                                    </TableCell>
+                                                    <TableCell className="text-xs whitespace-pre-wrap">
+                                                      {isSong
+                                                        ? song.arrangement_note || "-"
+                                                        : "-"}
+                                                    </TableCell>
+                                                    <TableCell className="text-xs space-y-1">
+                                                      <div>
+                                                        スポット:{" "}
+                                                        {isSong
+                                                          ? formatLightingChoice(
+                                                              song.lighting_spot
+                                                            )
+                                                          : "-"}
+                                                      </div>
+                                                      <div>
+                                                        ストロボ:{" "}
+                                                        {isSong
+                                                          ? formatLightingChoice(
+                                                              song.lighting_strobe
+                                                            )
+                                                          : "-"}
+                                                      </div>
+                                                      <div>
+                                                        ムービング:{" "}
+                                                        {isSong
+                                                          ? formatLightingChoice(
+                                                              song.lighting_moving
+                                                            )
+                                                          : "-"}
+                                                      </div>
+                                                    </TableCell>
+                                                    <TableCell className="text-xs whitespace-pre-wrap">
+                                                      {isSong
+                                                        ? song.lighting_color || "-"
+                                                        : "-"}
+                                                    </TableCell>
+                                                    <TableCell className="text-xs whitespace-pre-wrap">
+                                                      {song.memo || "-"}
+                                                    </TableCell>
+                                                  </TableRow>
+                                                );
+                                              })}
+                                            </TableBody>
+                                          </Table>
+                                        </div>
+                                      </div>
                                     </div>
                                   )}
                                 </div>

@@ -31,7 +31,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <TitleManager />
             <div className="min-h-screen flex flex-col">
               <PageTransition>{children}</PageTransition>
-              <footer className="border-t border-border bg-background/80 print:hidden">
+              <footer className="app-footer border-t border-border bg-background/80 print:hidden">
                 <div className="container mx-auto px-4 py-6 sm:px-6">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center gap-3">

@@ -251,7 +251,7 @@ export default function HomePage() {
                         </span>
                       </div>
                       <h3 className="text-lg md:text-xl font-bold mb-2">
-                        イベント管理
+                        イベント一覧
                       </h3>
                       <p className="text-xs md:text-sm text-muted-foreground flex-1">
                         ライブやイベントの一覧、詳細確認、レパートリー提出

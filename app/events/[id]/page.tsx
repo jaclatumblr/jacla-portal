@@ -142,6 +142,48 @@ export default function EventDetailPage() {
   const canManageBands =
     event?.event_type === "live" || event?.event_type === "camp";
 
+  const submittedBands = bands.filter((band) => band.status === "submitted");
+  const pendingBands = bands.filter((band) => band.status === "pending");
+
+  const renderBandList = (list: BandSummary[]) => {
+    if (list.length === 0) {
+      return (
+        <p className="text-muted-foreground text-center py-8">
+          該当するバンドがありません。
+        </p>
+      );
+    }
+    return list.map((band, index) => (
+      <div
+        key={band.id}
+        className="flex items-center justify-between p-3 md:p-4 bg-card/50 border border-border rounded-lg hover:border-primary/30 transition-all"
+      >
+        <div className="flex items-center gap-3 md:gap-4 min-w-0">
+          <span className="hidden sm:block text-xs text-muted-foreground font-mono w-6">
+            {String(index + 1).padStart(2, "0")}
+          </span>
+          <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+            <Music className="w-4 h-4 md:w-5 md:h-5 text-primary" />
+          </div>
+          <div className="min-w-0">
+            <p className="font-medium text-sm md:text-base truncate">
+              {band.name}
+            </p>
+            <p className="text-xs md:text-sm text-muted-foreground">
+              {band.songs > 0 ? `${band.songs}曲` : "未提出"}
+            </p>
+          </div>
+        </div>
+        <Badge
+          variant={band.status === "submitted" ? "default" : "outline"}
+          className="shrink-0 text-xs"
+        >
+          {band.status === "submitted" ? "提出済み" : "未提出"}
+        </Badge>
+      </div>
+    ));
+  };
+
   return (
     <AuthGuard>
       <div className="flex min-h-screen bg-background">
@@ -344,49 +386,15 @@ export default function EventDetailPage() {
                   </div>
 
                   <TabsContent value="all" className="space-y-3">
-                    {bands.map((band, index) => (
-                      <div
-                        key={band.id}
-                        className="flex items-center justify-between p-3 md:p-4 bg-card/50 border border-border rounded-lg hover:border-primary/30 transition-all"
-                      >
-                        <div className="flex items-center gap-3 md:gap-4 min-w-0">
-                          <span className="hidden sm:block text-xs text-muted-foreground font-mono w-6">
-                            {String(index + 1).padStart(2, "0")}
-                          </span>
-                          <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                            <Music className="w-4 h-4 md:w-5 md:h-5 text-primary" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="font-medium text-sm md:text-base truncate">
-                              {band.name}
-                            </p>
-                            <p className="text-xs md:text-sm text-muted-foreground">
-                              {band.songs > 0 ? `${band.songs}曲` : "未提出"}
-                            </p>
-                          </div>
-                        </div>
-                        <Badge
-                          variant={
-                            band.status === "submitted" ? "default" : "outline"
-                          }
-                          className="shrink-0 text-xs"
-                        >
-                          {band.status === "submitted" ? "\u63d0\u51fa\u6e08\u307f" : "\u672a\u63d0\u51fa"}
-                        </Badge>
-                      </div>
-                    ))}
+                    {renderBandList(bands)}
                   </TabsContent>
 
-                  <TabsContent value="submitted">
-                    <p className="text-muted-foreground text-center py-8">
-                      提出済みバンドのみ表示（後でフィルタ実装）
-                    </p>
+                  <TabsContent value="submitted" className="space-y-3">
+                    {renderBandList(submittedBands)}
                   </TabsContent>
 
-                  <TabsContent value="pending">
-                    <p className="text-muted-foreground text-center py-8">
-                      未提出バンドのみ表示（後でフィルタ実装）
-                    </p>
+                  <TabsContent value="pending" className="space-y-3">
+                    {renderBandList(pendingBands)}
                   </TabsContent>
                 </Tabs>
               </div>

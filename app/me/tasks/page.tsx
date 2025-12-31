@@ -1,50 +1,120 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, ArrowLeft, ArrowRight, CheckCircle, Clock } from "lucide-react";
+import { ArrowLeft, Calendar, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
+import { supabase } from "@/lib/supabaseClient";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "@/lib/toast";
 
-const tasks = {
-  pending: [
-    {
-      id: 1,
-      title: "春ライブ レパートリー提出",
-      deadline: "2025-03-01",
-      type: "提出",
-      urgent: true,
-      link: "/events",
-    },
-    {
-      id: 2,
-      title: "新歓コンサート バンドメンバー確認",
-      deadline: "2025-03-15",
-      type: "確認",
-      urgent: false,
-      link: "/events",
-    },
-  ],
-  assigned: [
-    {
-      id: 3,
-      title: "PA機材点検（担当）",
-      deadline: "2025-02-15",
-      type: "担当",
-      urgent: false,
-      link: "/pa",
-    },
-  ],
-  completed: [
-    {
-      id: 4,
-      title: "部員情報更新",
-      completedAt: "2025-01-10",
-      type: "完了",
-    },
-  ],
+type AssignmentRow = {
+  id: string;
+  role: "pa" | "light";
+  is_fixed: boolean;
+  note: string | null;
+  event_slots: {
+    id: string;
+    event_id: string;
+    slot_type: "band" | "break" | "mc" | "other";
+    order_in_event: number | null;
+    start_time: string | null;
+    end_time: string | null;
+    note: string | null;
+    bands: { name: string | null } | null;
+    events: { name: string; date: string } | null;
+  } | null;
+};
+
+const roleLabel = (role: AssignmentRow["role"]) => (role === "pa" ? "PA" : "照明");
+
+const slotLabel = (slot: AssignmentRow["event_slots"]) => {
+  if (!slot) return "不明なスロット";
+  if (slot.slot_type === "band") return slot.bands?.name ?? "バンド未設定";
+  if (slot.slot_type === "break") return "休憩";
+  if (slot.slot_type === "mc") return "MC";
+  return slot.note?.trim() || "その他";
+};
+
+const timeLabel = (start: string | null, end: string | null) => {
+  if (!start && !end) return "時間未設定";
+  if (start && end) return `${start} - ${end}`;
+  return start ?? end ?? "時間未設定";
 };
 
 export default function MyTasksPage() {
+  const { session } = useAuth();
+  const userId = session?.user.id;
+  const [loading, setLoading] = useState(true);
+  const [assignments, setAssignments] = useState<AssignmentRow[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+
+    (async () => {
+      setLoading(true);
+      setError(null);
+
+      const { data, error } = await supabase
+        .from("slot_staff_assignments")
+        .select(
+          "id, role, is_fixed, note, event_slots(id, event_id, slot_type, order_in_event, start_time, end_time, note, bands(name), events(name, date))"
+        )
+        .eq("profile_id", userId);
+
+      if (cancelled) return;
+
+      if (error) {
+        console.error(error);
+        setError("シフトの取得に失敗しました。");
+        setAssignments([]);
+      } else {
+        setAssignments((data ?? []) as AssignmentRow[]);
+      }
+      setLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  useEffect(() => {
+    if (!error) return;
+    toast.error(error);
+    setError(null);
+  }, [error]);
+
+  const groupedAssignments = useMemo(() => {
+    const map = new Map<
+      string,
+      { eventId: string; eventName: string; eventDate: string | null; items: AssignmentRow[] }
+    >();
+
+    assignments.forEach((assignment) => {
+      const slot = assignment.event_slots;
+      if (!slot?.event_id) return;
+      const eventId = slot.event_id;
+      const eventName = slot.events?.name ?? "イベント名未設定";
+      const eventDate = slot.events?.date ?? null;
+      const entry = map.get(eventId) ?? { eventId, eventName, eventDate, items: [] };
+      entry.items.push(assignment);
+      map.set(eventId, entry);
+    });
+
+    return Array.from(map.values()).sort((a, b) => {
+      if (!a.eventDate && !b.eventDate) return a.eventName.localeCompare(b.eventName, "ja");
+      if (!a.eventDate) return 1;
+      if (!b.eventDate) return -1;
+      return a.eventDate.localeCompare(b.eventDate);
+    });
+  }, [assignments]);
+
   return (
     <AuthGuard>
       <div className="flex min-h-screen bg-background">
@@ -64,10 +134,10 @@ export default function MyTasksPage() {
                   <span className="text-sm">マイページ</span>
                 </Link>
 
-                <span className="text-xs text-primary tracking-[0.3em] font-mono">MY TASKS</span>
-                <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mt-2 mb-2">やること</h1>
+                <span className="text-xs text-primary tracking-[0.3em] font-mono">MY SHIFTS</span>
+                <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mt-2 mb-2">担当シフト</h1>
                 <p className="text-muted-foreground text-sm md:text-base">
-                  未提出・担当・確認待ちのタスク一覧
+                  参加イベントごとの担当シフトを一覧で確認できます。
                 </p>
               </div>
             </div>
@@ -75,107 +145,80 @@ export default function MyTasksPage() {
 
           <section className="py-8 md:py-12">
             <div className="container mx-auto px-4 sm:px-6">
-              <div className="max-w-4xl mx-auto">
-                <Tabs defaultValue="pending">
-                  <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 mb-6">
-                    <TabsList className="bg-card/50 border border-border w-max sm:w-auto">
-                      <TabsTrigger value="pending" className="text-sm gap-2">
-                        <AlertCircle className="w-4 h-4" />
-                        未完了 ({tasks.pending.length})
-                      </TabsTrigger>
-                      <TabsTrigger value="assigned" className="text-sm gap-2">
-                        <Clock className="w-4 h-4" />
-                        担当 ({tasks.assigned.length})
-                      </TabsTrigger>
-                      <TabsTrigger value="completed" className="text-sm gap-2">
-                        <CheckCircle className="w-4 h-4" />
-                        完了 ({tasks.completed.length})
-                      </TabsTrigger>
-                    </TabsList>
+              <div className="max-w-4xl mx-auto space-y-6">
+                {loading ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Clock className="w-4 h-4 animate-spin" />
+                    読み込み中です...
                   </div>
+                ) : groupedAssignments.length === 0 ? (
+                  <Card className="bg-card/60 border-border">
+                    <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                      現在の担当シフトはありません。
+                    </CardContent>
+                  </Card>
+                ) : (
+                  groupedAssignments.map((group) => {
+                    const ordered = [...group.items].sort((a, b) => {
+                      const slotA = a.event_slots;
+                      const slotB = b.event_slots;
+                      const orderA = slotA?.order_in_event ?? Number.MAX_SAFE_INTEGER;
+                      const orderB = slotB?.order_in_event ?? Number.MAX_SAFE_INTEGER;
+                      if (orderA !== orderB) return orderA - orderB;
+                      return (slotA?.start_time ?? "").localeCompare(slotB?.start_time ?? "");
+                    });
 
-                  <TabsContent value="pending" className="space-y-3">
-                    {tasks.pending.map((task) => (
-                      <Link
-                        key={task.id}
-                        href={task.link}
-                        className={`group flex items-center justify-between p-4 rounded-lg border transition-all ${
-                          task.urgent
-                            ? "border-orange-500/50 bg-orange-500/5 hover:border-orange-500"
-                            : "border-border bg-card/50 hover:border-primary/50"
-                        }`}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div
-                            className={`w-2 h-2 rounded-full shrink-0 ${
-                              task.urgent ? "bg-orange-500" : "bg-primary"
-                            }`}
-                          />
-                          <div className="min-w-0">
-                            <p className="font-medium text-sm md:text-base truncate group-hover:text-primary transition-colors">
-                              {task.title}
-                            </p>
-                            <p className="text-xs text-muted-foreground">締切: {task.deadline}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <Badge variant={task.urgent ? "destructive" : "outline"} className="text-xs">
-                            {task.type}
-                          </Badge>
-                          <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                        </div>
-                      </Link>
-                    ))}
-                  </TabsContent>
-
-                  <TabsContent value="assigned" className="space-y-3">
-                    {tasks.assigned.map((task) => (
-                      <Link
-                        key={task.id}
-                        href={task.link}
-                        className="group flex items-center justify-between p-4 rounded-lg border border-border bg-card/50 hover:border-primary/50 transition-all"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-2 h-2 rounded-full bg-secondary shrink-0" />
-                          <div className="min-w-0">
-                            <p className="font-medium text-sm md:text-base truncate group-hover:text-primary transition-colors">
-                              {task.title}
-                            </p>
-                            <p className="text-xs text-muted-foreground">締切: {task.deadline}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <Badge variant="secondary" className="text-xs">
-                            {task.type}
-                          </Badge>
-                          <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                        </div>
-                      </Link>
-                    ))}
-                  </TabsContent>
-
-                  <TabsContent value="completed" className="space-y-3">
-                    {tasks.completed.map((task) => (
-                      <div
-                        key={task.id}
-                        className="flex items-center justify-between p-4 rounded-lg border border-border bg-card/50 opacity-60"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
-                          <div className="min-w-0">
-                            <p className="font-medium text-sm md:text-base truncate line-through">
-                              {task.title}
-                            </p>
-                            <p className="text-xs text-muted-foreground">完了: {task.completedAt}</p>
-                          </div>
-                        </div>
-                        <Badge variant="outline" className="text-xs text-green-500 border-green-500/30">
-                          {task.type}
-                        </Badge>
-                      </div>
-                    ))}
-                  </TabsContent>
-                </Tabs>
+                    return (
+                      <Card key={group.eventId} className="bg-card/60 border-border">
+                        <CardHeader>
+                          <CardTitle className="text-lg flex items-center gap-2">
+                            <Calendar className="w-4 h-4" />
+                            {group.eventName}
+                          </CardTitle>
+                          <CardDescription>
+                            {group.eventDate ? `${group.eventDate} 開催` : "開催日未設定"}
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          {ordered.map((assignment) => {
+                            const slot = assignment.event_slots;
+                            return (
+                              <div
+                                key={assignment.id}
+                                className="flex flex-col gap-2 rounded-lg border border-border px-3 py-2 md:flex-row md:items-center md:justify-between"
+                              >
+                                <div className="space-y-1 min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <Badge variant="outline">{roleLabel(assignment.role)}</Badge>
+                                    {assignment.is_fixed && (
+                                      <Badge variant="secondary">固定</Badge>
+                                    )}
+                                    <p className="text-sm font-medium truncate">
+                                      {slotLabel(slot)}
+                                    </p>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground">
+                                    {slot?.slot_type?.toUpperCase() ?? "-"} / {timeLabel(slot?.start_time ?? null, slot?.end_time ?? null)}
+                                  </p>
+                                  {slot?.note && (
+                                    <p className="text-xs text-muted-foreground">
+                                      {slot.note}
+                                    </p>
+                                  )}
+                                  {assignment.note && (
+                                    <p className="text-xs text-muted-foreground">
+                                      {assignment.note}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </CardContent>
+                      </Card>
+                    );
+                  })
+                )}
               </div>
             </div>
           </section>
@@ -184,4 +227,3 @@ export default function MyTasksPage() {
     </AuthGuard>
   );
 }
-

@@ -690,9 +690,10 @@ export default function RepertoireSubmitPage() {
       { id: "fixed-mon-3", label: "MON3", dashed: true, x: 50, y: 82, fixed: true },
       { id: "fixed-mon-4", label: "MON4", dashed: true, x: 88, y: 68, fixed: true },
     ];
-    if (bandMembers.some((member) => member.isMc)) {
-      items.push({ id: "fixed-mc", label: "MC", dashed: false, x: 50, y: 72, fixed: true });
-    }
+    items.push(
+      { id: "fixed-mc-1", label: "MC1", dashed: false, x: 26, y: 84, fixed: true },
+      { id: "fixed-mc-2", label: "MC2", dashed: false, x: 58, y: 10, fixed: true }
+    );
     return items;
   }, [bandMembers]);
 
@@ -2011,8 +2012,15 @@ export default function RepertoireSubmitPage() {
     const occupants = stageOccupants.filter(
       (entry) => !(entry.type === type && entry.id === excludeId)
     );
+    const filteredOccupants =
+      type === "member"
+        ? occupants.filter((entry) => {
+            if (entry.type !== "fixed") return true;
+            return entry.id?.startsWith("fixed-main");
+          })
+        : occupants;
     const isOverlapping = (posX: number, posY: number) =>
-      occupants.some((entry) => {
+      filteredOccupants.some((entry) => {
         const distance = Math.hypot(entry.x - posX, entry.y - posY);
         return distance < entry.radius + radius;
       });

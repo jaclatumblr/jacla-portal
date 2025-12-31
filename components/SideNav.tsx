@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -63,6 +63,13 @@ export function SideNav() {
   const { setTheme } = useTheme();
   const { canAccessAdmin } = useRoleFlags();
   const { session } = useAuth();
+
+  useEffect(() => {
+    document.body.dataset.hasSidenav = "1";
+    return () => {
+      delete document.body.dataset.hasSidenav;
+    };
+  }, []);
 
   const avatarUrl =
     session?.user.user_metadata?.avatar_url ||

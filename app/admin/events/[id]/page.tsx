@@ -8,6 +8,7 @@ import {
   BadgeCheck,
   Calendar,
   CheckCircle2,
+  ChevronDown,
   MapPin,
   PencilLine,
   Plus,
@@ -93,6 +94,24 @@ type EventSlot = {
   note: string | null;
 };
 
+type EventStaffMember = {
+  id: string;
+  event_id: string;
+  profile_id: string;
+  can_pa: boolean;
+  can_light: boolean;
+  note: string | null;
+};
+
+type SlotStaffAssignment = {
+  id: string;
+  event_slot_id: string;
+  profile_id: string;
+  role: "pa" | "light";
+  is_fixed: boolean;
+  note: string | null;
+};
+
 const statusOptions = [
   { value: "draft", label: "下書き" },
   { value: "recruiting", label: "募集中" },
@@ -158,6 +177,13 @@ export default function AdminEventDetailPage() {
   const [slots, setSlots] = useState<EventSlot[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [slotsSaving, setSlotsSaving] = useState(false);
+  const [slotsGenerating, setSlotsGenerating] = useState(false);
+  const [expandedSlots, setExpandedSlots] = useState<Record<string, boolean>>({});
+  const [eventStaff, setEventStaff] = useState<EventStaffMember[]>([]);
+  const [staffAssignments, setStaffAssignments] = useState<SlotStaffAssignment[]>([]);
+  const [savingStaff, setSavingStaff] = useState(false);
+  const [savingAssignments, setSavingAssignments] = useState(false);
+  const [assignmentDrafts, setAssignmentDrafts] = useState<Record<string, string>>({});
   const [newBandName, setNewBandName] = useState("");
   const [memberForm, setMemberForm] = useState({ profileId: "", instrument: "" });
   const [songForm, setSongForm] = useState({
@@ -167,6 +193,12 @@ export default function AdminEventDetailPage() {
     entry_type: "song",
     duration_sec: "",
     memo: "",
+  });
+  const [staffForm, setStaffForm] = useState({
+    profileId: "",
+    can_pa: false,
+    can_light: false,
+    note: "",
   });
   const [savingEvent, setSavingEvent] = useState(false);
   const [savingBand, setSavingBand] = useState(false);
@@ -190,6 +222,106 @@ export default function AdminEventDetailPage() {
     profiles.forEach((p) => map.set(p.id, p));
     return map;
   }, [profiles]);
+
+  const bandNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    bands.forEach((band) => map.set(band.id, band.name));
+    return map;
+  }, [bands]);
+
+  const availableStaffOptions = useMemo(() => {
+    const assigned = new Set(eventStaff.map((staff) => staff.profile_id));
+    return profiles.filter((profile) => !assigned.has(profile.id));
+  }, [eventStaff, profiles]);
+
+  const assignmentsBySlot = useMemo(() => {
+    const map = new Map<string, { pa: SlotStaffAssignment[]; light: SlotStaffAssignment[] }>();
+    staffAssignments.forEach((assignment) => {
+      const bucket = map.get(assignment.event_slot_id) ?? { pa: [], light: [] };
+      if (assignment.role === "pa") {
+        bucket.pa.push(assignment);
+      } else {
+        bucket.light.push(assignment);
+      }
+      map.set(assignment.event_slot_id, bucket);
+    });
+    return map;
+  }, [staffAssignments]);
+
+  const slotLabel = (slot: EventSlot) => {
+    if (slot.slot_type === "band") {
+      return bandNameMap.get(slot.band_id ?? "") ?? "バンド未設定";
+    }
+    if (slot.slot_type === "break") return "休憩";
+    if (slot.slot_type === "mc") return "MC";
+    return slot.note?.trim() || "その他";
+  };
+
+  const slotTimeLabel = (slot: EventSlot) => {
+    if (!slot.start_time && !slot.end_time) return "時間未設定";
+    if (slot.start_time && slot.end_time) return `${slot.start_time} - ${slot.end_time}`;
+    return slot.start_time ?? slot.end_time ?? "時間未設定";
+  };
+
+  const slotsById = useMemo(() => {
+    const map = new Map<string, EventSlot>();
+    slots.forEach((slot) => map.set(slot.id, slot));
+    return map;
+  }, [slots]);
+
+  const doubleBookings = useMemo(() => {
+    const toMinutes = (value: string | null) => {
+      if (!value) return null;
+      const [h, m] = value.split(":").map((part) => Number(part));
+      if (Number.isNaN(h) || Number.isNaN(m)) return null;
+      return h * 60 + m;
+    };
+
+    const buckets = new Map<string, { profileId: string; role: string; slots: EventSlot[] }>();
+    staffAssignments.forEach((assignment) => {
+      const slot = slotsById.get(assignment.event_slot_id);
+      if (!slot?.start_time || !slot.end_time) return;
+      const key = `${assignment.profile_id}:${assignment.role}`;
+      const bucket = buckets.get(key) ?? {
+        profileId: assignment.profile_id,
+        role: assignment.role,
+        slots: [],
+      };
+      bucket.slots.push(slot);
+      buckets.set(key, bucket);
+    });
+
+    const conflicts: {
+      profileId: string;
+      role: string;
+      slotA: EventSlot;
+      slotB: EventSlot;
+    }[] = [];
+
+    buckets.forEach((bucket) => {
+      const ordered = [...bucket.slots].sort((a, b) => {
+        const startA = toMinutes(a.start_time) ?? Number.MAX_SAFE_INTEGER;
+        const startB = toMinutes(b.start_time) ?? Number.MAX_SAFE_INTEGER;
+        return startA - startB;
+      });
+      for (let i = 0; i < ordered.length - 1; i += 1) {
+        const current = ordered[i];
+        const next = ordered[i + 1];
+        const currentEnd = toMinutes(current.end_time);
+        const nextStart = toMinutes(next.start_time);
+        if (currentEnd != null && nextStart != null && nextStart < currentEnd) {
+          conflicts.push({
+            profileId: bucket.profileId,
+            role: bucket.role,
+            slotA: current,
+            slotB: next,
+          });
+        }
+      }
+    });
+
+    return conflicts;
+  }, [staffAssignments, slotsById]);
 
   const selectedBandMembers = useMemo(
     () => members.filter((m) => m.band_id === selectedBandId),
@@ -237,7 +369,7 @@ export default function AdminEventDetailPage() {
       setError(null);
       setSlotsLoading(true);
 
-      const [eventRes, bandsRes, profilesRes, slotsRes] = await Promise.all([
+      const [eventRes, bandsRes, profilesRes, slotsRes, staffRes] = await Promise.all([
         supabase
           .from("events")
           .select(
@@ -259,6 +391,11 @@ export default function AdminEventDetailPage() {
           .eq("event_id", eventId)
           .order("order_in_event", { ascending: true })
           .order("start_time", { ascending: true }),
+        supabase
+          .from("event_staff_members")
+          .select("id, event_id, profile_id, can_pa, can_light, note")
+          .eq("event_id", eventId)
+          .order("created_at", { ascending: true }),
       ]);
 
       if (cancelled) return;
@@ -306,6 +443,33 @@ export default function AdminEventDetailPage() {
         setSlots((slotsRes.data ?? []) as EventSlot[]);
       }
       setSlotsLoading(false);
+
+      if (staffRes.error) {
+        console.error(staffRes.error);
+        setError((prev) => prev ?? "当日スタッフの取得に失敗しました。");
+        setEventStaff([]);
+      } else {
+        setEventStaff((staffRes.data ?? []) as EventStaffMember[]);
+      }
+
+      const slotIds = (slotsRes.data ?? []).map((slot: any) => slot.id).filter(Boolean);
+      if (slotIds.length > 0) {
+        const assignmentsRes = await supabase
+          .from("slot_staff_assignments")
+          .select("id, event_slot_id, profile_id, role, is_fixed, note")
+          .in("event_slot_id", slotIds);
+        if (!cancelled) {
+          if (assignmentsRes.error) {
+            console.error(assignmentsRes.error);
+            setError((prev) => prev ?? "シフト割当の取得に失敗しました。");
+            setStaffAssignments([]);
+          } else {
+            setStaffAssignments((assignmentsRes.data ?? []) as SlotStaffAssignment[]);
+          }
+        }
+      } else {
+        setStaffAssignments([]);
+      }
 
       const bandIds = bandList.map((b) => b.id);
       if (bandIds.length === 0) {
@@ -371,6 +535,10 @@ export default function AdminEventDetailPage() {
     setSlots((prev) => prev.map((slot) => (slot.id === id ? { ...slot, [key]: value } : slot)));
   };
 
+  const toggleSlotExpanded = (slotId: string) => {
+    setExpandedSlots((prev) => ({ ...prev, [slotId]: !prev[slotId] }));
+  };
+
   const handleSaveSlots = async () => {
     if (!eventId || slotsSaving) return;
     setSlotsSaving(true);
@@ -419,7 +587,362 @@ export default function AdminEventDetailPage() {
       return;
     }
     setSlots((prev) => prev.filter((slot) => slot.id !== slotId));
+    setStaffAssignments((prev) => prev.filter((assignment) => assignment.event_slot_id !== slotId));
     toast.success("スロットを削除しました。");
+  };
+
+  const handleGenerateSlots = async () => {
+    if (!eventId || slotsGenerating) return;
+    if (bands.length === 0) {
+      setError("バンドが登録されていません。");
+      return;
+    }
+    if (slots.length > 0) {
+      const confirmed = window.confirm("既存のスロットを上書きしますか？");
+      if (!confirmed) return;
+    }
+
+    setSlotsGenerating(true);
+    setError(null);
+
+    if (slots.length > 0) {
+      const { error } = await supabase.from("event_slots").delete().eq("event_id", eventId);
+      if (error) {
+        console.error(error);
+        setError("既存スロットの削除に失敗しました。");
+        setSlotsGenerating(false);
+        return;
+      }
+      setStaffAssignments([]);
+    }
+
+    const durationMap = new Map<string, number>();
+    songs.forEach((song) => {
+      if (!song.band_id || !song.duration_sec) return;
+      const current = durationMap.get(song.band_id) ?? 0;
+      durationMap.set(song.band_id, current + song.duration_sec);
+    });
+
+    const parseTime = (value: string | null) => {
+      if (!value) return null;
+      const [h, m] = value.split(":").map((part) => Number(part));
+      if (Number.isNaN(h) || Number.isNaN(m)) return null;
+      return h * 60 + m;
+    };
+    const formatTime = (minutes: number) => {
+      const h = Math.floor(minutes / 60);
+      const m = minutes % 60;
+      return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+    };
+
+    const baseStart = parseTime(eventForm?.start_time ?? null);
+    let cursor = baseStart;
+    const changeover = eventForm?.default_changeover_min ?? 15;
+
+    const payloads = bands.map((band, index) => {
+      const durationSec = durationMap.get(band.id) ?? 0;
+      const durationMin = durationSec > 0 ? Math.ceil(durationSec / 60) : null;
+      let startTime: string | null = null;
+      let endTime: string | null = null;
+      if (cursor != null) {
+        startTime = formatTime(cursor);
+        if (durationMin != null) {
+          endTime = formatTime(cursor + durationMin);
+          cursor += durationMin + changeover;
+        }
+      }
+
+      return {
+        event_id: eventId,
+        band_id: band.id,
+        slot_type: "band",
+        order_in_event: index + 1,
+        start_time: startTime,
+        end_time: endTime,
+        changeover_min: changeover,
+        note: null,
+      };
+    });
+
+    const { data, error } = await supabase
+      .from("event_slots")
+      .insert(payloads)
+      .select("id, event_id, band_id, slot_type, order_in_event, start_time, end_time, changeover_min, note");
+
+    if (error || !data) {
+      console.error(error);
+      setError("スロットの自動生成に失敗しました。");
+      setSlotsGenerating(false);
+      return;
+    }
+
+    setSlots((data ?? []) as EventSlot[]);
+    toast.success("スロットを自動生成しました。");
+    setSlotsGenerating(false);
+  };
+
+  const handleAutoAssign = async () => {
+    if (!eventId || savingAssignments) return;
+    setSavingAssignments(true);
+    setError(null);
+
+    const ordered = [...orderedSlots];
+    if (ordered.length === 0) {
+      setError("スロットがありません。");
+      setSavingAssignments(false);
+      return;
+    }
+
+    const addAssignments: Array<{
+      event_slot_id: string;
+      profile_id: string;
+      role: "pa" | "light";
+      is_fixed: boolean;
+      note: null;
+    }> = [];
+
+    (["pa", "light"] as const).forEach((role) => {
+      const eligible = eventStaff
+        .filter((staff) => (role === "pa" ? staff.can_pa : staff.can_light))
+        .map((staff) => staff.profile_id);
+      if (eligible.length === 0) return;
+
+      const existingBySlot = new Set(
+        staffAssignments
+          .filter((assignment) => assignment.role === role)
+          .map((assignment) => assignment.event_slot_id)
+      );
+
+      let cursor = 0;
+      ordered.forEach((slot) => {
+        if (existingBySlot.has(slot.id)) return;
+        const profileId = eligible[cursor % eligible.length];
+        addAssignments.push({
+          event_slot_id: slot.id,
+          profile_id: profileId,
+          role,
+          is_fixed: false,
+          note: null,
+        });
+        cursor += 1;
+      });
+    });
+
+    if (addAssignments.length === 0) {
+      toast.success("割当済みのため追加はありません。");
+      setSavingAssignments(false);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("slot_staff_assignments")
+      .insert(addAssignments)
+      .select("id, event_slot_id, profile_id, role, is_fixed, note");
+
+    if (error || !data) {
+      console.error(error);
+      setError("シフトの自動割当に失敗しました。");
+      setSavingAssignments(false);
+      return;
+    }
+
+    setStaffAssignments((prev) => [...prev, ...(data as SlotStaffAssignment[])]);
+    toast.success("シフトを自動割当しました。");
+    setSavingAssignments(false);
+  };
+
+  const handleAddStaff = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!eventId || !staffForm.profileId || savingStaff) return;
+    setSavingStaff(true);
+    setError(null);
+
+    const payload = {
+      event_id: eventId,
+      profile_id: staffForm.profileId,
+      can_pa: staffForm.can_pa,
+      can_light: staffForm.can_light,
+      note: staffForm.note.trim() || null,
+    };
+
+    const { data, error } = await supabase
+      .from("event_staff_members")
+      .insert([payload])
+      .select("id, event_id, profile_id, can_pa, can_light, note")
+      .maybeSingle();
+
+    if (error || !data) {
+      console.error(error);
+      setError("当日スタッフの追加に失敗しました。");
+      setSavingStaff(false);
+      return;
+    }
+
+    setEventStaff((prev) => [...prev, data as EventStaffMember]);
+    setStaffForm({ profileId: "", can_pa: false, can_light: false, note: "" });
+    toast.success("当日スタッフを追加しました。");
+    setSavingStaff(false);
+  };
+
+  const handleUpdateStaffLocal = (id: string, patch: Partial<EventStaffMember>) => {
+    setEventStaff((prev) => prev.map((staff) => (staff.id === id ? { ...staff, ...patch } : staff)));
+  };
+
+  const handleSaveStaff = async () => {
+    if (!eventId || savingStaff) return;
+    setSavingStaff(true);
+    setError(null);
+
+    const payloads = eventStaff.map((staff) => ({
+      id: staff.id,
+      event_id: eventId,
+      profile_id: staff.profile_id,
+      can_pa: Boolean(staff.can_pa),
+      can_light: Boolean(staff.can_light),
+      note: staff.note?.trim() || null,
+    }));
+
+    const { data, error } = await supabase
+      .from("event_staff_members")
+      .upsert(payloads, { onConflict: "id" })
+      .select("id, event_id, profile_id, can_pa, can_light, note");
+
+    if (error || !data) {
+      console.error(error);
+      setError("当日スタッフの保存に失敗しました。");
+      setSavingStaff(false);
+      return;
+    }
+
+    setEventStaff((data ?? []) as EventStaffMember[]);
+    toast.success("当日スタッフを保存しました。");
+    setSavingStaff(false);
+  };
+
+  const handleRemoveStaff = async (staffId: string) => {
+    if (!staffId || savingStaff) return;
+    setSavingStaff(true);
+    setError(null);
+
+    const staff = eventStaff.find((item) => item.id === staffId);
+    const { error } = await supabase.from("event_staff_members").delete().eq("id", staffId);
+    if (error) {
+      console.error(error);
+      setError("当日スタッフの削除に失敗しました。");
+      setSavingStaff(false);
+      return;
+    }
+
+    setEventStaff((prev) => prev.filter((staff) => staff.id !== staffId));
+    if (staff?.profile_id) {
+      const slotIds = slots.map((slot) => slot.id);
+      if (slotIds.length > 0) {
+        const { error: assignmentError } = await supabase
+          .from("slot_staff_assignments")
+          .delete()
+          .eq("profile_id", staff.profile_id)
+          .in("event_slot_id", slotIds);
+        if (assignmentError) {
+          console.error(assignmentError);
+        }
+      }
+      setStaffAssignments((prev) =>
+        prev.filter((assignment) => assignment.profile_id !== staff.profile_id)
+      );
+    }
+    toast.success("当日スタッフを削除しました。");
+    setSavingStaff(false);
+  };
+
+  const handleAddAssignment = async (slotId: string, role: "pa" | "light", profileId: string) => {
+    if (!slotId || !profileId || savingAssignments) return;
+    setSavingAssignments(true);
+    setError(null);
+
+    const payload = {
+      event_slot_id: slotId,
+      profile_id: profileId,
+      role,
+      is_fixed: false,
+      note: null,
+    };
+
+    const { data, error } = await supabase
+      .from("slot_staff_assignments")
+      .insert([payload])
+      .select("id, event_slot_id, profile_id, role, is_fixed, note")
+      .maybeSingle();
+
+    if (error || !data) {
+      console.error(error);
+      setError("シフト割当の追加に失敗しました。");
+      setSavingAssignments(false);
+      return;
+    }
+
+    setStaffAssignments((prev) => [...prev, data as SlotStaffAssignment]);
+    const key = `${slotId}:${role}`;
+    setAssignmentDrafts((prev) => ({ ...prev, [key]: "" }));
+    toast.success("シフトを追加しました。");
+    setSavingAssignments(false);
+  };
+
+  const handleUpdateAssignment = async (
+    assignmentId: string,
+    patch: Partial<Pick<SlotStaffAssignment, "is_fixed" | "note">>
+  ) => {
+    if (!assignmentId || savingAssignments) return;
+    setSavingAssignments(true);
+    setError(null);
+
+    const updatePayload: { is_fixed?: boolean; note?: string | null } = {};
+    if (typeof patch.is_fixed === "boolean") {
+      updatePayload.is_fixed = patch.is_fixed;
+    }
+    if ("note" in patch) {
+      updatePayload.note = patch.note?.trim() || null;
+    }
+    if (Object.keys(updatePayload).length === 0) {
+      setSavingAssignments(false);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("slot_staff_assignments")
+      .update(updatePayload)
+      .eq("id", assignmentId)
+      .select("id, event_slot_id, profile_id, role, is_fixed, note")
+      .maybeSingle();
+
+    if (error || !data) {
+      console.error(error);
+      setError("シフト割当の更新に失敗しました。");
+      setSavingAssignments(false);
+      return;
+    }
+
+    setStaffAssignments((prev) =>
+      prev.map((assignment) => (assignment.id === assignmentId ? (data as SlotStaffAssignment) : assignment))
+    );
+    setSavingAssignments(false);
+  };
+
+  const handleRemoveAssignment = async (assignmentId: string) => {
+    if (!assignmentId || savingAssignments) return;
+    setSavingAssignments(true);
+    setError(null);
+
+    const { error } = await supabase.from("slot_staff_assignments").delete().eq("id", assignmentId);
+    if (error) {
+      console.error(error);
+      setError("シフト割当の削除に失敗しました。");
+      setSavingAssignments(false);
+      return;
+    }
+
+    setStaffAssignments((prev) => prev.filter((assignment) => assignment.id !== assignmentId));
+    toast.success("シフトを削除しました。");
+    setSavingAssignments(false);
   };
 
   useEffect(() => {
@@ -959,6 +1482,15 @@ export default function AdminEventDetailPage() {
                       <Plus className="w-4 h-4" />
                       スロット追加
                     </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleGenerateSlots}
+                      disabled={slotsGenerating}
+                    >
+                      {slotsGenerating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                      自動生成
+                    </Button>
                     <Button type="button" onClick={handleSaveSlots} disabled={slotsSaving || slotsLoading}>
                       {slotsSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                       保存
@@ -975,101 +1507,541 @@ export default function AdminEventDetailPage() {
                     <div className="text-sm text-muted-foreground">スロットがまだありません。</div>
                   ) : (
                     <div className="space-y-3">
-                      {orderedSlots.map((slot) => (
-                        <div
-                          key={slot.id}
-                          className="grid gap-2 rounded-lg border border-border p-3 md:grid-cols-[70px,110px,1fr,120px,120px,120px,1fr,auto]"
+                      {orderedSlots.map((slot, index) => {
+                        const isExpanded = Boolean(expandedSlots[slot.id]);
+                        return (
+                          <div key={slot.id} className="rounded-lg border border-border p-3 space-y-3">
+                            <button
+                              type="button"
+                              onClick={() => toggleSlotExpanded(slot.id)}
+                              className="w-full flex items-center justify-between gap-3 text-left"
+                              aria-expanded={isExpanded}
+                            >
+                              <div className="space-y-1">
+                                <p className="text-sm font-medium">
+                                  #{slot.order_in_event ?? index + 1} {slotLabel(slot)}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {slotTimeLabel(slot)}
+                                </p>
+                              </div>
+                              <ChevronDown
+                                className={`w-4 h-4 text-muted-foreground transition-transform ${
+                                  isExpanded ? "rotate-180" : ""
+                                }`}
+                              />
+                            </button>
+
+                            {isExpanded && (
+                              <div className="space-y-3">
+                                <div className="grid gap-2 md:grid-cols-[70px,110px,1fr,120px,120px,1fr,auto]">
+                                <label className="space-y-1 text-xs">
+                                  <span className="text-muted-foreground">順番</span>
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    value={slot.order_in_event ?? ""}
+                                    onChange={(e) =>
+                                      handleSlotChange(slot.id, "order_in_event", Number(e.target.value))
+                                    }
+                                  />
+                                </label>
+                                <label className="space-y-1 text-xs">
+                                  <span className="text-muted-foreground">種別</span>
+                                  <select
+                                    className="h-10 w-full rounded-md border border-input bg-card px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                    value={slot.slot_type}
+                                    onChange={(e) =>
+                                      handleSlotChange(slot.id, "slot_type", e.target.value)
+                                    }
+                                  >
+                                    {slotTypeOptions.map((opt) => (
+                                      <option key={opt.value} value={opt.value}>
+                                        {opt.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label className="space-y-1 text-xs">
+                                  <span className="text-muted-foreground">バンド</span>
+                                  <select
+                                    className="h-10 w-full rounded-md border border-input bg-card px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                    value={slot.band_id ?? ""}
+                                    onChange={(e) =>
+                                      handleSlotChange(slot.id, "band_id", e.target.value || null)
+                                    }
+                                    disabled={slot.slot_type !== "band"}
+                                  >
+                                    <option value="">選択なし</option>
+                                    {bands.map((band) => (
+                                      <option key={band.id} value={band.id}>
+                                        {band.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label className="space-y-1 text-xs">
+                                  <span className="text-muted-foreground">開始</span>
+                                  <Input
+                                    type="time"
+                                    value={slot.start_time ?? ""}
+                                    onChange={(e) =>
+                                      handleSlotChange(slot.id, "start_time", e.target.value || null)
+                                    }
+                                  />
+                                </label>
+                                <label className="space-y-1 text-xs">
+                                  <span className="text-muted-foreground">終了</span>
+                                  <Input
+                                    type="time"
+                                    value={slot.end_time ?? ""}
+                                    onChange={(e) =>
+                                      handleSlotChange(slot.id, "end_time", e.target.value || null)
+                                    }
+                                  />
+                                </label>
+                                <label className="space-y-1 text-xs">
+                                  <span className="text-muted-foreground">メモ</span>
+                                  <Input
+                                    value={slot.note ?? ""}
+                                    onChange={(e) => handleSlotChange(slot.id, "note", e.target.value)}
+                                    placeholder="MC / 休憩など"
+                                  />
+                                </label>
+                                <div className="flex items-end">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleDeleteSlot(slot.id)}
+                                    className="text-muted-foreground hover:text-destructive"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                              <label className="space-y-1 text-xs block">
+                                <span className="text-muted-foreground">転換(分)</span>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  value={slot.changeover_min ?? ""}
+                                  onChange={(e) =>
+                                    handleSlotChange(slot.id, "changeover_min", Number(e.target.value))
+                                  }
+                                  className="max-w-[160px]"
+                                />
+                              </label>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="bg-card/60 border-border">
+                <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <CardTitle className="text-xl">当日スタッフ</CardTitle>
+                    <CardDescription>PA / 照明の担当メンバーを登録します。</CardDescription>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={handleSaveStaff}
+                    disabled={savingStaff || eventStaff.length === 0}
+                    className="gap-2"
+                  >
+                    {savingStaff ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    保存
+                  </Button>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  <form onSubmit={handleAddStaff} className="space-y-3">
+                    <div className="grid md:grid-cols-[1fr,200px,200px] gap-3">
+                      <label className="space-y-1 block text-sm">
+                        <span className="text-foreground">メンバー</span>
+                        <select
+                          required
+                          className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                          value={staffForm.profileId}
+                          onChange={(e) =>
+                            setStaffForm((prev) => ({ ...prev, profileId: e.target.value }))
+                          }
                         >
-                          <label className="space-y-1 text-xs">
-                            <span className="text-muted-foreground">順番</span>
-                            <Input
-                              type="number"
-                              min={1}
-                              value={slot.order_in_event ?? ""}
+                          <option value="">選択してください</option>
+                          {availableStaffOptions.map((profile) => (
+                            <option key={profile.id} value={profile.id}>
+                              {profile.display_name}
+                              {profile.crew ? ` / ${profile.crew}` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="space-y-1 block text-sm">
+                        <span className="text-foreground">担当区分</span>
+                        <div className="flex items-center gap-4 rounded-md border border-input bg-card px-3 py-2 text-sm">
+                          <label className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={staffForm.can_pa}
                               onChange={(e) =>
-                                handleSlotChange(slot.id, "order_in_event", Number(e.target.value))
+                                setStaffForm((prev) => ({ ...prev, can_pa: e.target.checked }))
                               }
                             />
+                            PA
                           </label>
-                          <label className="space-y-1 text-xs">
-                            <span className="text-muted-foreground">種別</span>
-                            <select
-                              className="h-10 w-full rounded-md border border-input bg-card px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-                              value={slot.slot_type}
-                              onChange={(e) => handleSlotChange(slot.id, "slot_type", e.target.value)}
-                            >
-                              {slotTypeOptions.map((opt) => (
-                                <option key={opt.value} value={opt.value}>
-                                  {opt.label}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label className="space-y-1 text-xs">
-                            <span className="text-muted-foreground">バンド</span>
-                            <select
-                              className="h-10 w-full rounded-md border border-input bg-card px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-                              value={slot.band_id ?? ""}
-                              onChange={(e) => handleSlotChange(slot.id, "band_id", e.target.value || null)}
-                              disabled={slot.slot_type !== "band"}
-                            >
-                              <option value="">選択なし</option>
-                              {bands.map((band) => (
-                                <option key={band.id} value={band.id}>
-                                  {band.name}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label className="space-y-1 text-xs">
-                            <span className="text-muted-foreground">開始</span>
-                            <Input
-                              type="time"
-                              value={slot.start_time ?? ""}
-                              onChange={(e) => handleSlotChange(slot.id, "start_time", e.target.value || null)}
-                            />
-                          </label>
-                          <label className="space-y-1 text-xs">
-                            <span className="text-muted-foreground">終了</span>
-                            <Input
-                              type="time"
-                              value={slot.end_time ?? ""}
-                              onChange={(e) => handleSlotChange(slot.id, "end_time", e.target.value || null)}
-                            />
-                          </label>
-                          <label className="space-y-1 text-xs">
-                            <span className="text-muted-foreground">転換(分)</span>
-                            <Input
-                              type="number"
-                              min={0}
-                              value={slot.changeover_min ?? ""}
+                          <label className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={staffForm.can_light}
                               onChange={(e) =>
-                                handleSlotChange(slot.id, "changeover_min", Number(e.target.value))
+                                setStaffForm((prev) => ({ ...prev, can_light: e.target.checked }))
                               }
                             />
+                            照明
                           </label>
-                          <label className="space-y-1 text-xs">
-                            <span className="text-muted-foreground">メモ</span>
+                        </div>
+                      </label>
+                      <label className="space-y-1 block text-sm">
+                        <span className="text-foreground">メモ</span>
+                        <Input
+                          value={staffForm.note}
+                          onChange={(e) => setStaffForm((prev) => ({ ...prev, note: e.target.value }))}
+                          placeholder="希望や注意点など"
+                        />
+                      </label>
+                    </div>
+                    <Button
+                      type="submit"
+                      disabled={
+                        savingStaff ||
+                        !staffForm.profileId ||
+                        (!staffForm.can_pa && !staffForm.can_light)
+                      }
+                      className="gap-2"
+                    >
+                      {savingStaff ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                      追加
+                    </Button>
+                  </form>
+
+                  {eventStaff.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">登録されたスタッフがいません。</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {eventStaff.map((staff) => {
+                        const profile = profilesMap.get(staff.profile_id);
+                        return (
+                          <div
+                            key={staff.id}
+                            className="grid gap-3 rounded-lg border border-border p-3 md:grid-cols-[1fr,200px,1fr,auto] md:items-center"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium truncate">
+                                {profile?.display_name ?? "不明なユーザー"}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Discord: {profile?.discord ?? "未連携"}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-4 text-xs">
+                              <label className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={staff.can_pa}
+                                  onChange={(e) => handleUpdateStaffLocal(staff.id, { can_pa: e.target.checked })}
+                                />
+                                PA
+                              </label>
+                              <label className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={staff.can_light}
+                                  onChange={(e) =>
+                                    handleUpdateStaffLocal(staff.id, { can_light: e.target.checked })
+                                  }
+                                />
+                                照明
+                              </label>
+                            </div>
                             <Input
-                              value={slot.note ?? ""}
-                              onChange={(e) => handleSlotChange(slot.id, "note", e.target.value)}
-                              placeholder="MC / 休憩など"
+                              value={staff.note ?? ""}
+                              onChange={(e) => handleUpdateStaffLocal(staff.id, { note: e.target.value })}
+                              placeholder="メモ"
                             />
-                          </label>
-                          <div className="flex items-end">
                             <Button
                               type="button"
                               variant="ghost"
                               size="icon"
-                              onClick={() => handleDeleteSlot(slot.id)}
+                              onClick={() => handleRemoveStaff(staff.id)}
                               className="text-muted-foreground hover:text-destructive"
+                              aria-label="スタッフを削除"
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="bg-card/60 border-border">
+                <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <CardTitle className="text-xl">シフト割当</CardTitle>
+                    <CardDescription>スロットごとにPA / 照明の担当を割り当てます。</CardDescription>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleAutoAssign}
+                    disabled={savingAssignments || eventStaff.length === 0}
+                  >
+                    {savingAssignments ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-4 h-4" />
+                    )}
+                    自動割当
+                  </Button>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {doubleBookings.length > 0 && (
+                    <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+                      <p className="font-medium">ダブルブッキングの可能性があります。</p>
+                      <div className="text-xs mt-2 space-y-1 text-destructive/90">
+                        {doubleBookings.map((conflict, index) => {
+                          const profile = profilesMap.get(conflict.profileId);
+                          return (
+                            <p key={`${conflict.profileId}-${index}`}>
+                              {profile?.display_name ?? "不明"} ({conflict.role.toUpperCase()}):{" "}
+                              {slotLabel(conflict.slotA)} / {slotTimeLabel(conflict.slotA)} と{" "}
+                              {slotLabel(conflict.slotB)} / {slotTimeLabel(conflict.slotB)}
+                            </p>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {orderedSlots.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">スロットがまだありません。</p>
+                  ) : (
+                    orderedSlots.map((slot, index) => {
+                      const assignment = assignmentsBySlot.get(slot.id) ?? { pa: [], light: [] };
+                      const paStaff = eventStaff.filter((staff) => staff.can_pa);
+                      const lightStaff = eventStaff.filter((staff) => staff.can_light);
+                      const usedPa = new Set(assignment.pa.map((item) => item.profile_id));
+                      const usedLight = new Set(assignment.light.map((item) => item.profile_id));
+                      const paOptions = paStaff.filter((staff) => !usedPa.has(staff.profile_id));
+                      const lightOptions = lightStaff.filter((staff) => !usedLight.has(staff.profile_id));
+                      const paKey = `${slot.id}:pa`;
+                      const lightKey = `${slot.id}:light`;
+
+                      return (
+                        <div key={slot.id} className="rounded-lg border border-border p-4 space-y-4">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="space-y-1">
+                              <p className="text-sm font-semibold">
+                                #{slot.order_in_event ?? index + 1} {slotLabel(slot)}
+                              </p>
+                              <p className="text-xs text-muted-foreground">{slotTimeLabel(slot)}</p>
+                            </div>
+                            <Badge variant={slot.slot_type === "band" ? "default" : "outline"}>
+                              {slot.slot_type.toUpperCase()}
+                            </Badge>
+                          </div>
+
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <div className="space-y-3">
+                              <p className="text-xs text-muted-foreground">PA担当</p>
+                              {assignment.pa.length === 0 ? (
+                                <p className="text-xs text-muted-foreground">未割当</p>
+                              ) : (
+                                <div className="space-y-2">
+                                  {assignment.pa.map((item) => {
+                                    const profile = profilesMap.get(item.profile_id);
+                                    return (
+                                      <div key={item.id} className="rounded-md border border-border p-2 space-y-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                          <p className="text-sm">{profile?.display_name ?? "不明"}</p>
+                                          <div className="flex items-center gap-2 text-xs">
+                                            <label className="flex items-center gap-1">
+                                              <input
+                                                type="checkbox"
+                                                checked={item.is_fixed}
+                                                onChange={(e) => {
+                                                  const checked = e.target.checked;
+                                                  setStaffAssignments((prev) =>
+                                                    prev.map((assignmentItem) =>
+                                                      assignmentItem.id === item.id
+                                                        ? { ...assignmentItem, is_fixed: checked }
+                                                        : assignmentItem
+                                                    )
+                                                  );
+                                                  handleUpdateAssignment(item.id, { is_fixed: checked });
+                                                }}
+                                              />
+                                              固定
+                                            </label>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleRemoveAssignment(item.id)}
+                                              className="text-muted-foreground hover:text-destructive"
+                                            >
+                                              削除
+                                            </button>
+                                          </div>
+                                        </div>
+                                        <Input
+                                          value={item.note ?? ""}
+                                          onChange={(e) => {
+                                            const value = e.target.value;
+                                            setStaffAssignments((prev) =>
+                                              prev.map((assignmentItem) =>
+                                                assignmentItem.id === item.id
+                                                  ? { ...assignmentItem, note: value }
+                                                  : assignmentItem
+                                              )
+                                            );
+                                          }}
+                                          onBlur={(e) => handleUpdateAssignment(item.id, { note: e.target.value })}
+                                          placeholder="メモ"
+                                        />
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                              <div className="flex flex-wrap items-center gap-2">
+                                <select
+                                  className="h-10 w-full md:w-auto flex-1 rounded-md border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                  value={assignmentDrafts[paKey] ?? ""}
+                                  onChange={(e) =>
+                                    setAssignmentDrafts((prev) => ({ ...prev, [paKey]: e.target.value }))
+                                  }
+                                >
+                                  <option value="">追加するスタッフ</option>
+                                  {paOptions.map((staff) => {
+                                    const profile = profilesMap.get(staff.profile_id);
+                                    return (
+                                      <option key={staff.profile_id} value={staff.profile_id}>
+                                        {profile?.display_name ?? "不明"}
+                                      </option>
+                                    );
+                                  })}
+                                </select>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  disabled={!assignmentDrafts[paKey]}
+                                  onClick={() =>
+                                    handleAddAssignment(slot.id, "pa", assignmentDrafts[paKey] ?? "")
+                                  }
+                                >
+                                  追加
+                                </Button>
+                              </div>
+                            </div>
+
+                            <div className="space-y-3">
+                              <p className="text-xs text-muted-foreground">照明担当</p>
+                              {assignment.light.length === 0 ? (
+                                <p className="text-xs text-muted-foreground">未割当</p>
+                              ) : (
+                                <div className="space-y-2">
+                                  {assignment.light.map((item) => {
+                                    const profile = profilesMap.get(item.profile_id);
+                                    return (
+                                      <div key={item.id} className="rounded-md border border-border p-2 space-y-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                          <p className="text-sm">{profile?.display_name ?? "不明"}</p>
+                                          <div className="flex items-center gap-2 text-xs">
+                                            <label className="flex items-center gap-1">
+                                              <input
+                                                type="checkbox"
+                                                checked={item.is_fixed}
+                                                onChange={(e) => {
+                                                  const checked = e.target.checked;
+                                                  setStaffAssignments((prev) =>
+                                                    prev.map((assignmentItem) =>
+                                                      assignmentItem.id === item.id
+                                                        ? { ...assignmentItem, is_fixed: checked }
+                                                        : assignmentItem
+                                                    )
+                                                  );
+                                                  handleUpdateAssignment(item.id, { is_fixed: checked });
+                                                }}
+                                              />
+                                              固定
+                                            </label>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleRemoveAssignment(item.id)}
+                                              className="text-muted-foreground hover:text-destructive"
+                                            >
+                                              削除
+                                            </button>
+                                          </div>
+                                        </div>
+                                        <Input
+                                          value={item.note ?? ""}
+                                          onChange={(e) => {
+                                            const value = e.target.value;
+                                            setStaffAssignments((prev) =>
+                                              prev.map((assignmentItem) =>
+                                                assignmentItem.id === item.id
+                                                  ? { ...assignmentItem, note: value }
+                                                  : assignmentItem
+                                              )
+                                            );
+                                          }}
+                                          onBlur={(e) => handleUpdateAssignment(item.id, { note: e.target.value })}
+                                          placeholder="メモ"
+                                        />
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                              <div className="flex flex-wrap items-center gap-2">
+                                <select
+                                  className="h-10 w-full md:w-auto flex-1 rounded-md border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                  value={assignmentDrafts[lightKey] ?? ""}
+                                  onChange={(e) =>
+                                    setAssignmentDrafts((prev) => ({ ...prev, [lightKey]: e.target.value }))
+                                  }
+                                >
+                                  <option value="">追加するスタッフ</option>
+                                  {lightOptions.map((staff) => {
+                                    const profile = profilesMap.get(staff.profile_id);
+                                    return (
+                                      <option key={staff.profile_id} value={staff.profile_id}>
+                                        {profile?.display_name ?? "不明"}
+                                      </option>
+                                    );
+                                  })}
+                                </select>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  disabled={!assignmentDrafts[lightKey]}
+                                  onClick={() =>
+                                    handleAddAssignment(slot.id, "light", assignmentDrafts[lightKey] ?? "")
+                                  }
+                                >
+                                  追加
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
                   )}
                 </CardContent>
               </Card>

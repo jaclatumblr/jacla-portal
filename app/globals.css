@@ -95,6 +95,12 @@
   }
 }
 
+@media (min-width: 768px) {
+  body[data-has-sidenav="1"] .app-footer {
+    padding-left: 5rem;
+  }
+}
+
 .theme-transition,
 .theme-transition * {
   transition: background-color 520ms ease, color 520ms ease, border-color 520ms ease,

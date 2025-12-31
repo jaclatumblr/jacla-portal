@@ -1763,6 +1763,8 @@ export default function RepertoireSubmitPage() {
     const orderedMembers = withMemberOrder(bandMembers);
     const updates = orderedMembers.map((member) => ({
       id: member.id,
+      band_id: selectedBandId,
+      user_id: member.userId,
       instrument: member.instrument,
       position_x: member.x,
       position_y: member.y,

@@ -181,8 +181,8 @@ export default function MyTasksPage() {
                 ) : (
                   groupedAssignments.map((group) => {
                     const ordered = [...group.items].sort((a, b) => {
-                      const slotA = a.event_slots;
-                      const slotB = b.event_slots;
+                      const slotA = resolveSlot(a.event_slots);
+                      const slotB = resolveSlot(b.event_slots);
                       const orderA = slotA?.order_in_event ?? Number.MAX_SAFE_INTEGER;
                       const orderB = slotB?.order_in_event ?? Number.MAX_SAFE_INTEGER;
                       if (orderA !== orderB) return orderA - orderB;

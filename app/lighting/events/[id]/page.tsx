@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Calendar, Clock } from "lucide-react";
 import { AuthGuard } from "@/lib/AuthGuard";

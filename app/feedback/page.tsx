@@ -99,9 +99,17 @@ export default function FeedbackPage() {
       }),
     });
 
+    const payload = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      mailOk?: boolean;
+      mailError?: string | null;
+    };
+
     if (!res.ok) {
-      const payload = (await res.json().catch(() => ({}))) as { error?: string };
       toast.error(payload.error ?? "送信に失敗しました。時間をおいて再度お試しください。");
+    } else if (payload.mailOk === false) {
+      toast.error("送信は保存されましたが、メール送信に失敗しました。");
+      setMessage("");
     } else {
       toast.success("送信しました。ご協力ありがとうございます！");
       setMessage("");

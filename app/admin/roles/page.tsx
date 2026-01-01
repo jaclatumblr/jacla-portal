@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
-  ArrowLeft,
   BadgeCheck,
   CheckCircle2,
   RefreshCw,
@@ -24,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/PageHeader";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 
@@ -857,26 +857,13 @@ export default function AdminRolesPage() {
         <SideNav />
 
         <main className="flex-1 md:ml-20">
-          <section className="relative py-12 md:py-16 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-secondary/5 to-transparent" />
-            <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
-
-            <div className="relative z-10 container mx-auto px-4 sm:px-6">
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <ArrowLeft className="w-4 h-4" />
-                <Link href="/admin" className="hover:text-primary transition-colors">
-                  管理トップに戻る
-                </Link>
-              </div>
-              <div className="max-w-5xl mt-6">
-                <span className="text-xs text-primary tracking-[0.3em] font-mono">ADMIN</span>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-3 mb-3">ユーザー管理</h1>
-                <p className="text-muted-foreground text-sm md:text-base">
-                  Administrator / Supervisor は全権限、PA/照明長は crew のみ編集できます。
-                </p>
-              </div>
-            </div>
-          </section>
+          <PageHeader
+            kicker="Admin"
+            title="ユーザー管理"
+            description="Administrator / Supervisor は全権限、PA/照明長は crew のみ編集できます。"
+            backHref="/admin"
+            backLabel="管理トップに戻る"
+          />
 
           <section className="pb-12 md:pb-16">
             <div className="container mx-auto px-4 sm:px-6 space-y-8 md:space-y-10">

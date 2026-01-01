@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/PageHeader";
 import { toast } from "@/lib/toast";
 
 const crewOptions = ["User", "PA", "Lighting"];
@@ -662,20 +663,12 @@ export default function OnboardingClient({
         {showSideNav && <SideNav />}
 
         <main className={`flex-1 ${showSideNav ? "md:ml-20" : ""}`}>
-          <section className="relative py-12 md:py-16 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-secondary/5 to-transparent" />
-            <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
-
-            <div className="relative z-10 container mx-auto px-4 sm:px-6">
-              <div className="max-w-4xl">
-                <span className="text-xs text-primary tracking-[0.3em] font-mono">PROFILE</span>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-3 mb-3">{pageTitle}</h1>
-                <p className="text-muted-foreground text-sm md:text-base">
-                  {pageDescription}
-                </p>
-              </div>
-            </div>
-          </section>
+          <PageHeader
+            kicker="Profile"
+            title={pageTitle}
+            description={pageDescription}
+            size="lg"
+          />
 
           <section className="pb-12 md:pb-16">
             <div className="container mx-auto px-4 sm:px-6">

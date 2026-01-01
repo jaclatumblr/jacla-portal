@@ -1,7 +1,6 @@
 ﻿"use client";
 
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -266,32 +265,15 @@ export default function LightingInstructionsPage() {
       <div className="flex min-h-screen bg-background">
         <SideNav />
         <main className="flex-1 md:ml-20">
-          <section className="relative py-16 md:py-20 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-accent/5 to-transparent" />
-            <div className="absolute top-0 right-1/4 w-80 h-80 bg-accent/5 rounded-full blur-3xl" />
-            <div className="relative z-10 container mx-auto px-4 sm:px-6">
-              <div className="max-w-4xl pt-10 md:pt-0 space-y-3">
-                <Link
-                  href="/lighting"
-                  className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  <span className="text-sm">照明ダッシュボードへ戻る</span>
-                </Link>
-                <div>
-                  <span className="text-xs text-accent tracking-[0.3em] font-mono">
-                    LIGHTING
-                  </span>
-                  <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-3">
-                    照明指示
-                  </h1>
-                  <p className="text-muted-foreground text-base md:text-lg mt-3">
-                    各イベントのレパ表から、共通メモ・立ち位置・照明メモを確認できます。
-                  </p>
-                </div>
-              </div>
-            </div>
-          </section>
+          <PageHeader
+            kicker="Lighting"
+            title="照明指示"
+            description="各イベントのレパ表から、共通メモ・立ち位置・照明メモを確認できます。"
+            backHref="/lighting"
+            backLabel="照明ダッシュボードへ戻る"
+            tone="accent"
+            size="lg"
+          />
 
           <section className="py-8 md:py-12">
             <div className="container mx-auto px-4 sm:px-6 space-y-6 max-w-5xl">

@@ -5,6 +5,7 @@ import { ArrowRight, Calendar, Pin } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { SideNav } from "@/components/SideNav";
+import { PageHeader } from "@/components/PageHeader";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -75,20 +76,12 @@ export default function AnnouncementsPage() {
         <SideNav />
 
         <main className="flex-1 md:ml-20">
-          <section className="relative py-16 md:py-24 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent" />
-            <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
-
-            <div className="relative z-10 container mx-auto px-4 sm:px-6">
-              <div className="max-w-4xl pt-12 md:pt-0">
-                <span className="text-xs text-primary tracking-[0.3em] font-mono">ANNOUNCEMENTS</span>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-4 mb-4">お知らせ</h1>
-                <p className="text-muted-foreground text-base md:text-lg max-w-2xl">
-                  最新のお知らせを時系列で確認できます。重要・イベント・締切などの情報をまとめています。
-                </p>
-              </div>
-            </div>
-          </section>
+          <PageHeader
+            kicker="Announcements"
+            title="お知らせ"
+            description="最新のお知らせを時系列で確認できます。重要・イベント・締切などの情報をまとめています。"
+            size="lg"
+          />
 
           <section className="py-8 md:py-12">
             <div className="container mx-auto px-4 sm:px-6">

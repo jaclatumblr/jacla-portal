@@ -15,6 +15,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { SideNav } from "@/components/SideNav";
+import { PageHeader } from "@/components/PageHeader";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/contexts/AuthContext";
@@ -163,21 +164,11 @@ export default function DashboardPage() {
         <SideNav />
 
         <main className="flex-1 md:ml-20">
-          <section className="relative py-12 md:py-16 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent" />
-
-            <div className="relative z-10 container mx-auto px-4 sm:px-6">
-              <div className="max-w-5xl pt-12 md:pt-0">
-                <span className="text-xs text-primary tracking-[0.3em] font-mono">DASHBOARD</span>
-                <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mt-2 mb-2">
-                  おかえりなさい{session ? `、${userLabel}さん` : ""}
-                </h1>
-                <p className="text-muted-foreground text-sm md:text-base">
-                  今日の予定と、やることを確認しましょう
-                </p>
-              </div>
-            </div>
-          </section>
+          <PageHeader
+            kicker="Dashboard"
+            title={`おかえりなさい${session ? `、${userLabel}さん` : ""}`}
+            description="今日の予定と、やることを確認しましょう"
+          />
 
           <section className="py-6 md:py-8">
             <div className="container mx-auto px-4 sm:px-6">

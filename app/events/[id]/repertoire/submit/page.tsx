@@ -22,7 +22,6 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   ArrowDown,
-  ArrowLeft,
   ArrowUp,
   Grid3x3,
   GripVertical,
@@ -37,6 +36,7 @@ import {
 } from "lucide-react";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { SideNav } from "@/components/SideNav";
+import { PageHeader } from "@/components/PageHeader";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRoleFlags } from "@/lib/useRoleFlags";
@@ -2888,33 +2888,16 @@ export default function RepertoireSubmitPage() {
           <SideNav />
 
           <main className="flex-1 md:ml-20">
-          <section className="relative py-12 md:py-16 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent" />
-            <div className="relative z-10 container mx-auto px-4 sm:px-6">
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <ArrowLeft className="w-4 h-4" />
-                <Link href={`/events/${eventId}`} className="hover:text-primary transition-colors">
-                  イベント詳細に戻る
-                </Link>
-              </div>
-              <div className="max-w-4xl mt-6">
-                <span className="text-xs text-primary tracking-[0.3em] font-mono">
-                  REPERTOIRE SUBMIT
-                </span>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-3 mb-3">
-                  レパ表提出
-                </h1>
-                {event && (
-                  <p className="text-muted-foreground text-sm md:text-base">
-                    {event.name} / {event.date}
-                  </p>
-                )}
-              </div>
-            </div>
-          </section>
+            <PageHeader
+              kicker="Repertoire Submit"
+              title="レパ表提出"
+              description={event ? `${event.name} / ${event.date}` : "レパ表を提出します。"}
+              backHref={`/events/${eventId}`}
+              backLabel="イベント詳細に戻る"
+            />
 
-          <section className="pb-12 md:pb-16">
-            <div className="container mx-auto px-4 sm:px-6 space-y-6">
+            <section className="pb-12 md:pb-16">
+              <div className="container mx-auto px-4 sm:px-6 space-y-6">
               {event && !canManageBands ? (
                 <div className="rounded-xl border border-border bg-card/60 p-4 text-sm text-muted-foreground">
                   このイベントではレパ表の提出・バンド登録はできません。（ライブ/合宿のみ対応）
@@ -4247,7 +4230,7 @@ export default function RepertoireSubmitPage() {
                 </div>
               )}
             </div>
-          </section>
+            </section>
           </main>
         </div>
 

@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Calendar, Link as LinkIcon, Pin, User } from "lucide-react";
+import { Calendar, Link as LinkIcon, Pin, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { supabase } from "@/lib/supabaseClient";
+import { PageHeader } from "@/components/PageHeader";
 
 type AnnouncementAuthor = {
   display_name: string | null;
@@ -52,6 +53,28 @@ export default function AnnouncementDetailPage() {
     return announcement.published_at ?? announcement.created_at;
   }, [announcement]);
 
+  const headerTitle = loading
+    ? "読み込み中..."
+    : announcement?.title ?? "お知らせが見つかりません。";
+  const headerMeta = announcement ? (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-3 flex-wrap">
+        {announcement.is_pinned && <Pin className="w-4 h-4 text-primary" />}
+        <Badge variant="default">{announcement.category}</Badge>
+      </div>
+      <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <Calendar className="w-4 h-4" />
+          <span>{formatDate(dateValue)}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <User className="w-4 h-4" />
+          <span>{announcement.profiles?.display_name ?? "未設定"}</span>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
@@ -86,51 +109,14 @@ export default function AnnouncementDetailPage() {
         <SideNav />
 
         <main className="flex-1 md:ml-20">
-          <section className="relative py-12 md:py-16 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent" />
-
-            <div className="relative z-10 container mx-auto px-4 sm:px-6">
-              <div className="max-w-3xl pt-12 md:pt-0">
-                <Link
-                  href="/announcements"
-                  className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors mb-6"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  <span className="text-sm">お知らせ一覧に戻る</span>
-                </Link>
-
-                {loading ? (
-                  <p className="text-sm text-muted-foreground">読み込み中...</p>
-                ) : !announcement ? (
-                  <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4">
-                    お知らせが見つかりません。
-                  </h1>
-                ) : (
-                  <>
-                    <div className="flex items-center gap-3 mb-4 flex-wrap">
-                      {announcement.is_pinned && <Pin className="w-4 h-4 text-primary" />}
-                      <Badge variant="default">{announcement.category}</Badge>
-                    </div>
-
-                    <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4">
-                      {announcement.title}
-                    </h1>
-
-                    <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4" />
-                        <span>{formatDate(dateValue)}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <User className="w-4 h-4" />
-                        <span>{announcement.profiles?.display_name ?? "未設定"}</span>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          </section>
+          <PageHeader
+            kicker="Announcements"
+            title={headerTitle}
+            description="お知らせの詳細を確認できます。"
+            backHref="/announcements"
+            backLabel="お知らせ一覧に戻る"
+            meta={headerMeta}
+          />
 
           {announcement && (
             <section className="py-8 md:py-12">

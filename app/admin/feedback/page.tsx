@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { supabase } from "@/lib/supabaseClient";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { PageHeader } from "@/components/PageHeader";
 import { toast } from "@/lib/toast";
 
 const categoryLabels: Record<string, string> = {
@@ -91,14 +92,8 @@ export default function AdminFeedbackPage() {
       }
 
       const [profilesRes, privateRes] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("id, display_name, real_name")
-          .in("id", ids),
-        supabase
-          .from("profile_private")
-          .select("profile_id, student_id")
-          .in("profile_id", ids),
+        supabase.from("profiles").select("id, display_name, real_name").in("id", ids),
+        supabase.from("profile_private").select("profile_id, student_id").in("profile_id", ids),
       ]);
 
       if (cancelled) return;
@@ -142,7 +137,7 @@ export default function AdminFeedbackPage() {
         <div className="min-h-screen flex items-center justify-center bg-background px-6">
           <div className="text-center space-y-3">
             <p className="text-xl font-semibold text-foreground">管理者のみアクセスできます</p>
-            <p className="text-sm text-muted-foreground">管理者へ問い合わせてください。</p>
+            <p className="text-sm text-muted-foreground">管理者にお問い合わせください。</p>
             <Link
               href="/"
               className="inline-flex items-center justify-center px-4 py-2 rounded-lg border border-border text-sm text-foreground hover:border-primary/60 hover:text-primary transition-colors"
@@ -161,26 +156,13 @@ export default function AdminFeedbackPage() {
         <SideNav />
 
         <main className="flex-1 md:ml-20">
-          <section className="relative py-12 md:py-16 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent" />
-            <div className="relative z-10 container mx-auto px-4 sm:px-6">
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <ArrowLeft className="w-4 h-4" />
-                <Link href="/admin" className="hover:text-primary transition-colors">
-                  管理ダッシュボードに戻る
-                </Link>
-              </div>
-              <div className="max-w-4xl mt-6">
-                <span className="text-xs text-primary tracking-[0.3em] font-mono">ADMIN</span>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-3 mb-3">
-                  フィードバック
-                </h1>
-                <p className="text-muted-foreground text-sm md:text-base">
-                  送信された意見を一覧で確認できます。
-                </p>
-              </div>
-            </div>
-          </section>
+          <PageHeader
+            kicker="Admin"
+            title="フィードバック"
+            description="送信された意見を一覧で確認できます。"
+            backHref="/admin"
+            backLabel="管理ダッシュボードに戻る"
+          />
 
           <section className="pb-12 md:pb-16">
             <div className="container mx-auto px-4 sm:px-6">
@@ -192,7 +174,7 @@ export default function AdminFeedbackPage() {
                   {loading ? (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <RefreshCw className="w-4 h-4 animate-spin" />
-                      読み込み中です...
+                      読み込み中...
                     </div>
                   ) : feedbacks.length === 0 ? (
                     <p className="text-sm text-muted-foreground">フィードバックはまだありません。</p>

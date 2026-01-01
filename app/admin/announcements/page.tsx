@@ -2,13 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import {
-  ArrowLeft,
-  Image as ImageIcon,
-  Loader2,
-  Save,
-  Trash2,
-} from "lucide-react";
+import { Image as ImageIcon, Loader2, Save, Trash2 } from "lucide-react";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { SideNav } from "@/components/SideNav";
 import { useRoleFlags } from "@/lib/useRoleFlags";
@@ -25,6 +19,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { PageHeader } from "@/components/PageHeader";
 import {
   Table,
   TableBody,
@@ -372,24 +367,13 @@ export default function AdminAnnouncementsPage() {
         <SideNav />
 
         <main className="flex-1 md:ml-20">
-          <section className="relative py-12 md:py-16 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent" />
-            <div className="relative z-10 container mx-auto px-4 sm:px-6">
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <ArrowLeft className="w-4 h-4" />
-                <Link href="/admin" className="hover:text-primary transition-colors">
-                  管理ダッシュボードに戻る
-                </Link>
-              </div>
-              <div className="max-w-4xl mt-6">
-                <span className="text-xs text-primary tracking-[0.3em] font-mono">ADMIN</span>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-3 mb-3">お知らせ管理</h1>
-                <p className="text-muted-foreground text-sm md:text-base">
-                  WordPressのように投稿を管理できます。公開状態・固定表示・カテゴリを調整してください。
-                </p>
-              </div>
-            </div>
-          </section>
+          <PageHeader
+            kicker="Admin"
+            title="お知らせ管理"
+            description="WordPressのように投稿を管理できます。公開状態・固定表示・カテゴリを調整してください。"
+            backHref="/admin"
+            backLabel="管理ダッシュボードに戻る"
+          />
 
           <section className="pb-12 md:pb-16">
             <div className="container mx-auto px-4 sm:px-6 space-y-6">

@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
+import { PageHeader } from "@/components/PageHeader";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { useAuth } from "@/contexts/AuthContext";
@@ -287,71 +288,67 @@ export default function ProfilePage() {
         <SideNav />
 
         <main className="flex-1 md:ml-20">
-          <section className="relative py-16 md:py-24 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent" />
-            <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
+          <PageHeader
+            kicker="Profile"
+            title={displayName}
+            description="プロフィール情報を確認・編集できます。"
+            actions={
+              <Link href={editHref}>
+                <Button variant="outline" className="bg-transparent w-full sm:w-auto">
+                  <Edit className="w-4 h-4 mr-2" />
+                  編集
+                </Button>
+              </Link>
+            }
+            meta={
+              <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6">
+                <Avatar className="w-20 h-20 md:w-24 md:h-24 border-2 border-primary/30">
+                  {avatarUrl && <AvatarImage src={avatarUrl} alt={displayName} />}
+                  <AvatarFallback className="bg-primary/10 text-primary text-xl md:text-2xl font-bold">
+                    {displayName.charAt(0)}
+                  </AvatarFallback>
+                </Avatar>
 
-            <div className="relative z-10 container mx-auto px-4 sm:px-6">
-              <div className="max-w-4xl pt-12 md:pt-0">
-                <span className="text-xs text-primary tracking-[0.3em] font-mono">PROFILE</span>
-
-                <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6 mt-8">
-                  <Avatar className="w-20 h-20 md:w-24 md:h-24 border-2 border-primary/30">
-                    {avatarUrl && <AvatarImage src={avatarUrl} alt={displayName} />}
-                    <AvatarFallback className="bg-primary/10 text-primary text-xl md:text-2xl font-bold">
-                      {displayName.charAt(0)}
-                    </AvatarFallback>
-                  </Avatar>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 md:gap-3 mb-2">
-                      <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold">{displayName}</h1>
-                      {isOfficialRole && (
-                        <Badge
-                          variant="outline"
-                          className="border-primary/40 bg-primary/15 text-primary shadow-sm"
-                        >
-                          Official
-                        </Badge>
-                      )}
-                      {showAdminBadge && (
-                        <Badge
-                          variant="outline"
-                          className="border-[#aee6ff]/40 bg-[#aee6ff]/10 text-[#aee6ff]"
-                        >
-                          Administrator
-                        </Badge>
-                      )}
-                      {positionBadgeLabel && <Badge variant="secondary">{positionBadgeLabel}</Badge>}
-                      {showRoleBadge && (
-                        <Badge variant="outline" className="bg-transparent">
-                          {roleBadge}
-                        </Badge>
-                      )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 md:gap-3 mb-2">
+                    {isOfficialRole && (
+                      <Badge
+                        variant="outline"
+                        className="border-primary/40 bg-primary/15 text-primary shadow-sm"
+                      >
+                        Official
+                      </Badge>
+                    )}
+                    {showAdminBadge && (
+                      <Badge
+                        variant="outline"
+                        className="border-[#aee6ff]/40 bg-[#aee6ff]/10 text-[#aee6ff]"
+                      >
+                        Administrator
+                      </Badge>
+                    )}
+                    {positionBadgeLabel && <Badge variant="secondary">{positionBadgeLabel}</Badge>}
+                    {showRoleBadge && (
+                      <Badge variant="outline" className="bg-transparent">
+                        {roleBadge}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3 md:gap-4 text-muted-foreground text-sm md:text-base">
+                    <div className="flex items-center gap-2">
+                      <Music className="w-4 h-4 text-primary" />
+                      <span>{partLabel}</span>
                     </div>
-                    <div className="flex flex-wrap items-center gap-3 md:gap-4 text-muted-foreground text-sm md:text-base">
-                      <div className="flex items-center gap-2">
-                        <Music className="w-4 h-4 text-primary" />
-                        <span>{partLabel}</span>
-                      </div>
-                      <span className="hidden sm:inline">/</span>
-                      <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-primary" />
-                        <span>参加日: {joinDate}</span>
-                      </div>
+                    <span className="hidden sm:inline">/</span>
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-primary" />
+                      <span>参加日: {joinDate}</span>
                     </div>
                   </div>
-
-                  <Link href={editHref}>
-                    <Button variant="outline" className="bg-transparent w-full sm:w-auto mt-4 sm:mt-0">
-                      <Edit className="w-4 h-4 mr-2" />
-                      編集
-                    </Button>
-                  </Link>
                 </div>
               </div>
-            </div>
-          </section>
+            }
+          />
 
           <section className="py-8 md:py-12">
             <div className="container mx-auto px-4 sm:px-6">

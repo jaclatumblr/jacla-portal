@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Calendar, Clock, MapPin, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { SideNav } from "@/components/SideNav";
+import { PageHeader } from "@/components/PageHeader";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { supabase } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/button";
@@ -225,22 +226,11 @@ export default function AdminEventsPage() {
         <SideNav />
 
         <main className="flex-1 md:ml-20">
-          <section className="relative py-12 md:py-16 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent" />
-            <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
-
-            <div className="relative z-10 container mx-auto px-4 sm:px-6">
-              <div className="max-w-5xl pt-8 md:pt-0">
-                <span className="text-xs text-primary tracking-[0.3em] font-mono">ADMIN</span>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-3 mb-4">
-                  イベント管理
-                </h1>
-                <p className="text-muted-foreground text-sm md:text-base">
-                  イベントの作成・編集を行います。
-                </p>
-              </div>
-            </div>
-          </section>
+          <PageHeader
+            kicker="Admin"
+            title="イベント管理"
+            description="イベントの作成・編集を行います。"
+          />
 
           <section className="py-8 md:py-12">
             <div className="container mx-auto px-4 sm:px-6 grid lg:grid-cols-2 gap-6 lg:gap-10 items-start">

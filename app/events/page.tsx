@@ -6,6 +6,7 @@ import { ArrowRight, Calendar, Clock, MapPin } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { SideNav } from "@/components/SideNav";
+import { PageHeader } from "@/components/PageHeader";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/lib/toast";
@@ -74,22 +75,12 @@ export default function EventsPage() {
         <SideNav />
 
         <main className="flex-1 md:ml-20">
-          <section className="relative py-16 md:py-24 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent" />
-            <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
-
-            <div className="relative z-10 container mx-auto px-4 sm:px-6">
-              <div className="max-w-4xl pt-12 md:pt-0">
-                <span className="text-xs text-primary tracking-[0.3em] font-mono">EVENTS</span>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-4 mb-4">
-                  イベント一覧
-                </h1>
-                <p className="text-muted-foreground text-base md:text-lg max-w-2xl">
-                  ライブやコンサートのスケジュール確認、レパートリー提出、タイムテーブル閲覧ができます。
-                </p>
-              </div>
-            </div>
-          </section>
+          <PageHeader
+            kicker="Events"
+            title="イベント一覧"
+            description="ライブやコンサートのスケジュール確認、レパートリー提出、タイムテーブル閲覧ができます。"
+            size="lg"
+          />
 
           <section className="py-8 md:py-12">
             <div className="container mx-auto px-4 sm:px-6">

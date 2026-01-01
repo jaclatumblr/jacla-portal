@@ -1,14 +1,14 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
-  ArrowLeft,
   BadgeCheck,
   Calendar,
   CheckCircle2,
   ChevronDown,
+  GripVertical,
   MapPin,
   PencilLine,
   Plus,
@@ -17,6 +17,23 @@ import {
   Trash2,
   Users,
 } from "lucide-react";
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DraggableAttributes,
+  type DraggableSyntheticListeners,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { supabase } from "@/lib/supabaseClient";
@@ -30,6 +47,7 @@ import { useIsAdministrator } from "@/lib/useIsAdministrator";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
+import { PageHeader } from "@/components/PageHeader";
 
 type EventRow = {
   id: string;
@@ -146,6 +164,33 @@ function statusLabel(status: string) {
 
 function eventTypeLabel(eventType: string) {
   return eventTypeOptions.find((t) => t.value === eventType)?.label ?? eventType;
+}
+
+type SortableItemRenderProps = {
+  attributes: DraggableAttributes;
+  listeners: DraggableSyntheticListeners;
+  setActivatorNodeRef: (node: HTMLElement | null) => void;
+  isDragging: boolean;
+};
+
+type SortableItemProps = {
+  id: string;
+  children: (props: SortableItemRenderProps) => ReactNode;
+};
+
+function SortableItem({ id, children }: SortableItemProps) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
+    useSortable({ id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className={cn(isDragging && "opacity-80")}>
+      {children({ attributes, listeners, setActivatorNodeRef, isDragging })}
+    </div>
+  );
 }
 
 export default function AdminEventDetailPage() {
@@ -361,6 +406,28 @@ export default function AdminEventDetailPage() {
       return (a.note ?? "").localeCompare(b.note ?? "");
     });
   }, [slots]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 6 },
+    })
+  );
+
+  const handleSlotDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const activeId = String(active.id);
+    const overId = String(over.id);
+    const oldIndex = orderedSlots.findIndex((slot) => slot.id === activeId);
+    const newIndex = orderedSlots.findIndex((slot) => slot.id === overId);
+    if (oldIndex < 0 || newIndex < 0) return;
+
+    const reordered = arrayMove(orderedSlots, oldIndex, newIndex).map((slot, index) => ({
+      ...slot,
+      order_in_event: index + 1,
+    }));
+    setSlots(reordered);
+  };
   useEffect(() => {
     if (!eventId || adminLoading || !isAdmin) return;
     let cancelled = false;
@@ -1297,43 +1364,58 @@ export default function AdminEventDetailPage() {
         <SideNav />
 
         <main className="flex-1 md:ml-20">
-          <section className="relative py-12 md:py-16 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-secondary/5 to-transparent" />
-            <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
-
-            <div className="relative z-10 container mx-auto px-4 sm:px-6">
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <ArrowLeft className="w-4 h-4" />
-                <Link href="/admin/events" className="hover:text-primary transition-colors">
-                  イベント一覧に戻る
-                </Link>
-              </div>
-              <div className="max-w-5xl mt-6">
-                <span className="text-xs text-primary tracking-[0.3em] font-mono">ADMIN</span>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-3 mb-3">イベント編集</h1>
-                <p className="text-muted-foreground text-sm md:text-base">
-                  イベント情報・バンド・メンバー・セットリストを管理します。
-                </p>
-                <div className="flex flex-wrap items-center gap-3 mt-4">
-                  <Badge variant={statusBadge(eventForm.status)}>{statusLabel(eventForm.status)}</Badge>
-                  <Badge variant="outline">{eventTypeLabel(eventForm.event_type)}</Badge>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Calendar className="w-4 h-4 text-primary" />
-                    <span>{eventForm.date}</span>
-                  </div>
-                  {eventForm.venue && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <MapPin className="w-4 h-4 text-primary" />
-                      <span>{eventForm.venue}</span>
-                    </div>
-                  )}
+          <PageHeader
+            kicker="Admin"
+            title="イベント編集"
+            description="イベント情報・バンド・メンバー・セットリストを管理します。"
+            backHref="/admin/events"
+            backLabel="イベント一覧に戻る"
+            meta={
+              <div className="flex flex-wrap items-center gap-3">
+                <Badge variant={statusBadge(eventForm.status)}>{statusLabel(eventForm.status)}</Badge>
+                <Badge variant="outline">{eventTypeLabel(eventForm.event_type)}</Badge>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Calendar className="w-4 h-4 text-primary" />
+                  <span>{eventForm.date}</span>
                 </div>
+                {eventForm.venue && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <MapPin className="w-4 h-4 text-primary" />
+                    <span>{eventForm.venue}</span>
+                  </div>
+                )}
               </div>
-            </div>
-          </section>
+            }
+          />
 
           <section className="pb-12 md:pb-16">
             <div className="container mx-auto px-4 sm:px-6 space-y-8 md:space-y-10">
+              <Card className="bg-card/60 border-border">
+                <CardHeader>
+                  <CardTitle className="text-lg">編集ガイド</CardTitle>
+                  <CardDescription>迷ったときはこの順番で進めてください。</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <ol className="grid gap-2 text-sm md:grid-cols-2">
+                    <li className="rounded-md border border-border/60 bg-background/40 px-3 py-2">
+                      1. イベント情報を入力
+                    </li>
+                    <li className="rounded-md border border-border/60 bg-background/40 px-3 py-2">
+                      2. バンドとメンバーを登録
+                    </li>
+                    <li className="rounded-md border border-border/60 bg-background/40 px-3 py-2">
+                      3. タイムテーブルを調整
+                    </li>
+                    <li className="rounded-md border border-border/60 bg-background/40 px-3 py-2">
+                      4. 当日スタッフを割り当て
+                    </li>
+                  </ol>
+                  <p className="text-xs text-muted-foreground">
+                    ヒント: タイムテーブルはドラッグで並び替え、保存で反映されます。
+                  </p>
+                </CardContent>
+              </Card>
+
               <Card className="bg-card/60 border-border">
                 <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                   <div>
@@ -1475,7 +1557,7 @@ export default function AdminEventDetailPage() {
                 <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                   <div>
                     <CardTitle className="text-xl">タイムテーブル（手動）</CardTitle>
-                    <CardDescription>イベントの進行スロットを管理します。</CardDescription>
+                    <CardDescription>クリックで展開、ドラッグで並び替え、保存で反映します。</CardDescription>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <Button type="button" variant="outline" onClick={handleAddSlot}>
@@ -1506,138 +1588,192 @@ export default function AdminEventDetailPage() {
                   ) : orderedSlots.length === 0 ? (
                     <div className="text-sm text-muted-foreground">スロットがまだありません。</div>
                   ) : (
-                    <div className="space-y-3">
-                      {orderedSlots.map((slot, index) => {
-                        const isExpanded = Boolean(expandedSlots[slot.id]);
-                        return (
-                          <div key={slot.id} className="rounded-lg border border-border p-3 space-y-3">
-                            <button
-                              type="button"
-                              onClick={() => toggleSlotExpanded(slot.id)}
-                              className="w-full flex items-center justify-between gap-3 text-left"
-                              aria-expanded={isExpanded}
-                            >
-                              <div className="space-y-1">
-                                <p className="text-sm font-medium">
-                                  #{slot.order_in_event ?? index + 1} {slotLabel(slot)}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  {slotTimeLabel(slot)}
-                                </p>
-                              </div>
-                              <ChevronDown
-                                className={`w-4 h-4 text-muted-foreground transition-transform ${
-                                  isExpanded ? "rotate-180" : ""
-                                }`}
-                              />
-                            </button>
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={handleSlotDragEnd}
+                    >
+                      <SortableContext
+                        items={orderedSlots.map((slot) => slot.id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        <div className="space-y-3">
+                          {orderedSlots.map((slot, index) => {
+                            const isExpanded = Boolean(expandedSlots[slot.id]);
+                            return (
+                              <SortableItem key={slot.id} id={slot.id}>
+                                {({ attributes, listeners, setActivatorNodeRef, isDragging }) => (
+                                  <div
+                                    className={cn(
+                                      "rounded-lg border border-border p-3 space-y-3",
+                                      isDragging && "ring-1 ring-primary/40 bg-background/70"
+                                    )}
+                                  >
+                                    <div className="flex items-start gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleSlotExpanded(slot.id)}
+                                        className="flex-1 flex items-center justify-between gap-3 text-left"
+                                        aria-expanded={isExpanded}
+                                      >
+                                        <div className="space-y-1">
+                                          <p className="text-sm font-medium">
+                                            #{slot.order_in_event ?? index + 1} {slotLabel(slot)}
+                                          </p>
+                                          <p className="text-xs text-muted-foreground">
+                                            {slotTimeLabel(slot)}
+                                          </p>
+                                        </div>
+                                        <ChevronDown
+                                          className={`w-4 h-4 text-muted-foreground transition-transform ${
+                                            isExpanded ? "rotate-180" : ""
+                                          }`}
+                                        />
+                                      </button>
+                                      <button
+                                        ref={setActivatorNodeRef}
+                                        type="button"
+                                        aria-label="ドラッグして順番を変更"
+                                        className="mt-1 inline-flex items-center justify-center rounded-md border border-border bg-background/60 p-1 text-muted-foreground hover:text-foreground"
+                                        {...attributes}
+                                        {...(listeners ?? {})}
+                                      >
+                                        <GripVertical className="w-4 h-4" />
+                                      </button>
+                                    </div>
 
-                            {isExpanded && (
-                              <div className="space-y-3">
-                                <div className="grid gap-2 md:grid-cols-[70px,110px,1fr,120px,120px,1fr,auto]">
-                                <label className="space-y-1 text-xs">
-                                  <span className="text-muted-foreground">順番</span>
-                                  <Input
-                                    type="number"
-                                    min={1}
-                                    value={slot.order_in_event ?? ""}
-                                    onChange={(e) =>
-                                      handleSlotChange(slot.id, "order_in_event", Number(e.target.value))
-                                    }
-                                  />
-                                </label>
-                                <label className="space-y-1 text-xs">
-                                  <span className="text-muted-foreground">種別</span>
-                                  <select
-                                    className="h-10 w-full rounded-md border border-input bg-card px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-                                    value={slot.slot_type}
-                                    onChange={(e) =>
-                                      handleSlotChange(slot.id, "slot_type", e.target.value)
-                                    }
-                                  >
-                                    {slotTypeOptions.map((opt) => (
-                                      <option key={opt.value} value={opt.value}>
-                                        {opt.label}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </label>
-                                <label className="space-y-1 text-xs">
-                                  <span className="text-muted-foreground">バンド</span>
-                                  <select
-                                    className="h-10 w-full rounded-md border border-input bg-card px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-                                    value={slot.band_id ?? ""}
-                                    onChange={(e) =>
-                                      handleSlotChange(slot.id, "band_id", e.target.value || null)
-                                    }
-                                    disabled={slot.slot_type !== "band"}
-                                  >
-                                    <option value="">選択なし</option>
-                                    {bands.map((band) => (
-                                      <option key={band.id} value={band.id}>
-                                        {band.name}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </label>
-                                <label className="space-y-1 text-xs">
-                                  <span className="text-muted-foreground">開始</span>
-                                  <Input
-                                    type="time"
-                                    value={slot.start_time ?? ""}
-                                    onChange={(e) =>
-                                      handleSlotChange(slot.id, "start_time", e.target.value || null)
-                                    }
-                                  />
-                                </label>
-                                <label className="space-y-1 text-xs">
-                                  <span className="text-muted-foreground">終了</span>
-                                  <Input
-                                    type="time"
-                                    value={slot.end_time ?? ""}
-                                    onChange={(e) =>
-                                      handleSlotChange(slot.id, "end_time", e.target.value || null)
-                                    }
-                                  />
-                                </label>
-                                <label className="space-y-1 text-xs">
-                                  <span className="text-muted-foreground">メモ</span>
-                                  <Input
-                                    value={slot.note ?? ""}
-                                    onChange={(e) => handleSlotChange(slot.id, "note", e.target.value)}
-                                    placeholder="MC / 休憩など"
-                                  />
-                                </label>
-                                <div className="flex items-end">
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => handleDeleteSlot(slot.id)}
-                                    className="text-muted-foreground hover:text-destructive"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </Button>
-                                </div>
-                              </div>
-                              <label className="space-y-1 text-xs block">
-                                <span className="text-muted-foreground">転換(分)</span>
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  value={slot.changeover_min ?? ""}
-                                  onChange={(e) =>
-                                    handleSlotChange(slot.id, "changeover_min", Number(e.target.value))
-                                  }
-                                  className="max-w-[160px]"
-                                />
-                              </label>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
+                                    {isExpanded && (
+                                      <div className="space-y-3">
+                                        <div className="grid gap-2 md:grid-cols-[70px,110px,1fr,120px,120px,1fr,auto]">
+                                          <label className="space-y-1 text-xs">
+                                            <span className="text-muted-foreground">順番</span>
+                                            <Input
+                                              type="number"
+                                              min={1}
+                                              value={slot.order_in_event ?? ""}
+                                              onChange={(e) =>
+                                                handleSlotChange(
+                                                  slot.id,
+                                                  "order_in_event",
+                                                  Number(e.target.value)
+                                                )
+                                              }
+                                            />
+                                          </label>
+                                          <label className="space-y-1 text-xs">
+                                            <span className="text-muted-foreground">種別</span>
+                                            <select
+                                              className="h-10 w-full rounded-md border border-input bg-card px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                              value={slot.slot_type}
+                                              onChange={(e) =>
+                                                handleSlotChange(slot.id, "slot_type", e.target.value)
+                                              }
+                                            >
+                                              {slotTypeOptions.map((opt) => (
+                                                <option key={opt.value} value={opt.value}>
+                                                  {opt.label}
+                                                </option>
+                                              ))}
+                                            </select>
+                                          </label>
+                                          <label className="space-y-1 text-xs">
+                                            <span className="text-muted-foreground">バンド</span>
+                                            <select
+                                              className="h-10 w-full rounded-md border border-input bg-card px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                              value={slot.band_id ?? ""}
+                                              onChange={(e) =>
+                                                handleSlotChange(
+                                                  slot.id,
+                                                  "band_id",
+                                                  e.target.value || null
+                                                )
+                                              }
+                                              disabled={slot.slot_type !== "band"}
+                                            >
+                                              <option value="">選択なし</option>
+                                              {bands.map((band) => (
+                                                <option key={band.id} value={band.id}>
+                                                  {band.name}
+                                                </option>
+                                              ))}
+                                            </select>
+                                          </label>
+                                          <label className="space-y-1 text-xs">
+                                            <span className="text-muted-foreground">開始</span>
+                                            <Input
+                                              type="time"
+                                              value={slot.start_time ?? ""}
+                                              onChange={(e) =>
+                                                handleSlotChange(
+                                                  slot.id,
+                                                  "start_time",
+                                                  e.target.value || null
+                                                )
+                                              }
+                                            />
+                                          </label>
+                                          <label className="space-y-1 text-xs">
+                                            <span className="text-muted-foreground">終了</span>
+                                            <Input
+                                              type="time"
+                                              value={slot.end_time ?? ""}
+                                              onChange={(e) =>
+                                                handleSlotChange(
+                                                  slot.id,
+                                                  "end_time",
+                                                  e.target.value || null
+                                                )
+                                              }
+                                            />
+                                          </label>
+                                          <label className="space-y-1 text-xs">
+                                            <span className="text-muted-foreground">メモ</span>
+                                            <Input
+                                              value={slot.note ?? ""}
+                                              onChange={(e) =>
+                                                handleSlotChange(slot.id, "note", e.target.value)
+                                              }
+                                              placeholder="MC / 休憩など"
+                                            />
+                                          </label>
+                                          <div className="flex items-end">
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              size="icon"
+                                              onClick={() => handleDeleteSlot(slot.id)}
+                                              className="text-muted-foreground hover:text-destructive"
+                                            >
+                                              <Trash2 className="w-4 h-4" />
+                                            </Button>
+                                          </div>
+                                        </div>
+                                        <label className="space-y-1 text-xs block">
+                                          <span className="text-muted-foreground">転換(分)</span>
+                                          <Input
+                                            type="number"
+                                            min={0}
+                                            value={slot.changeover_min ?? ""}
+                                            onChange={(e) =>
+                                              handleSlotChange(
+                                                slot.id,
+                                                "changeover_min",
+                                                Number(e.target.value)
+                                              )
+                                            }
+                                            className="max-w-[160px]"
+                                          />
+                                        </label>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </SortableItem>
+                            );
+                          })}
+                        </div>
+                      </SortableContext>
+                    </DndContext>
                   )}
                 </CardContent>
               </Card>

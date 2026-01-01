@@ -1,11 +1,11 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Calendar, ChevronDown, Clock, List } from "lucide-react";
+import { Calendar, ChevronDown, Clock, List } from "lucide-react";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { SideNav } from "@/components/SideNav";
+import { PageHeader } from "@/components/PageHeader";
 import { supabase } from "@/lib/supabaseClient";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -146,40 +146,32 @@ export default function EventTimeTablePage() {
       <div className="flex min-h-screen bg-background">
         <SideNav />
         <main className="flex-1 md:ml-20">
-          <section className="relative py-12 md:py-16 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent" />
-            <div className="relative z-10 container mx-auto px-4 sm:px-6">
-              <Link
-                href={`/events/${eventId}`}
-                className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span className="text-sm">イベント詳細へ戻る</span>
-              </Link>
-              <div className="max-w-4xl mt-6">
-                <span className="text-xs text-primary tracking-[0.3em] font-mono">TIMETABLE</span>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-3">タイムテーブル</h1>
-                {event && (
-                  <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+          <PageHeader
+            kicker="Timetable"
+            title="タイムテーブル"
+            backHref={`/events/${eventId}`}
+            backLabel="イベント詳細へ戻る"
+            meta={
+              event && (
+                <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                  <span className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4" />
+                    {event.date}
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <Clock className="w-4 h-4" />
+                    {timeLabel(event.open_time, event.start_time)}
+                  </span>
+                  {event.venue && (
                     <span className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4" />
-                      {event.date}
+                      <List className="w-4 h-4" />
+                      {event.venue}
                     </span>
-                    <span className="flex items-center gap-2">
-                      <Clock className="w-4 h-4" />
-                      {timeLabel(event.open_time, event.start_time)}
-                    </span>
-                    {event.venue && (
-                      <span className="flex items-center gap-2">
-                        <List className="w-4 h-4" />
-                        {event.venue}
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </section>
+                  )}
+                </div>
+              )
+            }
+          />
 
           <section className="pb-12 md:pb-16">
             <div className="container mx-auto px-4 sm:px-6 space-y-6">

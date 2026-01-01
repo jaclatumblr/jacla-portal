@@ -1,10 +1,10 @@
-import Link from "next/link";
-import { ArrowLeft, Sparkles, Waves, Headphones } from "lucide-react";
+import { Sparkles, Waves, Headphones } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
+import { PageHeader } from "@/components/PageHeader";
 
 export default function PALiveAdviserPage() {
   return (
@@ -12,23 +12,15 @@ export default function PALiveAdviserPage() {
       <div className="flex min-h-screen bg-background">
         <SideNav />
         <main className="flex-1 md:ml-20">
-          <section className="relative py-16 md:py-20 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-secondary/5 to-transparent" />
-            <div className="absolute top-0 right-1/4 w-80 h-80 bg-secondary/5 rounded-full blur-3xl" />
-            <div className="relative z-10 container mx-auto px-4 sm:px-6">
-              <div className="max-w-4xl pt-10 md:pt-0">
-                <Link href="/pa" className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary mb-4">
-                  <ArrowLeft className="w-4 h-4" />
-                  <span className="text-sm">PAダッシュボードへ戻る</span>
-                </Link>
-                <span className="text-xs text-secondary tracking-[0.3em] font-mono">PA</span>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-3 mb-3">Live Adviser</h1>
-                <p className="text-muted-foreground text-base md:text-lg">
-                  本番中の気付きや改善ポイントを記録し、次の曲・次のバンドへフィードバックします。
-                </p>
-              </div>
-            </div>
-          </section>
+          <PageHeader
+            kicker="PA"
+            title="Live Adviser"
+            description="本番中の気付きや改善ポイントを記録し、次の曲・次のバンドへフィードバックします。"
+            backHref="/pa"
+            backLabel="PAダッシュボードへ戻る"
+            tone="secondary"
+            size="lg"
+          />
 
           <section className="py-8 md:py-12">
             <div className="container mx-auto px-4 sm:px-6 space-y-6 max-w-5xl">

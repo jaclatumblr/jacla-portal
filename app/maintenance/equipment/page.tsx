@@ -1,9 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import {
-  ArrowLeft,
   ClipboardList,
   Loader2,
   Save,
@@ -18,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/PageHeader";
 import {
   Table,
   TableBody,
@@ -406,44 +405,33 @@ export default function EquipmentMaintenancePage() {
         <SideNav />
 
         <main className="flex-1 md:ml-20">
-          <section className="relative py-12 md:py-16 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent" />
-            <div className="relative z-10 container mx-auto px-4 sm:px-6">
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <ArrowLeft className="w-4 h-4" />
-                <Link href="/maintenance" className="hover:text-primary transition-colors">
-                  備品管理に戻る
-                </Link>
+          <PageHeader
+            kicker="Equipment"
+            title="備品管理"
+            description="PA / 照明 / 総合の備品を記録し、状態の更新履歴を残します。"
+            backHref="/maintenance"
+            backLabel="備品管理に戻る"
+            actions={
+              <div className="flex flex-wrap items-center gap-3">
+                <Badge variant={openToAll ? "default" : "secondary"}>
+                  {openToAll ? "編集: 全員に開放" : "編集: リーダー以上"}
+                </Badge>
+                {canToggleOpen && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleToggleOpen}
+                    disabled={settingsLoading}
+                    className="gap-2"
+                  >
+                    <ClipboardList className="w-4 h-4" />
+                    {openToAll ? "全員編集を解除" : "全員編集を許可"}
+                  </Button>
+                )}
               </div>
-              <div className="max-w-4xl mt-6">
-                <span className="text-xs text-primary tracking-[0.3em] font-mono">EQUIPMENT</span>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-3 mb-3">
-                  備品管理
-                </h1>
-                <p className="text-muted-foreground text-sm md:text-base">
-                  PA / 照明 / 総合の備品を記録し、状態の更新履歴を残します。
-                </p>
-                <div className="mt-4 flex flex-wrap items-center gap-3">
-                  <Badge variant={openToAll ? "default" : "secondary"}>
-                    {openToAll ? "編集: 全員に開放" : "編集: リーダー以上"}
-                  </Badge>
-                  {canToggleOpen && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={handleToggleOpen}
-                      disabled={settingsLoading}
-                      className="gap-2"
-                    >
-                      <ClipboardList className="w-4 h-4" />
-                      {openToAll ? "全員編集を解除" : "全員編集を許可"}
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </div>
-          </section>
+            }
+          />
 
           <section className="pb-12 md:pb-16">
             <div className="container mx-auto px-4 sm:px-6 space-y-6">

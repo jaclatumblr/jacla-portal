@@ -10,7 +10,6 @@ import {
   Music,
   FileText,
   List,
-  ArrowLeft,
   ArrowRight,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +23,7 @@ import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/lib/toast";
+import { PageHeader } from "@/components/PageHeader";
 
 type Event = {
   id: string;
@@ -131,6 +131,15 @@ export default function EventDetailPage() {
       ? `${event.open_time} - ${event.start_time}`
       : "時間未定";
 
+  const headerTitle = loading ? "イベント情報を読み込み中..." : event?.name ?? "イベント詳細";
+  const headerDescription =
+    !loading && event?.note ? event.note : "イベントの詳細を確認できます。";
+  const headerMeta = event ? (
+    <div className="flex items-center gap-3 flex-wrap">
+      <Badge variant="default">{event.status}</Badge>
+    </div>
+  ) : null;
+
   const eventTypeLabel = (eventType: string) => {
     if (eventType === "live") return "ライブ";
     if (eventType === "workshop") return "講習会";
@@ -190,93 +199,55 @@ export default function EventDetailPage() {
         <SideNav />
 
         <main className="flex-1 md:ml-20">
-          <section className="relative py-16 md:py-24 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent" />
-            <div className="absolute top-0 right-1/4 w-96 h-96 bg-secondary/5 rounded-full blur-3xl" />
+          <PageHeader
+            kicker="Event Detail"
+            title={headerTitle}
+            description={headerDescription}
+            backHref="/events"
+            backLabel="イベント一覧に戻る"
+            meta={headerMeta}
+            size="lg"
+          />
 
-            <div className="relative z-10 container mx-auto px-4 sm:px-6">
-              <div className="pt-12 md:pt-0">
-                <Link
-                  href="/events"
-                  className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors mb-6 md:mb-8"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  <span className="text-sm">イベント一覧に戻る</span>
-                </Link>
-
-                {loading ? (
-                  <p className="text-sm text-muted-foreground">
-                    イベント情報を読み込み中です…
-                  </p>
-                ) : event ? (
-                  <div className="max-w-4xl">
-                    <div className="flex items-center gap-3 mb-4 flex-wrap">
-                      <span className="text-xs text-primary tracking-[0.3em] font-mono">
-                        EVENT DETAIL
-                      </span>
-                      <Badge variant="default">{event.status}</Badge>
-                    </div>
-                    <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4">
-                      {event.name}
-                    </h1>
-                    {event.note && (
-                      <p className="text-muted-foreground text-base md:text-lg max-w-2xl mb-8">
-                        {event.note}
-                      </p>
-                    )}
-
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-                      <div className="p-3 md:p-4 bg-card/50 border border-border rounded-lg">
-                        <Calendar className="w-5 h-5 text-primary mb-2" />
-                        <p className="text-xs text-muted-foreground mb-1">
-                          開催日
-                        </p>
-                        <p className="font-medium text-sm md:text-base">
-                          {event.date}
-                        </p>
-                      </div>
-                      <div className="p-3 md:p-4 bg-card/50 border border-border rounded-lg">
-                        <Clock className="w-5 h-5 text-primary mb-2" />
-                        <p className="text-xs text-muted-foreground mb-1">
-                          時間
-                        </p>
-                        <p className="font-medium text-sm md:text-base">
-                          {timeRange}
-                        </p>
-                      </div>
-                      <div className="p-3 md:p-4 bg-card/50 border border-border rounded-lg">
-                        <MapPin className="w-5 h-5 text-primary mb-2" />
-                        <p className="text-xs text-muted-foreground mb-1">
-                          会場
-                        </p>
-                        <p className="font-medium text-sm md:text-base">
-                          {event.venue ?? "未設定"}
-                        </p>
-                      </div>
-                      <div className="p-3 md:p-4 bg-card/50 border border-border rounded-lg">
-                        <List className="w-5 h-5 text-primary mb-2" />
-                        <p className="text-xs text-muted-foreground mb-1">
-                          イベント種別
-                        </p>
-                        <p className="font-medium text-sm md:text-base">
-                          {eventTypeLabel(event.event_type)}
-                        </p>
-                      </div>
-                      <div className="p-3 md:p-4 bg-card/50 border border-border rounded-lg">
-                        <FileText className="w-5 h-5 text-primary mb-2" />
-                        <p className="text-xs text-muted-foreground mb-1">
-                          メモ
-                        </p>
-                        <p className="font-medium text-xs md:text-sm line-clamp-3">
-                          {event.note ?? "—"}
-                        </p>
-                      </div>
-                    </div>
+          {!loading && event && (
+            <section className="pb-12 md:pb-16">
+              <div className="container mx-auto px-4 sm:px-6">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 max-w-4xl">
+                  <div className="p-3 md:p-4 bg-card/50 border border-border rounded-lg">
+                    <Calendar className="w-5 h-5 text-primary mb-2" />
+                    <p className="text-xs text-muted-foreground mb-1">開催日</p>
+                    <p className="font-medium text-sm md:text-base">{event.date}</p>
                   </div>
-                ) : null}
+                  <div className="p-3 md:p-4 bg-card/50 border border-border rounded-lg">
+                    <Clock className="w-5 h-5 text-primary mb-2" />
+                    <p className="text-xs text-muted-foreground mb-1">時間</p>
+                    <p className="font-medium text-sm md:text-base">{timeRange}</p>
+                  </div>
+                  <div className="p-3 md:p-4 bg-card/50 border border-border rounded-lg">
+                    <MapPin className="w-5 h-5 text-primary mb-2" />
+                    <p className="text-xs text-muted-foreground mb-1">会場</p>
+                    <p className="font-medium text-sm md:text-base">
+                      {event.venue ?? "未設定"}
+                    </p>
+                  </div>
+                  <div className="p-3 md:p-4 bg-card/50 border border-border rounded-lg">
+                    <List className="w-5 h-5 text-primary mb-2" />
+                    <p className="text-xs text-muted-foreground mb-1">イベント種別</p>
+                    <p className="font-medium text-sm md:text-base">
+                      {eventTypeLabel(event.event_type)}
+                    </p>
+                  </div>
+                  <div className="p-3 md:p-4 bg-card/50 border border-border rounded-lg">
+                    <FileText className="w-5 h-5 text-primary mb-2" />
+                    <p className="text-xs text-muted-foreground mb-1">メモ</p>
+                    <p className="font-medium text-xs md:text-sm line-clamp-3">
+                      {event.note ?? "未設定"}
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
-          </section>
+            </section>
+          )}
 
           {/* アクションカード（今はリンクだけ / 将来ここにTT・レパートリーなどを実装） */}
           {event && (

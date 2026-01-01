@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SideNav } from "@/components/SideNav";
+import { PageHeader } from "@/components/PageHeader";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/contexts/AuthContext";
@@ -398,43 +399,36 @@ export default function MembersPage() {
         <SideNav />
 
         <main className="flex-1 md:ml-20">
-          <section className="relative py-16 md:py-24 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent" />
-            <div className="absolute top-0 left-1/3 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
-
-            <div className="relative z-10 container mx-auto px-4 sm:px-6">
-              <div className="max-w-5xl pt-12 md:pt-0">
-                <span className="text-xs text-primary tracking-[0.3em] font-mono">MEMBERS</span>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-4 mb-4">部員一覧</h1>
-                <p className="text-muted-foreground text-base md:text-lg max-w-2xl mb-8">
-                  部員情報と担当パートを確認できます。
-                </p>
-
-                <div className="flex flex-col sm:flex-row gap-3 md:gap-4 max-w-xl">
-                  <div className="flex-1 relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      value={searchText}
-                      onChange={(event) => setSearchText(event.target.value)}
-                      placeholder="名前、役職、パート、バンドで検索..."
-                      className="pl-10 bg-card/50 border-border"
-                    />
-                  </div>
-                  <select
-                    value={sortKey}
-                    onChange={(event) => setSortKey(event.target.value as SortKey)}
-                    className="h-10 w-full sm:w-auto rounded-md border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-                  >
-                    {sortOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+          <PageHeader
+            kicker="Members"
+            title="部員一覧"
+            description="部員情報と担当パートを確認できます。"
+            size="lg"
+            meta={
+              <div className="flex flex-col sm:flex-row gap-3 md:gap-4 max-w-xl">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    value={searchText}
+                    onChange={(event) => setSearchText(event.target.value)}
+                    placeholder="名前、役職、パート、バンドで検索..."
+                    className="pl-10 bg-card/50 border-border"
+                  />
                 </div>
+                <select
+                  value={sortKey}
+                  onChange={(event) => setSortKey(event.target.value as SortKey)}
+                  className="h-10 w-full sm:w-auto rounded-md border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                >
+                  {sortOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </div>
-            </div>
-          </section>
+            }
+          />
 
           <section className="py-8 md:py-12">
             <div className="container mx-auto px-4 sm:px-6">

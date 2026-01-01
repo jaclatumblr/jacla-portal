@@ -3,12 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, ChevronDown, ExternalLink } from "lucide-react";
+import { ChevronDown, ExternalLink } from "lucide-react";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { SideNav } from "@/components/SideNav";
 import { supabase } from "@/lib/supabaseClient";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/PageHeader";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 
@@ -145,30 +146,13 @@ export default function RepertoireViewPage() {
         <SideNav />
 
         <main className="flex-1 md:ml-20">
-          <section className="relative py-12 md:py-16 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent" />
-            <div className="relative z-10 container mx-auto px-4 sm:px-6">
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <ArrowLeft className="w-4 h-4" />
-                <Link href={`/events/${eventId}`} className="hover:text-primary transition-colors">
-                  イベント詳細に戻る
-                </Link>
-              </div>
-              <div className="max-w-4xl mt-6">
-                <span className="text-xs text-primary tracking-[0.3em] font-mono">
-                  REPERTOIRE
-                </span>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-3 mb-3">
-                  レパ表一覧
-                </h1>
-                {event && (
-                  <p className="text-muted-foreground text-sm md:text-base">
-                    {event.name} / {event.date}
-                  </p>
-                )}
-              </div>
-            </div>
-          </section>
+          <PageHeader
+            kicker="Repertoire"
+            title="レパ表一覧"
+            description={event ? `${event.name} / ${event.date}` : "全バンドのセットリストを確認できます。"}
+            backHref={`/events/${eventId}`}
+            backLabel="イベント詳細に戻る"
+          />
 
           <section className="pb-12 md:pb-16">
             <div className="container mx-auto px-4 sm:px-6 space-y-6">

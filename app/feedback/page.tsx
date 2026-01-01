@@ -7,6 +7,7 @@ import { AuthGuard } from "@/lib/AuthGuard";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/PageHeader";
 import { toast } from "@/lib/toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
@@ -117,20 +118,12 @@ export default function FeedbackPage() {
         <SideNav />
 
         <main className="flex-1 md:ml-20">
-          <section className="relative py-12 md:py-16 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-secondary/5 to-transparent" />
-            <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
-
-            <div className="relative z-10 container mx-auto px-4 sm:px-6">
-              <div className="max-w-4xl">
-                <span className="text-xs text-primary tracking-[0.3em] font-mono">FEEDBACK</span>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-3 mb-3">フィードバック</h1>
-                <p className="text-muted-foreground text-sm md:text-base">
-                  改善したい点や不具合を共有してください。運営が確認します。
-                </p>
-              </div>
-            </div>
-          </section>
+          <PageHeader
+            kicker="Feedback"
+            title="フィードバック"
+            description="改善したい点や不具合を共有してください。運営が確認します。"
+            size="lg"
+          />
 
           <section className="pb-12 md:pb-16">
             <div className="container mx-auto px-4 sm:px-6">
@@ -142,7 +135,7 @@ export default function FeedbackPage() {
                     </div>
                     <div>
                       <CardTitle className="text-xl">ご意見フォーム</CardTitle>
-                      <CardDescription>送信者情報は運営側で確認します。</CardDescription>
+                      <CardDescription>送信内容は運営側で確認します。</CardDescription>
                     </div>
                   </div>
                 </CardHeader>

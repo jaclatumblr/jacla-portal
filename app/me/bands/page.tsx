@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowLeft, ArrowRight, Calendar, Music, Users } from "lucide-react";
+import { ArrowRight, Calendar, Music, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/lib/toast";
+import { PageHeader } from "@/components/PageHeader";
 
 type EventRow = {
   id: string;
@@ -183,29 +184,13 @@ export default function MyBandsPage() {
         <SideNav />
 
         <main className="flex-1 md:ml-20">
-          <section className="relative py-12 md:py-16 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent" />
-
-            <div className="relative z-10 container mx-auto px-4 sm:px-6">
-              <div className="max-w-4xl pt-12 md:pt-0">
-                <Link
-                  href="/me/profile"
-                  className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors mb-6"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  <span className="text-sm">マイページ</span>
-                </Link>
-
-                <span className="text-xs text-primary tracking-[0.3em] font-mono">MY BANDS</span>
-                <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mt-2 mb-2">
-                  マイバンド
-                </h1>
-                <p className="text-muted-foreground text-sm md:text-base">
-                  自分が参加しているバンドとイベントを確認できます。
-                </p>
-              </div>
-            </div>
-          </section>
+          <PageHeader
+            kicker="My Bands"
+            title="マイバンド"
+            description="自分が参加しているバンドとイベントを確認できます。"
+            backHref="/me/profile"
+            backLabel="マイページ"
+          />
 
           <section className="py-8 md:py-12">
             <div className="container mx-auto px-4 sm:px-6">

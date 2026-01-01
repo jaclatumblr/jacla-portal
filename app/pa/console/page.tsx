@@ -1,8 +1,8 @@
-﻿import Link from "next/link";
-import { ArrowLeft, SlidersHorizontal } from "lucide-react";
+import { SlidersHorizontal } from "lucide-react";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { cn } from "@/lib/utils";
+import { PageHeader } from "@/components/PageHeader";
 
 const channelColors = [
   "bg-white/40",
@@ -118,31 +118,14 @@ export default function PAConsolePage() {
       <div className="flex min-h-screen bg-background">
         <SideNav />
         <main className="flex-1 md:ml-20">
-          <section className="relative py-12 md:py-16 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent" />
-            <div className="relative z-10 container mx-auto px-4 sm:px-6">
-              <div className="max-w-5xl pt-10 md:pt-0 space-y-3">
-                <Link
-                  href="/pa"
-                  className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  <span className="text-sm">PAダッシュボードへ戻る</span>
-                </Link>
-                <div>
-                  <span className="text-xs text-white/60 tracking-[0.3em] font-mono">
-                    PA CONSOLE
-                  </span>
-                  <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-3">
-                    疑似PAコンソール
-                  </h1>
-                  <p className="text-muted-foreground text-base md:text-lg mt-3">
-                    見た目だけのイメージ表示です。PAセクションの雰囲気を共有するためのビジュアルです。
-                  </p>
-                </div>
-              </div>
-            </div>
-          </section>
+          <PageHeader
+            kicker="PA Console"
+            title="疑似PAコンソール"
+            description="見た目だけのイメージ表示です。PAセクションの雰囲気を共有するためのビジュアルです。"
+            backHref="/pa"
+            backLabel="PAダッシュボードへ戻る"
+            tone="white"
+          />
 
           <section className="pb-14">
             <div className="container mx-auto px-4 sm:px-6">

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ArrowRight, Bell, Calendar, MessageSquare, Shield } from "lucide-react";
 import { SideNav } from "@/components/SideNav";
+import { PageHeader } from "@/components/PageHeader";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { useRoleFlags } from "@/lib/useRoleFlags";
 
@@ -51,22 +52,12 @@ export default function AdminPage() {
         <SideNav />
 
         <main className="flex-1 md:ml-20">
-          <section className="relative py-16 md:py-24 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent" />
-            <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
-
-            <div className="relative z-10 container mx-auto px-4 sm:px-6">
-              <div className="max-w-4xl pt-12 md:pt-0">
-                <span className="text-xs text-primary tracking-[0.3em] font-mono">ADMIN</span>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-4 mb-4">
-                  管理ダッシュボード
-                </h1>
-                <p className="text-muted-foreground text-base md:text-lg max-w-2xl">
-                  管理者メニューからイベントやユーザー管理が行えます。
-                </p>
-              </div>
-            </div>
-          </section>
+          <PageHeader
+            kicker="Admin"
+            title="管理ダッシュボード"
+            description="管理者メニューからイベントやユーザー管理が行えます。"
+            size="lg"
+          />
 
           <section className="py-8 md:py-12">
             <div className="container mx-auto px-4 sm:px-6">

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { ArrowRight, Bell, Calendar, MessageSquare, Shield } from "lucide-react";
@@ -55,7 +55,7 @@ export default function AdminPage() {
           <PageHeader
             kicker="Admin"
             title="管理ダッシュボード"
-            description="管理者メニューからイベントやユーザー管理が行えます。"
+            description="管理メニューからイベントやユーザー管理が行えます。"
             size="lg"
           />
 

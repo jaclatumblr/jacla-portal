@@ -1419,6 +1419,33 @@ export default function AdminEventDetailPage() {
               <Card className="bg-card/60 border-border">
                 <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                   <div>
+                    <CardTitle className="text-lg">タイムテーブルとシフト</CardTitle>
+                    <CardDescription>作成・割当は専用ページでまとめて管理します。</CardDescription>
+                  </div>
+                  <Badge variant="outline" className="gap-1">
+                    <Users className="w-4 h-4" />
+                    PAL / LL 以上
+                  </Badge>
+                </CardHeader>
+                <CardContent className="flex flex-wrap gap-2">
+                  <Link
+                    href={`/admin/events/${eventId}/tt/edit`}
+                    className="inline-flex items-center justify-center rounded-md border border-border px-4 py-2 text-sm text-foreground hover:border-primary/60 hover:text-primary transition-colors"
+                  >
+                    TTを編集する
+                  </Link>
+                  <Link
+                    href={`/admin/events/${eventId}/tt/staff`}
+                    className="inline-flex items-center justify-center rounded-md border border-border px-4 py-2 text-sm text-foreground hover:border-primary/60 hover:text-primary transition-colors"
+                  >
+                    シフト割当を編集する
+                  </Link>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-card/60 border-border">
+                <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <div>
                     <CardTitle className="text-xl">イベント情報</CardTitle>
                     <CardDescription>基本情報とデフォルト設定を更新します。</CardDescription>
                   </div>

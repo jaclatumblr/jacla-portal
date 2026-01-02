@@ -1,4 +1,4 @@
-export const siteTitle = "Jacla Portal";
+﻿export const siteTitle = "Jacla Portal";
 export const titleTemplate = "%s | Jacla Portal";
 
 const exactTitles: Record<string, string> = {
@@ -33,7 +33,7 @@ const exactTitles: Record<string, string> = {
   "/feedback": "フィードバック",
   "/onboarding": "初回設定",
   "/auth/callback": "ログイン処理",
-  "/debug-auth": "認証デバッグ",
+  "/debug-auth": "認証チェック",
 };
 
 export function getPageTitle(pathname: string): string | null {
@@ -44,6 +44,8 @@ export function getPageTitle(pathname: string): string | null {
   }
 
   if (pathname.startsWith("/admin/events/")) {
+    if (pathname.includes("/tt/edit")) return "タイムテーブル編集";
+    if (pathname.includes("/tt/staff")) return "シフト割当";
     return "イベント管理詳細";
   }
 

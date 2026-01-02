@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState, type FormEvent } from "react";
 import { Loader2, MessageCircle, Send } from "lucide-react";

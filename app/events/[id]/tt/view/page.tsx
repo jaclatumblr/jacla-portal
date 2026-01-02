@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/lib/toast";
+import { useRoleFlags } from "@/lib/useRoleFlags";
 
 type EventRow = {
   id: string;
@@ -21,6 +22,7 @@ type EventRow = {
   venue: string | null;
   open_time: string | null;
   start_time: string | null;
+  tt_is_published: boolean;
 };
 
 type SlotRow = {
@@ -64,6 +66,7 @@ const timeLabel = (start: string | null, end: string | null) => {
 export default function EventTimeTablePage() {
   const params = useParams<{ id: string }>();
   const eventId = params?.id as string | undefined;
+  const { canAccessAdmin, loading: rolesLoading } = useRoleFlags();
 
   const [event, setEvent] = useState<EventRow | null>(null);
   const [slots, setSlots] = useState<SlotRow[]>([]);
@@ -81,7 +84,7 @@ export default function EventTimeTablePage() {
       const [eventRes, slotsRes] = await Promise.all([
         supabase
           .from("events")
-          .select("id, name, date, status, event_type, venue, open_time, start_time")
+          .select("id, name, date, status, event_type, venue, open_time, start_time, tt_is_published")
           .eq("id", eventId)
           .maybeSingle(),
         supabase
@@ -168,6 +171,9 @@ export default function EventTimeTablePage() {
                       {event.venue}
                     </span>
                   )}
+                  <Badge variant={event.tt_is_published ? "default" : "outline"}>
+                    {event.tt_is_published ? "公開中" : "非公開"}
+                  </Badge>
                 </div>
               )
             }
@@ -175,9 +181,13 @@ export default function EventTimeTablePage() {
 
           <section className="pb-12 md:pb-16">
             <div className="container mx-auto px-4 sm:px-6 space-y-6">
-              {loading ? (
+              {loading || rolesLoading ? (
                 <div className="rounded-lg border border-border bg-card/60 px-4 py-3 text-sm text-muted-foreground">
                   タイムテーブルを読み込み中...
+                </div>
+              ) : event && !event.tt_is_published && !canAccessAdmin ? (
+                <div className="rounded-lg border border-border bg-card/60 px-4 py-3 text-sm text-muted-foreground">
+                  タイムテーブルは未公開です。公開されるまでお待ちください。
                 </div>
               ) : orderedSlots.length === 0 ? (
                 <div className="rounded-lg border border-border bg-card/60 px-4 py-3 text-sm text-muted-foreground">

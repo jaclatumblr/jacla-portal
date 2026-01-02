@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -136,7 +136,7 @@ export default function AdminFeedbackPage() {
       <AuthGuard>
         <div className="min-h-screen flex items-center justify-center bg-background px-6">
           <div className="text-center space-y-3">
-            <p className="text-xl font-semibold text-foreground">管理者のみアクセスできます</p>
+            <p className="text-xl font-semibold text-foreground">管理者のみアクセスできます。</p>
             <p className="text-sm text-muted-foreground">管理者にお問い合わせください。</p>
             <Link
               href="/"

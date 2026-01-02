@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
@@ -63,7 +63,7 @@ export function useRoleFlags(): RoleFlagsResult {
         if (cancelled) return;
         if (profileError) {
           console.error(profileError);
-          setError("権限の取得に失敗しました。");
+          setError("権限情報の取得に失敗しました。");
           setLoading(false);
           return;
         }

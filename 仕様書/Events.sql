@@ -61,6 +61,9 @@ alter table public.events
 alter table public.events
   add column if not exists event_type text not null default 'live';
 
+alter table public.events
+  add column if not exists tt_is_published boolean not null default false;
+
 do $$
 begin
   if not exists (
@@ -108,6 +111,31 @@ create policy "events_delete_admin"
 on public.events for delete
 to authenticated
 using (public.is_admin_or_supervisor(auth.uid()));
+
+-- TT公開フラグ更新（PAL/LL/Admin/SVのみ）
+create or replace function public.set_event_tt_publish(event_id uuid, is_published boolean)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not (
+    public.is_admin_or_supervisor(auth.uid())
+    or public.is_pa_leader(auth.uid())
+    or public.is_lighting_leader(auth.uid())
+  ) then
+    raise exception 'Not allowed';
+  end if;
+
+  update public.events
+  set tt_is_published = is_published
+  where id = event_id;
+end;
+$$;
+
+revoke execute on function public.set_event_tt_publish(uuid, boolean) from public;
+grant execute on function public.set_event_tt_publish(uuid, boolean) to authenticated;
 
 
 -- =========================
@@ -536,8 +564,16 @@ using (true);
 create policy "event_slots_write_admin"
 on public.event_slots for all
 to authenticated
-using (public.is_admin_or_supervisor(auth.uid()))
-with check (public.is_admin_or_supervisor(auth.uid()));
+using (
+  public.is_admin_or_supervisor(auth.uid())
+  or public.is_pa_leader(auth.uid())
+  or public.is_lighting_leader(auth.uid())
+)
+with check (
+  public.is_admin_or_supervisor(auth.uid())
+  or public.is_pa_leader(auth.uid())
+  or public.is_lighting_leader(auth.uid())
+);
 
 -- =========================
 -- 6) event_staff_members（イベント参加クルー）
@@ -568,8 +604,16 @@ using (true);
 create policy "event_staff_members_write_admin"
 on public.event_staff_members for all
 to authenticated
-using (public.is_admin_or_supervisor(auth.uid()))
-with check (public.is_admin_or_supervisor(auth.uid()));
+using (
+  public.is_admin_or_supervisor(auth.uid())
+  or public.is_pa_leader(auth.uid())
+  or public.is_lighting_leader(auth.uid())
+)
+with check (
+  public.is_admin_or_supervisor(auth.uid())
+  or public.is_pa_leader(auth.uid())
+  or public.is_lighting_leader(auth.uid())
+);
 
 -- =========================
 -- 7) slot_staff_assignments（スロット担当）
@@ -608,7 +652,15 @@ using (true);
 create policy "slot_staff_assignments_write_admin"
 on public.slot_staff_assignments for all
 to authenticated
-using (public.is_admin_or_supervisor(auth.uid()))
-with check (public.is_admin_or_supervisor(auth.uid()));
+using (
+  public.is_admin_or_supervisor(auth.uid())
+  or public.is_pa_leader(auth.uid())
+  or public.is_lighting_leader(auth.uid())
+)
+with check (
+  public.is_admin_or_supervisor(auth.uid())
+  or public.is_pa_leader(auth.uid())
+  or public.is_lighting_leader(auth.uid())
+);
 
 commit;

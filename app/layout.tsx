@@ -8,6 +8,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { PageTransition } from "@/components/PageTransition";
 import { TitleManager } from "@/components/TitleManager";
 import { ToastViewport } from "@/components/ToastViewport";
+import { PageViewTracker } from "@/components/PageViewTracker";
 import { siteTitle, titleTemplate } from "@/lib/pageTitles";
 
 export const metadata: Metadata = {
@@ -30,6 +31,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         >
           <AuthProvider>
             <TitleManager />
+            <PageViewTracker />
             <div className="min-h-screen flex flex-col">
               <PageTransition>{children}</PageTransition>
               <footer className="app-footer border-t border-border bg-background/80 print:hidden">
@@ -55,6 +57,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                         </Link>
                         <Link href="/privacy" className="hover:text-foreground">
                           プライバシーポリシー
+                        </Link>
+                        <Link href="/updates" className="hover:text-foreground">
+                          更新履歴
                         </Link>
                       </div>
                       <span>© Tokyo University of Technology - 総合音楽部 Jacla</span>

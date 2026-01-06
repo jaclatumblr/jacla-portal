@@ -839,6 +839,7 @@ export default function RepertoireSubmitPage() {
   const [savingLightingInfo, setSavingLightingInfo] = useState(false);
   const [savingAll, setSavingAll] = useState(false);
   const [newBandName, setNewBandName] = useState("");
+  const [newBandInstrument, setNewBandInstrument] = useState("");
   const [creatingBand, setCreatingBand] = useState(false);
   const [joinBandId, setJoinBandId] = useState("");
   const [joinInstrument, setJoinInstrument] = useState("");
@@ -849,6 +850,8 @@ export default function RepertoireSubmitPage() {
   const [bandMembersLoading, setBandMembersLoading] = useState(false);
   const [savingStage, setSavingStage] = useState(false);
   const [profiles, setProfiles] = useState<ProfileOption[]>([]);
+  const [currentProfile, setCurrentProfile] = useState<ProfileOption | null>(null);
+  const [currentProfileParts, setCurrentProfileParts] = useState<string[]>([]);
   const [subPartsByProfileId, setSubPartsByProfileId] = useState<Record<string, string[]>>({});
   const [memberSearch, setMemberSearch] = useState("");
   const [addMemberId, setAddMemberId] = useState("");
@@ -1066,6 +1069,38 @@ export default function RepertoireSubmitPage() {
     return options;
   }, [addMemberId, profiles, subPartsByProfileId]);
 
+  const allInstrumentOptions = useMemo(() => {
+    const options = new Set<string>();
+    profiles.forEach((profile) => {
+      const value = profile.part?.trim();
+      if (value && value !== "none") options.add(value);
+      (subPartsByProfileId[profile.id] ?? []).forEach((part) => {
+        const trimmed = part?.trim();
+        if (trimmed && trimmed !== "none") options.add(trimmed);
+      });
+    });
+    currentProfileParts.forEach((part) => {
+      const trimmed = part?.trim();
+      if (trimmed && trimmed !== "none") options.add(trimmed);
+    });
+    options.add("Vo.");
+    return Array.from(options);
+  }, [profiles, subPartsByProfileId, currentProfileParts]);
+
+  const memberInstrumentOptions = useMemo(() => {
+    const options = new Set<string>();
+    addMemberInstrumentOptions.forEach((part) => options.add(part));
+    allInstrumentOptions.forEach((part) => options.add(part));
+    return Array.from(options);
+  }, [addMemberInstrumentOptions, allInstrumentOptions]);
+
+  const newBandInstrumentOptions = useMemo(() => {
+    const options = new Set<string>();
+    currentProfileParts.forEach((part) => options.add(part));
+    allInstrumentOptions.forEach((part) => options.add(part));
+    return Array.from(options);
+  }, [currentProfileParts, allInstrumentOptions]);
+
   const bandCountLabel = (bandId: string) => songCounts[bandId] ?? 0;
 
   const fixedStageItems = useMemo<StageItem[]>(() => {
@@ -1278,6 +1313,7 @@ export default function RepertoireSubmitPage() {
   const handleCreateBand = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const name = newBandName.trim();
+    const instrument = newBandInstrument.trim();
     if (!eventId || !name || creatingBand) return;
     if (!canManageBands) {
       toast.error("このイベントではバンドを作成できません。");
@@ -1285,6 +1321,10 @@ export default function RepertoireSubmitPage() {
     }
     if (!userId) {
       toast.error("ログイン情報を確認できません。");
+      return;
+    }
+    if (!instrument) {
+      toast.error("担当楽器を入力してください。");
       return;
     }
     setCreatingBand(true);
@@ -1309,11 +1349,24 @@ export default function RepertoireSubmitPage() {
       return;
     }
     const created = data as BandRow;
+    const { error: joinError } = await supabase.from("band_members").insert([
+      {
+        band_id: created.id,
+        user_id: userId,
+        instrument,
+        order_index: 1,
+      },
+    ]);
+    if (joinError) {
+      console.error(joinError);
+      toast.error("作成者の参加登録に失敗しました。");
+    }
     setAllBands((prev) => [...prev, created]);
     setBands((prev) => [...prev, created]);
     setSelectedBandId(created.id);
     setSongCounts((prev) => ({ ...prev, [created.id]: 0 }));
     setNewBandName("");
+    setNewBandInstrument("");
     setCreatingBand(false);
   };
 
@@ -1411,13 +1464,22 @@ export default function RepertoireSubmitPage() {
       const resolvedName =
         currentProfile?.real_name ?? currentProfile?.display_name ?? fallbackName;
       setCurrentUserName(resolvedName);
+      setCurrentProfile(currentProfile ?? null);
       const filtered = nextProfiles.filter(
         (profile) => !adminIds.has(profile.id) && !adminLeaderSet.has(profile.leader ?? "")
       );
       setProfiles(filtered);
-
-      if (filtered.length === 0) {
+      const currentBaseParts: string[] = [];
+      const currentMainPart = currentProfile?.part?.trim();
+      if (currentMainPart && currentMainPart !== "none") {
+        currentBaseParts.push(currentMainPart);
+      }
+      const profileIdsForParts = Array.from(
+        new Set([...filtered.map((profile) => profile.id), session.user.id])
+      );
+      if (profileIdsForParts.length === 0) {
         setSubPartsByProfileId({});
+        setCurrentProfileParts(currentBaseParts);
         return;
       }
 
@@ -1426,7 +1488,7 @@ export default function RepertoireSubmitPage() {
         .select("profile_id, part, is_primary")
         .in(
           "profile_id",
-          filtered.map((profile) => profile.id)
+          profileIdsForParts
         );
 
       if (cancelled) return;
@@ -1434,6 +1496,7 @@ export default function RepertoireSubmitPage() {
       if (partsError) {
         console.error(partsError);
         setSubPartsByProfileId({});
+        setCurrentProfileParts(currentBaseParts);
         return;
       }
 
@@ -1451,6 +1514,14 @@ export default function RepertoireSubmitPage() {
         nextMap[entry.profile_id] = bucket;
       });
       setSubPartsByProfileId(nextMap);
+      const currentParts = [...currentBaseParts];
+      const currentSubParts = nextMap[session.user.id] ?? [];
+      currentSubParts.forEach((part) => {
+        const value = part?.trim();
+        if (!value || value === "none") return;
+        if (!currentParts.includes(value)) currentParts.push(value);
+      });
+      setCurrentProfileParts(currentParts);
     })();
 
     return () => {
@@ -1843,10 +1914,16 @@ export default function RepertoireSubmitPage() {
       prevAddMemberIdRef.current = addMemberId;
       return;
     }
-    if (!addMemberInstrument || !addMemberInstrumentOptions.includes(addMemberInstrument)) {
+    if (!addMemberInstrument) {
       setAddMemberInstrument(nextDefault);
     }
   }, [addMemberId, addMemberInstrument, addMemberInstrumentOptions]);
+
+  useEffect(() => {
+    if (!newBandInstrument && currentProfileParts.length > 0) {
+      setNewBandInstrument(currentProfileParts[0]);
+    }
+  }, [currentProfileParts, newBandInstrument]);
 
   useEffect(() => {
     return () => {
@@ -3093,12 +3170,18 @@ export default function RepertoireSubmitPage() {
                               </select>
                               <div className="flex flex-col sm:flex-row gap-2">
                                   <Input
+                                    list="band-join-instruments"
                                     value={joinInstrument}
                                     onChange={(event) => {
                                       setJoinInstrument(event.target.value);
                                     }}
                                     placeholder="担当楽器/パート"
                                   />
+                                  <datalist id="band-join-instruments">
+                                    {allInstrumentOptions.map((part) => (
+                                      <option key={part} value={part} />
+                                    ))}
+                                  </datalist>
                                 <Button
                                   type="submit"
                                   disabled={!joinBandId || !joinInstrument.trim() || joining}
@@ -3119,7 +3202,7 @@ export default function RepertoireSubmitPage() {
                         <div className="space-y-2">
                           <p className="text-sm font-medium text-foreground">新しくバンドを作成する</p>
                           <form onSubmit={handleCreateBand} className="flex flex-col gap-2">
-                            <div className="flex flex-col sm:flex-row gap-2">
+                            <div className="flex flex-col gap-2">
                               <Input
                                 value={newBandName}
                                 onChange={(event) => {
@@ -3127,9 +3210,26 @@ export default function RepertoireSubmitPage() {
                                 }}
                                 placeholder="バンド名を入力"
                               />
+                              <Input
+                                list="band-create-instruments"
+                                value={newBandInstrument}
+                                onChange={(event) => {
+                                  setNewBandInstrument(event.target.value);
+                                }}
+                                placeholder="担当楽器/パート"
+                              />
+                              <datalist id="band-create-instruments">
+                                {newBandInstrumentOptions.map((part) => (
+                                  <option key={part} value={part} />
+                                ))}
+                              </datalist>
                               <Button
                                 type="submit"
-                                disabled={!newBandName.trim() || creatingBand}
+                                disabled={
+                                  !newBandName.trim() ||
+                                  !newBandInstrument.trim() ||
+                                  creatingBand
+                                }
                                 className="gap-2"
                               >
                                 {creatingBand ? (
@@ -3943,23 +4043,23 @@ export default function RepertoireSubmitPage() {
                                       </Table>
                                     </div>
                                     <div className="flex flex-col sm:flex-row gap-2">
-                                      <select
-                                        value={addMemberInstrument}
-                                        onChange={(event) =>
-                                          setAddMemberInstrument(event.target.value)
-                                        }
-                                        disabled={
-                                          !addMemberId || addMemberInstrumentOptions.length === 0
-                                        }
-                                        className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
-                                      >
-                                        <option value="">担当パートを選択</option>
-                                        {addMemberInstrumentOptions.map((part) => (
-                                          <option key={part} value={part}>
-                                            {part}
-                                          </option>
-                                        ))}
-                                      </select>
+                                      <div className="flex-1">
+                                        <Input
+                                          list="member-instrument-options"
+                                          value={addMemberInstrument}
+                                          onChange={(event) =>
+                                            setAddMemberInstrument(event.target.value)
+                                          }
+                                          disabled={!addMemberId}
+                                          placeholder="担当楽器/パート"
+                                          className="h-10"
+                                        />
+                                        <datalist id="member-instrument-options">
+                                          {memberInstrumentOptions.map((part) => (
+                                            <option key={part} value={part} />
+                                          ))}
+                                        </datalist>
+                                      </div>
                                       <Button
                                         type="submit"
                                         disabled={

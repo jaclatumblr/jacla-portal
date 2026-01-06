@@ -1,7 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Bell, Calendar, ClipboardList, MessageSquare, Shield } from "lucide-react";
+import {
+  Activity,
+  ArrowRight,
+  Bell,
+  Calendar,
+  ClipboardList,
+  ListChecks,
+  MessageSquare,
+  Power,
+  Shield,
+} from "lucide-react";
 import { SideNav } from "@/components/SideNav";
 import { PageHeader } from "@/components/PageHeader";
 import { AuthGuard } from "@/lib/AuthGuard";
@@ -145,6 +155,63 @@ export default function AdminPage() {
                         <h3 className="text-base md:text-lg font-bold mb-2">フィードバック</h3>
                         <p className="text-xs md:text-sm text-muted-foreground flex-1">
                           送信された意見を確認できます。
+                        </p>
+                        <div className="flex items-center gap-2 text-primary text-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                          <span>開く</span>
+                          <ArrowRight className="w-4 h-4" />
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                )}
+
+                {isAdmin && (
+                  <Link href="/admin/site" className="group">
+                    <div className="relative h-40 md:h-48 p-4 md:p-6 bg-card/50 border border-border rounded-lg hover:border-primary/50 transition-all">
+                      <div className="absolute inset-0 bg-gradient-to-br from-secondary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-lg" />
+                      <div className="relative h-full flex flex-col">
+                        <Power className="w-6 md:w-8 h-6 md:h-8 text-primary mb-3 md:mb-4" />
+                        <h3 className="text-base md:text-lg font-bold mb-2">サイト設定</h3>
+                        <p className="text-xs md:text-sm text-muted-foreground flex-1">
+                          サイトの公開 / クローズを切り替え
+                        </p>
+                        <div className="flex items-center gap-2 text-primary text-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                          <span>開く</span>
+                          <ArrowRight className="w-4 h-4" />
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                )}
+
+                {isAdmin && (
+                  <Link href="/admin/analytics" className="group">
+                    <div className="relative h-40 md:h-48 p-4 md:p-6 bg-card/50 border border-border rounded-lg hover:border-primary/50 transition-all">
+                      <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-lg" />
+                      <div className="relative h-full flex flex-col">
+                        <Activity className="w-6 md:w-8 h-6 md:h-8 text-primary mb-3 md:mb-4" />
+                        <h3 className="text-base md:text-lg font-bold mb-2">ログ / 分析</h3>
+                        <p className="text-xs md:text-sm text-muted-foreground flex-1">
+                          ログイン履歴やアクセス状況を確認
+                        </p>
+                        <div className="flex items-center gap-2 text-primary text-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                          <span>開く</span>
+                          <ArrowRight className="w-4 h-4" />
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                )}
+
+                {isAdmin && (
+                  <Link href="/admin/updates" className="group">
+                    <div className="relative h-40 md:h-48 p-4 md:p-6 bg-card/50 border border-border rounded-lg hover:border-primary/50 transition-all">
+                      <div className="absolute inset-0 bg-gradient-to-br from-secondary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-lg" />
+                      <div className="relative h-full flex flex-col">
+                        <ListChecks className="w-6 md:w-8 h-6 md:h-8 text-primary mb-3 md:mb-4" />
+                        <h3 className="text-base md:text-lg font-bold mb-2">更新履歴</h3>
+                        <p className="text-xs md:text-sm text-muted-foreground flex-1">
+                          公開向けの更新履歴を管理
                         </p>
                         <div className="flex items-center gap-2 text-primary text-sm opacity-0 group-hover:opacity-100 transition-opacity">
                           <span>開く</span>

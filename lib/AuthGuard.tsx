@@ -13,6 +13,31 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
+  const isAdminUser = async (userId: string) => {
+    const { data: leadersData, error: leadersError } = await supabase
+      .from("profile_leaders")
+      .select("leader")
+      .eq("profile_id", userId);
+    if (!leadersError) {
+      const leaders = (leadersData ?? [])
+        .map((row) => (row as { leader?: string }).leader)
+        .filter((role) => role && role !== "none") as string[];
+      if (leaders.includes("Administrator") || leaders.includes("Supervisor")) return true;
+    }
+
+    const { data: profileData, error: profileError } = await supabase
+      .from("profiles")
+      .select("leader")
+      .eq("id", userId)
+      .maybeSingle();
+    if (!profileError) {
+      const leader = (profileData as { leader?: string } | null)?.leader;
+      return leader === "Administrator" || leader === "Supervisor";
+    }
+
+    return false;
+  };
+
   useEffect(() => {
     if (!loading && !session) {
       router.replace("/login");
@@ -22,30 +47,6 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (loading || !session) return;
     let cancelled = false;
-
-    const isAdminUser = async (userId: string) => {
-      const { data: leadersData, error: leadersError } = await supabase
-        .from("profile_leaders")
-        .select("leader")
-        .eq("profile_id", userId);
-      if (!leadersError) {
-        const leaders = (leadersData ?? [])
-          .map((row) => (row as { leader?: string }).leader)
-          .filter((role) => role && role !== "none") as string[];
-        if (leaders.includes("Administrator")) return true;
-      }
-
-      const { data: profileData, error: profileError } = await supabase
-        .from("profiles")
-        .select("leader")
-        .eq("id", userId)
-        .maybeSingle();
-      if (!profileError) {
-        return (profileData as { leader?: string } | null)?.leader === "Administrator";
-      }
-
-      return false;
-    };
 
     (async () => {
       const email = getUserEmail(session.user ?? null);
@@ -66,9 +67,40 @@ export function AuthGuard({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (loading || !session) return;
+    if (pathname === "/closed") return;
+    let cancelled = false;
+
+    (async () => {
+      const { data, error } = await supabase
+        .from("site_settings")
+        .select("is_open")
+        .eq("id", 1)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error) {
+        console.error("site_settings load failed", error);
+        return;
+      }
+      if (!data?.is_open && session.user?.id) {
+        const isAdmin = await isAdminUser(session.user.id);
+        if (cancelled) return;
+        if (!isAdmin) {
+          router.replace("/closed");
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, pathname, router, session]);
+
+  useEffect(() => {
+    if (loading || !session) return;
     const email = getUserEmail(session.user ?? null);
     if (!isAllowedEmail(email) && !isGmailAddress(email)) return;
     if (pathname === "/onboarding") return;
+    if (pathname === "/closed") return;
 
     let cancelled = false;
     (async () => {

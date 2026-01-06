@@ -54,6 +54,7 @@ const positionOptions = [
   { value: "Treasurer", label: "会計" },
   { value: "PA Chief", label: "PA長" },
   { value: "Lighting Chief", label: "照明長" },
+  { value: "Public Relations", label: "広報" },
   { value: "Web Secretary", label: "Web幹事" },
 ];
 const uniquePositions = [
@@ -191,6 +192,7 @@ export default function AdminRolesPage() {
   }, [leaderRoles, selectedProfile?.leader]);
   const allowedPositions = useMemo(() => {
     const allowed = new Set<string>();
+    allowed.add("Public Relations");
     if (roleFlags.isAdministrator || roleFlags.isSupervisor) {
       uniquePositions.forEach((position) => {
         const holder = positionHolders[position];
@@ -860,7 +862,7 @@ export default function AdminRolesPage() {
           <PageHeader
             kicker="Admin"
             title="ユーザー管理"
-            description="Administrator / Supervisor は全権限、PA/照明長は crew のみ編集できます。"
+            description="Administrator / Supervisor は全権限、PA/照明長は job のみ編集できます。"
             backHref="/admin"
             backLabel="管理トップに戻る"
           />
@@ -882,7 +884,7 @@ export default function AdminRolesPage() {
                   <CardContent className="space-y-4">
                     {isCrewOnlyEditor && (
                       <p className="text-xs text-muted-foreground">
-                        PA/照明長は crew のみ編集できます。
+                        PA/照明長は job のみ編集できます。
                       </p>
                     )}
                     <Input
@@ -960,7 +962,7 @@ export default function AdminRolesPage() {
                       <div>
                         <CardTitle className="text-lg">権限と楽器を編集</CardTitle>
                         <CardDescription>
-                          Administrator / Supervisor は全権限、PA/照明長は crew のみ編集できます。
+                          Administrator / Supervisor は全権限、PA/照明長は job のみ編集できます。
                         </CardDescription>
                       </div>
                     </div>
@@ -1076,7 +1078,7 @@ export default function AdminRolesPage() {
                         </div>
 
                         <label className="space-y-1 block text-sm">
-                          <span className="text-foreground">crew ロール</span>
+                          <span className="text-foreground">job ロール</span>
                           <select
                             value={form.crew}
                             onChange={(e) => setForm((prev) => ({ ...prev, crew: e.target.value }))}

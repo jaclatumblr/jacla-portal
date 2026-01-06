@@ -49,6 +49,7 @@ create table if not exists public.events (
   note text,
 
   default_changeover_min    int4 not null default 15,
+  normal_rehearsal_order    text not null default 'same',
 
   created_by uuid references public.profiles(id) on delete set null,
   created_at timestamptz not null default now(),
@@ -64,6 +65,12 @@ alter table public.events
 alter table public.events
   add column if not exists tt_is_published boolean not null default false;
 
+alter table public.events
+  add column if not exists tt_is_provisional boolean not null default false;
+
+alter table public.events
+  add column if not exists normal_rehearsal_order text not null default 'same';
+
 do $$
 begin
   if not exists (
@@ -73,11 +80,27 @@ begin
       add constraint events_event_type_check
       check (event_type in ('live', 'workshop', 'briefing', 'camp', 'other'));
   end if;
+  if not exists (
+    select 1 from pg_constraint where conname = 'events_normal_rehearsal_check'
+  ) then
+    alter table public.events
+      add constraint events_normal_rehearsal_check
+      check (normal_rehearsal_order in ('same', 'reverse'));
+  end if;
 end $$;
 
 update public.events
 set event_type = 'live'
 where event_type is null;
+
+update public.events
+set normal_rehearsal_order = 'same'
+where normal_rehearsal_order is null;
+
+update public.events
+set tt_is_provisional = true
+where tt_is_published = true
+  and tt_is_provisional = false;
 
 drop trigger if exists trg_events_updated_at on public.events;
 create trigger trg_events_updated_at
@@ -129,13 +152,38 @@ begin
   end if;
 
   update public.events
-  set tt_is_published = is_published
+  set tt_is_published = is_published,
+      tt_is_provisional = case when is_published then true else tt_is_provisional end
+  where id = event_id;
+end;
+$$;
+
+create or replace function public.set_event_tt_provisional(event_id uuid, is_provisional boolean)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not (
+    public.is_admin_or_supervisor(auth.uid())
+    or public.is_pa_leader(auth.uid())
+    or public.is_lighting_leader(auth.uid())
+  ) then
+    raise exception 'Not allowed';
+  end if;
+
+  update public.events
+  set tt_is_provisional = is_provisional
   where id = event_id;
 end;
 $$;
 
 revoke execute on function public.set_event_tt_publish(uuid, boolean) from public;
 grant execute on function public.set_event_tt_publish(uuid, boolean) to authenticated;
+
+revoke execute on function public.set_event_tt_provisional(uuid, boolean) from public;
+grant execute on function public.set_event_tt_provisional(uuid, boolean) to authenticated;
 
 
 -- =========================
@@ -152,7 +200,6 @@ create table if not exists public.bands (
   lighting_note text,
   general_note text,
   lighting_total_min int4,
-  is_approved boolean not null default false,
 
   created_by uuid references public.profiles(id) on delete set null,
   created_at timestamptz not null default now(),
@@ -174,6 +221,7 @@ drop policy if exists "bands_update_owner_or_admin" on public.bands;
 drop policy if exists "bands_delete_owner_or_admin" on public.bands;
 
 alter table public.bands
+  drop column if exists is_approved,
   add column if not exists note_pa text,
   add column if not exists note_lighting text,
   add column if not exists repertoire_status text not null default 'draft',
@@ -525,6 +573,7 @@ create table if not exists public.event_slots (
   event_id uuid not null references public.events(id) on delete cascade,
   band_id uuid references public.bands(id) on delete set null,
   slot_type text not null default 'band', -- band / break / mc / other
+  slot_phase text not null default 'show', -- show / rehearsal_normal / rehearsal_pre
   order_in_event int4,
   start_time time,
   end_time time,
@@ -537,12 +586,20 @@ create table if not exists public.event_slots (
 create index if not exists idx_event_slots_event_id on public.event_slots(event_id);
 create index if not exists idx_event_slots_band_id on public.event_slots(band_id);
 
+alter table public.event_slots
+  add column if not exists slot_phase text not null default 'show';
+
 do $$
 begin
   if not exists (select 1 from pg_constraint where conname = 'event_slots_type_check') then
     alter table public.event_slots
       add constraint event_slots_type_check
       check (slot_type in ('band', 'break', 'mc', 'other'));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'event_slots_phase_check') then
+    alter table public.event_slots
+      add constraint event_slots_phase_check
+      check (slot_phase in ('show', 'rehearsal_normal', 'rehearsal_pre'));
   end if;
 end $$;
 
@@ -630,14 +687,25 @@ create table if not exists public.slot_staff_assignments (
 
 create index if not exists idx_slot_staff_slot_id on public.slot_staff_assignments(event_slot_id);
 
-do $$
-begin
-  if not exists (select 1 from pg_constraint where conname = 'slot_staff_role_check') then
-    alter table public.slot_staff_assignments
-      add constraint slot_staff_role_check
-      check (role in ('pa', 'light'));
-  end if;
-end $$;
+alter table public.slot_staff_assignments
+  drop constraint if exists slot_staff_role_check;
+
+update public.slot_staff_assignments set role = 'pa_main' where role = 'pa';
+update public.slot_staff_assignments set role = 'light_op1' where role = 'light';
+
+alter table public.slot_staff_assignments
+  add constraint slot_staff_role_check
+  check (
+    role in (
+      'pa_main',
+      'pa_sub',
+      'pa_extra',
+      'light_op1',
+      'light_op2',
+      'light_spot',
+      'light_assist'
+    )
+  );
 
 alter table public.slot_staff_assignments enable row level security;
 

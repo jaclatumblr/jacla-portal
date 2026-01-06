@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
@@ -50,7 +50,9 @@ type EventRow = {
   open_time: string | null;
   start_time: string | null;
   default_changeover_min: number;
+  tt_is_provisional: boolean;
   tt_is_published: boolean;
+  normal_rehearsal_order: "same" | "reverse";
 };
 
 type BandRow = {
@@ -68,6 +70,7 @@ type EventSlot = {
   event_id: string;
   band_id: string | null;
   slot_type: "band" | "break" | "mc" | "other";
+  slot_phase: "show" | "rehearsal_normal" | "rehearsal_pre";
   order_in_event: number | null;
   start_time: string | null;
   end_time: string | null;
@@ -82,6 +85,85 @@ const slotTypeOptions = [
   { value: "other", label: "その他" },
 ];
 
+const slotPhaseOptions = [
+  { value: "show", label: "本番" },
+  { value: "rehearsal_normal", label: "通常リハ" },
+  { value: "rehearsal_pre", label: "直前リハ" },
+];
+
+const TEMPLATE_PREP_MINUTES = 60;
+const TEMPLATE_BREAK_MINUTES = 10;
+const TEMPLATE_CLEANUP_MINUTES = 60;
+const DEFAULT_BAND_DURATION_MIN = 10;
+
+const parseTimeValue = (value: string | null) => {
+  if (!value) return null;
+  const [h, m] = value.split(":").map((part) => Number(part));
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  return h * 60 + m;
+};
+
+const formatTimeValue = (minutes: number) => {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+};
+
+const phaseLabel = (phase: EventSlot["slot_phase"]) =>
+  slotPhaseOptions.find((opt) => opt.value === phase)?.label ?? phase;
+
+const phaseBadgeVariant = (phase: EventSlot["slot_phase"]) => {
+  if (phase === "show") return "default" as const;
+  if (phase === "rehearsal_pre") return "secondary" as const;
+  return "outline" as const;
+};
+
+type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup";
+
+const slotPhaseKey = (slot: EventSlot): PhaseKey => {
+  const note = slot.note?.trim();
+  if (note === "集合～準備") return "prep";
+  if (note === "終了～撤収" || note === "終了～解散") return "cleanup";
+  return slot.slot_phase ?? "show";
+};
+
+const slotPhaseLabel = (slot: EventSlot) => {
+  const note = slot.note?.trim();
+  if (note === "集合～準備") return "集合～準備";
+  if (note === "終了～撤収" || note === "終了～解散") return note;
+  return phaseLabel(slot.slot_phase);
+};
+
+const slotPhaseBadgeVariant = (slot: EventSlot) => {
+  const key = slotPhaseKey(slot);
+  if (key === "prep" || key === "cleanup") return "outline" as const;
+  return phaseBadgeVariant(slot.slot_phase);
+};
+
+const slotAccentClass = (slot: EventSlot) => {
+  const note = slot.note?.trim() ?? "";
+  if (note === "集合～準備" || note === "終了～撤収" || note === "終了～解散") {
+    return "border-l-4 border-l-amber-400/80";
+  }
+  if (slot.slot_type === "break" || note.includes("転換")) {
+    return "border-l-4 border-l-amber-400/80";
+  }
+  if (slot.slot_phase === "rehearsal_normal" || slot.slot_phase === "rehearsal_pre") {
+    return "border-l-4 border-l-sky-400/80";
+  }
+  if (slot.slot_phase === "show") {
+    return "border-l-4 border-l-fuchsia-400/80";
+  }
+  return "border-l-4 border-l-muted";
+};
+
+const phaseBarClass = (phase: PhaseKey) => {
+  if (phase === "show") return "bg-fuchsia-400/80";
+  if (phase === "rehearsal_normal" || phase === "rehearsal_pre") return "bg-sky-400/80";
+  if (phase === "prep" || phase === "cleanup") return "bg-amber-400/80";
+  return "bg-muted";
+};
+
 type SortableItemRenderProps = {
   attributes: DraggableAttributes;
   listeners: DraggableSyntheticListeners;
@@ -92,6 +174,17 @@ type SortableItemRenderProps = {
 type SortableItemProps = {
   id: string;
   children: (props: SortableItemRenderProps) => ReactNode;
+};
+
+type SlotSeed = {
+  slot_type: EventSlot["slot_type"];
+  slot_phase: EventSlot["slot_phase"];
+  band_id?: string | null;
+  note?: string | null;
+  changeover_min?: number | null;
+  duration_min?: number | null;
+  start_time?: string | null;
+  end_time?: string | null;
 };
 
 function SortableItem({ id, children }: SortableItemProps) {
@@ -124,7 +217,12 @@ export default function AdminEventTimetableEditPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [templating, setTemplating] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [provisioning, setProvisioning] = useState(false);
+  const [rehearsalOrder, setRehearsalOrder] = useState<"same" | "reverse">("same");
+  const [savingRehearsalOrder, setSavingRehearsalOrder] = useState(false);
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
 
   const bandMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -140,6 +238,89 @@ export default function AdminEventTimetableEditPage() {
       return (a.start_time ?? "").localeCompare(b.start_time ?? "");
     });
   }, [slots]);
+
+  const selectedSlot = useMemo(
+    () => orderedSlots.find((slot) => slot.id === selectedSlotId) ?? orderedSlots[0] ?? null,
+    [orderedSlots, selectedSlotId]
+  );
+
+  useEffect(() => {
+    if (!selectedSlotId && orderedSlots.length > 0) {
+      setSelectedSlotId(orderedSlots[0].id);
+      return;
+    }
+    if (selectedSlotId && !orderedSlots.some((slot) => slot.id === selectedSlotId)) {
+      setSelectedSlotId(orderedSlots[0]?.id ?? null);
+    }
+  }, [orderedSlots, selectedSlotId]);
+
+  const slotLabel = (slot: EventSlot) => {
+    if (slot.slot_type === "band") {
+      return bandMap.get(slot.band_id ?? "") ?? "バンド未設定";
+    }
+    if (slot.slot_type === "break") return "休憩";
+    if (slot.slot_type === "mc") return "MC";
+    return slot.note?.trim() || "その他";
+  };
+
+  const slotDurationLabel = (slot: EventSlot) => {
+    const start = parseTimeValue(slot.start_time ?? null);
+    const end = parseTimeValue(slot.end_time ?? null);
+    if (start == null || end == null) return "";
+    let duration = end - start;
+    if (duration < 0) duration += 24 * 60;
+    if (duration <= 0) return "";
+    return `(${duration})`;
+  };
+
+  const slotTimeRangeLabel = (slot: EventSlot) => {
+    if (!slot.start_time && !slot.end_time) return "時間未設定";
+    if (slot.start_time && slot.end_time) return `${slot.start_time}-${slot.end_time}`;
+    return slot.start_time ?? slot.end_time ?? "時間未設定";
+  };
+
+  const slotTimeLabel = (slot: EventSlot) => {
+    if (!slot.start_time && !slot.end_time) return "時間未設定";
+    if (slot.start_time && slot.end_time) {
+      return `${slot.start_time}-${slot.end_time}${slotDurationLabel(slot)}`;
+    }
+    return slot.start_time ?? slot.end_time ?? "時間未設定";
+  };
+
+  const timelineSegments = useMemo(() => {
+    const segments = orderedSlots.map((slot) => {
+      const start = parseTimeValue(slot.start_time ?? null);
+      const end = parseTimeValue(slot.end_time ?? null);
+      let duration = 8;
+      if (start != null && end != null && end > start) {
+        duration = end - start;
+      } else if (slot.changeover_min != null && slot.changeover_min > 0) {
+        duration = slot.changeover_min;
+      }
+      const note = slot.note?.trim() ?? "";
+      const tone =
+        note === "集合～準備" ||
+        note === "終了～撤収" ||
+        note === "終了～解散" ||
+        slot.slot_type === "break" ||
+        note.includes("転換")
+          ? "amber"
+          : slot.slot_phase === "show"
+            ? "show"
+            : "rehearsal";
+      return {
+        id: slot.id,
+        label: slotLabel(slot),
+        time: slotTimeRangeLabel(slot),
+        phase: slotPhaseKey(slot),
+        type: slot.slot_type,
+        tone,
+        duration,
+      };
+    });
+    const total = segments.reduce((sum, seg) => sum + seg.duration, 0);
+    return { segments, total };
+  }, [orderedSlots]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -159,7 +340,7 @@ export default function AdminEventTimetableEditPage() {
         supabase
           .from("events")
           .select(
-            "id, name, date, status, event_type, venue, open_time, start_time, default_changeover_min, tt_is_published"
+            "id, name, date, status, event_type, venue, open_time, start_time, default_changeover_min, tt_is_provisional, tt_is_published, normal_rehearsal_order"
           )
           .eq("id", eventId)
           .maybeSingle(),
@@ -171,7 +352,7 @@ export default function AdminEventTimetableEditPage() {
         supabase
           .from("event_slots")
           .select(
-            "id, event_id, band_id, slot_type, order_in_event, start_time, end_time, changeover_min, note"
+            "id, event_id, band_id, slot_type, slot_phase, order_in_event, start_time, end_time, changeover_min, note"
           )
           .eq("event_id", eventId)
           .order("order_in_event", { ascending: true })
@@ -186,6 +367,9 @@ export default function AdminEventTimetableEditPage() {
         setEvent(null);
       } else {
         setEvent(eventRes.data as EventRow);
+        setRehearsalOrder(
+          (eventRes.data as EventRow).normal_rehearsal_order ?? "same"
+        );
       }
 
       if (bandsRes.error) {
@@ -254,6 +438,79 @@ export default function AdminEventTimetableEditPage() {
     setSlots(reordered);
   };
 
+  const buildSlot = (overrides: Partial<EventSlot> = {}): EventSlot => ({
+    id: crypto.randomUUID(),
+    event_id: eventId,
+    band_id: null,
+    slot_type: "band",
+    slot_phase: "show",
+    order_in_event: 1,
+    start_time: null,
+    end_time: null,
+    changeover_min: event?.default_changeover_min ?? 15,
+    note: "",
+    ...overrides,
+  });
+
+  const insertSlotAt = (index: number, slot: EventSlot) => {
+    const next = [...orderedSlots];
+    next.splice(index, 0, slot);
+    const normalized = next.map((item, idx) => ({
+      ...item,
+      order_in_event: idx + 1,
+    }));
+    setSlots(normalized);
+    setSelectedSlotId(slot.id);
+  };
+
+  const handleInsertAbove = (slotId: string) => {
+    const index = orderedSlots.findIndex((slot) => slot.id === slotId);
+    if (index < 0) return;
+    const base = orderedSlots[index];
+    insertSlotAt(index, buildSlot({ slot_phase: base.slot_phase }));
+  };
+
+  const handleInsertBelow = (slotId: string) => {
+    const index = orderedSlots.findIndex((slot) => slot.id === slotId);
+    if (index < 0) return;
+    const base = orderedSlots[index];
+    insertSlotAt(index + 1, buildSlot({ slot_phase: base.slot_phase }));
+  };
+
+  const handleDuplicateSlot = (slotId: string) => {
+    const index = orderedSlots.findIndex((slot) => slot.id === slotId);
+    if (index < 0) return;
+    const base = orderedSlots[index];
+    insertSlotAt(
+      index + 1,
+      buildSlot({
+        slot_type: base.slot_type,
+        slot_phase: base.slot_phase,
+        band_id: base.band_id,
+        start_time: base.start_time,
+        end_time: base.end_time,
+        changeover_min: base.changeover_min,
+        note: base.note,
+      })
+    );
+  };
+
+  const handleInsertChangeover = (slotId: string) => {
+    const index = orderedSlots.findIndex((slot) => slot.id === slotId);
+    if (index < 0) return;
+    const base = orderedSlots[index];
+    insertSlotAt(
+      index + 1,
+      buildSlot({
+        slot_type: "other",
+        slot_phase: base.slot_phase,
+        band_id: null,
+        changeover_min: event?.default_changeover_min ?? 15,
+        note: "転換",
+      })
+    );
+  };
+
   const handleAddSlot = () => {
     if (!eventId) return;
     const nextOrder =
@@ -263,6 +520,7 @@ export default function AdminEventTimetableEditPage() {
       event_id: eventId,
       band_id: null,
       slot_type: "band",
+      slot_phase: "show",
       order_in_event: nextOrder,
       start_time: null,
       end_time: null,
@@ -270,6 +528,34 @@ export default function AdminEventTimetableEditPage() {
       note: "",
     };
     setSlots((prev) => [...prev, newSlot]);
+  };
+
+  const handleAddRehearsalSlots = (
+    phase: EventSlot["slot_phase"],
+    orderOverride?: "same" | "reverse"
+  ) => {
+    if (!eventId) return;
+    if (bands.length === 0) {
+      setError("バンドが登録されていません。");
+      return;
+    }
+    const nextOrder =
+      slots.reduce((max, slot) => Math.max(max, slot.order_in_event ?? 0), 0) + 1;
+    const order = orderOverride ?? rehearsalOrder;
+    const list = order === "reverse" ? [...bands].reverse() : [...bands];
+    const newSlots = list.map((band, index) => ({
+      id: crypto.randomUUID(),
+      event_id: eventId,
+      band_id: band.id,
+      slot_type: "band" as const,
+      slot_phase: phase,
+      order_in_event: nextOrder + index,
+      start_time: null,
+      end_time: null,
+      changeover_min: event?.default_changeover_min ?? 15,
+      note: "",
+    }));
+    setSlots((prev) => [...prev, ...newSlots]);
   };
 
   const handleSlotChange = <K extends keyof EventSlot>(id: string, key: K, value: EventSlot[K]) => {
@@ -299,6 +585,7 @@ export default function AdminEventTimetableEditPage() {
       event_id: eventId,
       band_id: slot.slot_type === "band" ? slot.band_id ?? null : null,
       slot_type: slot.slot_type,
+      slot_phase: slot.slot_phase ?? "show",
       order_in_event: slot.order_in_event ?? index + 1,
       start_time: slot.start_time || null,
       end_time: slot.end_time || null,
@@ -313,7 +600,7 @@ export default function AdminEventTimetableEditPage() {
       .from("event_slots")
       .upsert(payloads, { onConflict: "id" })
       .select(
-        "id, event_id, band_id, slot_type, order_in_event, start_time, end_time, changeover_min, note"
+        "id, event_id, band_id, slot_type, slot_phase, order_in_event, start_time, end_time, changeover_min, note"
       );
 
     if (error || !data) {
@@ -337,6 +624,7 @@ export default function AdminEventTimetableEditPage() {
       return;
     }
     setSlots((prev) => prev.filter((slot) => slot.id !== slotId));
+    setSelectedSlotId((prev) => (prev === slotId ? null : prev));
     toast.success("スロットを削除しました。");
   };
 
@@ -371,19 +659,7 @@ export default function AdminEventTimetableEditPage() {
       durationMap.set(song.band_id, current + song.duration_sec);
     });
 
-    const parseTime = (value: string | null) => {
-      if (!value) return null;
-      const [h, m] = value.split(":").map((part) => Number(part));
-      if (Number.isNaN(h) || Number.isNaN(m)) return null;
-      return h * 60 + m;
-    };
-    const formatTime = (minutes: number) => {
-      const h = Math.floor(minutes / 60);
-      const m = minutes % 60;
-      return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-    };
-
-    const baseStart = parseTime(event?.start_time ?? null);
+    const baseStart = parseTimeValue(event?.start_time ?? null);
     let cursor = baseStart;
     const changeover = event?.default_changeover_min ?? 15;
 
@@ -393,9 +669,9 @@ export default function AdminEventTimetableEditPage() {
       let startTime: string | null = null;
       let endTime: string | null = null;
       if (cursor != null) {
-        startTime = formatTime(cursor);
+        startTime = formatTimeValue(cursor);
         if (durationMin != null) {
-          endTime = formatTime(cursor + durationMin);
+          endTime = formatTimeValue(cursor + durationMin);
           cursor += durationMin + changeover;
         }
       }
@@ -404,6 +680,7 @@ export default function AdminEventTimetableEditPage() {
         event_id: eventId,
         band_id: band.id,
         slot_type: "band",
+        slot_phase: "show",
         order_in_event: index + 1,
         start_time: startTime,
         end_time: endTime,
@@ -415,7 +692,9 @@ export default function AdminEventTimetableEditPage() {
     const { data, error } = await supabase
       .from("event_slots")
       .insert(payloads)
-      .select("id, event_id, band_id, slot_type, order_in_event, start_time, end_time, changeover_min, note");
+      .select(
+        "id, event_id, band_id, slot_type, slot_phase, order_in_event, start_time, end_time, changeover_min, note"
+      );
 
     if (error || !data) {
       console.error(error);
@@ -427,6 +706,160 @@ export default function AdminEventTimetableEditPage() {
     setSlots((data ?? []) as EventSlot[]);
     toast.success("スロットを自動生成しました。");
     setGenerating(false);
+  };
+
+  const handleGenerateTemplate = async () => {
+    if (!eventId || templating) return;
+    if (bands.length === 0) {
+      setError("バンドが登録されていません。");
+      return;
+    }
+    if (slots.length > 0) {
+      const confirmed = window.confirm("既存のスロットを上書きしますか？");
+      if (!confirmed) return;
+    }
+
+    setTemplating(true);
+    setError(null);
+
+    if (slots.length > 0) {
+      const { error: deleteError } = await supabase.from("event_slots").delete().eq("event_id", eventId);
+      if (deleteError) {
+        console.error(deleteError);
+        setError("既存スロットの削除に失敗しました。");
+        setTemplating(false);
+        return;
+      }
+    }
+
+    const durationMap = new Map<string, number>();
+    songs.forEach((song) => {
+      if (!song.band_id || !song.duration_sec) return;
+      const current = durationMap.get(song.band_id) ?? 0;
+      durationMap.set(song.band_id, current + song.duration_sec);
+    });
+
+    const changeover = event?.default_changeover_min ?? 15;
+    const getBandDurationMin = (bandId: string) => {
+      const durationSec = durationMap.get(bandId) ?? 0;
+      if (durationSec > 0) return Math.ceil(durationSec / 60);
+      return DEFAULT_BAND_DURATION_MIN;
+    };
+
+    const buildBandSeeds = (list: BandRow[], phase: EventSlot["slot_phase"]) => {
+      const seeds: SlotSeed[] = [];
+      list.forEach((band, index) => {
+        seeds.push({
+          slot_type: "band",
+          slot_phase: phase,
+          band_id: band.id,
+          changeover_min: null,
+          note: null,
+          duration_min: getBandDurationMin(band.id),
+        });
+        if (index < list.length - 1) {
+          seeds.push({
+            slot_type: "other",
+            slot_phase: phase,
+            band_id: null,
+            changeover_min: changeover,
+            note: "転換",
+            duration_min: changeover,
+          });
+        }
+      });
+      return seeds;
+    };
+
+    const rehearsalList = rehearsalOrder === "reverse" ? [...bands].reverse() : [...bands];
+    const preShowSeeds: SlotSeed[] = [
+      {
+        slot_type: "other",
+        slot_phase: "rehearsal_normal",
+        note: "集合～準備",
+        changeover_min: null,
+        duration_min: TEMPLATE_PREP_MINUTES,
+      },
+      ...buildBandSeeds(rehearsalList, "rehearsal_normal"),
+      {
+        slot_type: "break",
+        slot_phase: "rehearsal_normal",
+        note: "休憩",
+        changeover_min: null,
+        duration_min: TEMPLATE_BREAK_MINUTES,
+      },
+    ];
+    const showSeeds: SlotSeed[] = [
+      ...buildBandSeeds(bands, "show"),
+      {
+        slot_type: "other",
+        slot_phase: "show",
+        note: "終了～撤収",
+        changeover_min: null,
+        duration_min: TEMPLATE_CLEANUP_MINUTES,
+      },
+    ];
+
+    const preShowDuration = preShowSeeds.reduce((sum, seed) => sum + (seed.duration_min ?? 0), 0);
+    const gatherStart = parseTimeValue(event?.open_time ?? null);
+    const showStartBase = parseTimeValue(event?.start_time ?? null);
+    let preShowStart = gatherStart ?? (showStartBase != null ? showStartBase - preShowDuration : null);
+    if (preShowStart != null && preShowStart < 0) preShowStart = null;
+    let showStart = showStartBase;
+    if (showStart == null && preShowStart != null) {
+      showStart = preShowStart + preShowDuration;
+    }
+
+    const applyTimes = (items: SlotSeed[], startMin: number | null) => {
+      let cursor = startMin;
+      return items.map((item) => {
+        let start_time: string | null = null;
+        let end_time: string | null = null;
+        if (cursor != null && item.duration_min != null) {
+          start_time = formatTimeValue(cursor);
+          end_time = formatTimeValue(cursor + item.duration_min);
+          cursor += item.duration_min;
+        }
+        return { ...item, start_time, end_time };
+      });
+    };
+
+    const preShowTimed = applyTimes(preShowSeeds, preShowStart);
+    const showTimed = applyTimes(showSeeds, showStart ?? null);
+    const merged = [...preShowTimed, ...showTimed];
+
+    const payloads = merged.map((slot, index) => ({
+      event_id: eventId,
+      band_id: slot.slot_type === "band" ? slot.band_id ?? null : null,
+      slot_type: slot.slot_type,
+      slot_phase: slot.slot_phase,
+      order_in_event: index + 1,
+      start_time: slot.start_time ?? null,
+      end_time: slot.end_time ?? null,
+      changeover_min:
+        slot.changeover_min == null || Number.isNaN(Number(slot.changeover_min))
+          ? null
+          : Number(slot.changeover_min),
+      note: slot.note ?? null,
+    }));
+
+    const { data, error } = await supabase
+      .from("event_slots")
+      .insert(payloads)
+      .select(
+        "id, event_id, band_id, slot_type, slot_phase, order_in_event, start_time, end_time, changeover_min, note"
+      );
+
+    if (error || !data) {
+      console.error(error);
+      setError("テンプレートの作成に失敗しました。");
+      setTemplating(false);
+      return;
+    }
+
+    setSlots((data ?? []) as EventSlot[]);
+    toast.success("テンプレートを作成しました。");
+    setTemplating(false);
   };
 
   const handleTogglePublish = async () => {
@@ -447,9 +880,66 @@ export default function AdminEventTimetableEditPage() {
       return;
     }
 
-    setEvent((prev) => (prev ? { ...prev, tt_is_published: nextValue } : prev));
+    setEvent((prev) =>
+      prev
+        ? {
+            ...prev,
+            tt_is_published: nextValue,
+            tt_is_provisional: nextValue ? true : prev.tt_is_provisional,
+          }
+        : prev
+    );
     toast.success(nextValue ? "タイムテーブルを公開しました。" : "タイムテーブルを非公開にしました。");
     setPublishing(false);
+  };
+
+  const handleToggleProvisional = async () => {
+    if (!eventId || !event || provisioning) return;
+    if (event.tt_is_published && event.tt_is_provisional) {
+      toast.error("公開中は仮確定を解除できません。");
+      return;
+    }
+    setProvisioning(true);
+    setError(null);
+
+    const nextValue = !event.tt_is_provisional;
+    const { error: provisionalError } = await supabase.rpc("set_event_tt_provisional", {
+      event_id: eventId,
+      is_provisional: nextValue,
+    });
+
+    if (provisionalError) {
+      console.error(provisionalError);
+      setError("仮確定の更新に失敗しました。");
+      setProvisioning(false);
+      return;
+    }
+
+    setEvent((prev) => (prev ? { ...prev, tt_is_provisional: nextValue } : prev));
+    toast.success(nextValue ? "仮確定にしました。" : "仮確定を解除しました。");
+    setProvisioning(false);
+  };
+
+  const handleSaveRehearsalOrder = async () => {
+    if (!eventId || savingRehearsalOrder) return;
+    setSavingRehearsalOrder(true);
+    const { error: updateError } = await supabase
+      .from("events")
+      .update({ normal_rehearsal_order: rehearsalOrder })
+      .eq("id", eventId);
+
+    if (updateError) {
+      console.error(updateError);
+      setError("通常リハ順序の保存に失敗しました。");
+      setSavingRehearsalOrder(false);
+      return;
+    }
+
+    setEvent((prev) =>
+      prev ? { ...prev, normal_rehearsal_order: rehearsalOrder } : prev
+    );
+    toast.success("通常リハ順序を保存しました。");
+    setSavingRehearsalOrder(false);
   };
 
   if (roleLoading || loading) {
@@ -489,7 +979,7 @@ export default function AdminEventTimetableEditPage() {
       <div className="flex min-h-screen bg-background">
         <SideNav />
 
-        <main className="flex-1 md:ml-20">
+        <main className="flex-1 md:ml-20 flex flex-col min-h-screen">
           <PageHeader
             kicker="Admin"
             title="タイムテーブル編集"
@@ -503,62 +993,130 @@ export default function AdminEventTimetableEditPage() {
                     <Calendar className="w-4 h-4" />
                     {event.date}
                   </span>
+                  {event.open_time && (
+                    <span className="flex items-center gap-2">
+                      <Clock className="w-4 h-4" />
+                      集合 {event.open_time}
+                    </span>
+                  )}
                   {event.start_time && (
                     <span className="flex items-center gap-2">
                       <Clock className="w-4 h-4" />
-                      {event.start_time}
+                      開演 {event.start_time}
                     </span>
                   )}
                   <Badge variant={event.tt_is_published ? "default" : "outline"}>
                     {event.tt_is_published ? "公開中" : "非公開"}
+                  </Badge>
+                  <Badge variant={event.tt_is_provisional ? "secondary" : "outline"}>
+                    {event.tt_is_provisional ? "仮確定" : "仮確定前"}
                   </Badge>
                 </div>
               )
             }
           />
 
-          <section className="pb-12 md:pb-16">
-            <div className="container mx-auto px-4 sm:px-6 space-y-6">
-              <Card className="bg-card/60 border-border">
+          <section className="flex-1 overflow-hidden pb-6 md:pb-8">
+            <div className="container mx-auto px-4 sm:px-6 h-full flex flex-col gap-6">
+              <Card className="bg-card/60 border-border shrink-0">
                 <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                   <div>
-                    <CardTitle className="text-lg">公開設定</CardTitle>
-                    <CardDescription>公開中は全員がタイムテーブルを閲覧できます。</CardDescription>
+                    <CardTitle className="text-lg">公開・仮確定</CardTitle>
+                    <CardDescription>仮確定でシフト作成を解放し、公開で全員が閲覧できます。</CardDescription>
                   </div>
-                  <Button
-                    type="button"
-                    variant={event?.tt_is_published ? "outline" : "default"}
-                    onClick={handleTogglePublish}
-                    disabled={publishing}
-                  >
-                    {publishing ? (
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                    ) : event?.tt_is_published ? (
-                      "非公開にする"
-                    ) : (
-                      "公開する"
-                    )}
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      variant={event?.tt_is_provisional ? "outline" : "default"}
+                      onClick={handleToggleProvisional}
+                      disabled={provisioning}
+                    >
+                      {provisioning ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : event?.tt_is_provisional ? (
+                        "仮確定を解除"
+                      ) : (
+                        "仮確定にする"
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={event?.tt_is_published ? "outline" : "default"}
+                      onClick={handleTogglePublish}
+                      disabled={publishing}
+                    >
+                      {publishing ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : event?.tt_is_published ? (
+                        "非公開にする"
+                      ) : (
+                        "公開する"
+                      )}
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent className="text-sm text-muted-foreground">
-                  公開/非公開の切り替えはこのページからいつでも変更できます。
+                  仮確定にするとシフト作成が解放されます。公開は閲覧用です。
                 </CardContent>
               </Card>
 
-              <Card className="bg-card/60 border-border">
+              <Card className="bg-card/60 border-border flex flex-col min-h-0">
                 <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                   <div>
                     <CardTitle className="text-lg">タイムテーブル</CardTitle>
                     <CardDescription>ドラッグで順番を調整し、保存で反映します。</CardDescription>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-2">
+                      <select
+                        className="h-9 rounded-md border border-input bg-card px-2 text-xs text-foreground"
+                        value={rehearsalOrder}
+                        onChange={(e) =>
+                          setRehearsalOrder(e.target.value as "same" | "reverse")
+                        }
+                      >
+                        <option value="same">通常リハ: 同順</option>
+                        <option value="reverse">通常リハ: 逆順</option>
+                      </select>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleSaveRehearsalOrder}
+                        disabled={savingRehearsalOrder}
+                      >
+                        {savingRehearsalOrder ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : (
+                          "順序保存"
+                        )}
+                      </Button>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => handleAddRehearsalSlots("rehearsal_normal")}
+                    >
+                      通常リハ追加
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => handleAddRehearsalSlots("rehearsal_pre")}
+                    >
+                      直前リハ追加
+                    </Button>
                     <Button type="button" variant="outline" onClick={handleGenerateSlots} disabled={generating}>
                       {generating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                       自動生成
                     </Button>
+                    <Button type="button" variant="outline" onClick={handleGenerateTemplate} disabled={templating}>
+                      {templating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                      テンプレート作成
+                    </Button>
                     <Button type="button" variant="outline" onClick={handleAddSlot}>
                       <Plus className="w-4 h-4" />
-                      追加
+                      本番追加
                     </Button>
                     <Button type="button" onClick={handleSaveSlots} disabled={saving || orderedSlots.length === 0}>
                       {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -566,135 +1124,334 @@ export default function AdminEventTimetableEditPage() {
                     </Button>
                   </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="flex-1 min-h-0 overflow-auto">
                   {orderedSlots.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">スロットがまだありません。</p>
+                    <p className="text-sm text-muted-foreground">
+                      スロットがまだありません。テンプレート作成か追加ボタンで枠を用意してください。
+                    </p>
                   ) : (
-                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleSlotDragEnd}>
-                      <SortableContext items={orderedSlots.map((slot) => slot.id)} strategy={verticalListSortingStrategy}>
-                        <div className="space-y-3">
-                          {orderedSlots.map((slot, index) => (
-                            <SortableItem key={slot.id} id={slot.id}>
-                              {({ attributes, listeners, setActivatorNodeRef, isDragging }) => (
-                                <div
-                                  className={cn(
-                                    "rounded-lg border border-border bg-background/50 p-4 space-y-3",
-                                    isDragging && "ring-2 ring-primary/40"
-                                  )}
-                                >
-                                  <div className="flex flex-wrap items-start gap-4">
-                                    <button
-                                      type="button"
-                                      ref={setActivatorNodeRef}
-                                      className="mt-1 rounded-md border border-border p-1 text-muted-foreground hover:text-foreground"
-                                      {...attributes}
-                                      {...listeners}
-                                      aria-label="順番を変更"
-                                    >
-                                      <GripVertical className="w-4 h-4" />
-                                    </button>
-
-                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                      <Badge variant="outline">#{slot.order_in_event ?? index + 1}</Badge>
-                                    </div>
-
-                                    <div className="flex-1 grid gap-3 md:grid-cols-[160px,1fr]">
-                                      <label className="space-y-1 text-xs">
-                                        <span className="text-muted-foreground">種別</span>
-                                        <select
-                                          className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-                                          value={slot.slot_type}
-                                          onChange={(e) =>
-                                            handleSlotChange(slot.id, "slot_type", e.target.value as EventSlot["slot_type"])
-                                          }
-                                        >
-                                          {slotTypeOptions.map((opt) => (
-                                            <option key={opt.value} value={opt.value}>
-                                              {opt.label}
-                                            </option>
-                                          ))}
-                                        </select>
-                                      </label>
-                                      {slot.slot_type === "band" && (
-                                        <label className="space-y-1 text-xs">
-                                          <span className="text-muted-foreground">バンド</span>
-                                          <select
-                                            className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-                                            value={slot.band_id ?? ""}
-                                            onChange={(e) => handleSlotChange(slot.id, "band_id", e.target.value || null)}
-                                          >
-                                            <option value="">選択してください</option>
-                                            {bands.map((band) => (
-                                              <option key={band.id} value={band.id}>
-                                                {band.name}
-                                              </option>
-                                            ))}
-                                          </select>
-                                        </label>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  <div className="grid gap-3 md:grid-cols-[repeat(4,minmax(0,1fr))]">
-                                    <label className="space-y-1 text-xs">
-                                      <span className="text-muted-foreground">開始</span>
-                                      <Input
-                                        type="time"
-                                        value={slot.start_time ?? ""}
-                                        onChange={(e) => handleSlotChange(slot.id, "start_time", e.target.value || null)}
-                                      />
-                                    </label>
-                                    <label className="space-y-1 text-xs">
-                                      <span className="text-muted-foreground">終了</span>
-                                      <Input
-                                        type="time"
-                                        value={slot.end_time ?? ""}
-                                        onChange={(e) => handleSlotChange(slot.id, "end_time", e.target.value || null)}
-                                      />
-                                    </label>
-                                    <label className="space-y-1 text-xs">
-                                      <span className="text-muted-foreground">転換(分)</span>
-                                      <Input
-                                        type="number"
-                                        min={0}
-                                        value={slot.changeover_min ?? ""}
-                                        onChange={(e) =>
-                                          handleSlotChange(slot.id, "changeover_min", Number(e.target.value))
-                                        }
-                                      />
-                                    </label>
-                                    <label className="space-y-1 text-xs">
-                                      <span className="text-muted-foreground">メモ</span>
-                                      <Input
-                                        value={slot.note ?? ""}
-                                        onChange={(e) => handleSlotChange(slot.id, "note", e.target.value)}
-                                        placeholder="MC / 休憩など"
-                                      />
-                                    </label>
-                                  </div>
-
-                                  <div className="flex items-center justify-between">
-                                    <p className="text-xs text-muted-foreground">
-                                      {slot.slot_type === "band"
-                                        ? bandMap.get(slot.band_id ?? "") ?? "バンド未設定"
-                                        : slotTypeOptions.find((opt) => opt.value === slot.slot_type)?.label}
-                                    </p>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      onClick={() => handleDeleteSlot(slot.id)}
-                                      className="text-muted-foreground hover:text-destructive"
-                                    >
-                                      削除
-                                    </Button>
-                                  </div>
-                                </div>
+                    <div className="space-y-4">
+                      <div className="rounded-lg border border-border/70 bg-background/40 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                          <span>タイムライン</span>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant={phaseBadgeVariant("show")}>本番</Badge>
+                            <Badge variant={phaseBadgeVariant("rehearsal_normal")}>通常リハ</Badge>
+                            <Badge variant={phaseBadgeVariant("rehearsal_pre")}>直前リハ</Badge>
+                          </div>
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+                          <span className="inline-flex items-center gap-2">
+                            <span className="h-2 w-6 rounded-full bg-fuchsia-400/80" />
+                            本番
+                          </span>
+                          <span className="inline-flex items-center gap-2">
+                            <span className="h-2 w-6 rounded-full bg-sky-400/80" />
+                            リハ
+                          </span>
+                          <span className="inline-flex items-center gap-2">
+                            <span className="h-2 w-6 rounded-full bg-amber-400/80" />
+                            転換/休憩/準備/解散
+                          </span>
+                        </div>
+                        <div className="mt-3 flex gap-1 overflow-x-auto">
+                          {timelineSegments.segments.map((segment) => (
+                            <button
+                              key={segment.id}
+                              type="button"
+                              onClick={() => setSelectedSlotId(segment.id)}
+                              className={cn(
+                                "group min-w-[80px] flex-1 rounded-md border px-2 py-2 text-left text-[11px] transition-colors",
+                                segment.tone === "show"
+                                  ? "border-primary/40 bg-primary/15 text-primary"
+                                  : segment.tone === "rehearsal"
+                                    ? "border-secondary/40 bg-secondary/20 text-foreground"
+                                    : "border-amber-400/40 bg-amber-500/10 text-amber-200",
+                                selectedSlotId === segment.id && "ring-2 ring-primary/40"
                               )}
-                            </SortableItem>
+                              style={{ flexGrow: segment.duration, flexBasis: 0 }}
+                              title={`${segment.label} ${segment.time}`}
+                            >
+                              <p className="truncate font-medium text-foreground/90">{segment.label}</p>
+                              <p className="truncate">{segment.time}</p>
+                            </button>
                           ))}
                         </div>
-                      </SortableContext>
-                    </DndContext>
+                      </div>
+
+                      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr),320px]">
+                        <div className="space-y-2">
+                          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleSlotDragEnd}>
+                            <SortableContext
+                              items={orderedSlots.map((slot) => slot.id)}
+                              strategy={verticalListSortingStrategy}
+                            >
+                              <div className="space-y-2">
+                                {orderedSlots.map((slot, index) => {
+                                  const currentPhase = slotPhaseKey(slot);
+                                  const prevPhase = orderedSlots[index - 1]
+                                    ? slotPhaseKey(orderedSlots[index - 1])
+                                    : currentPhase;
+                                  const showPhaseSeparator = index === 0 || prevPhase !== currentPhase;
+
+                                  return (
+                                    <div key={slot.id} className="space-y-2">
+                                      {showPhaseSeparator && (
+                                        <div className="flex items-center gap-2 px-1 text-xs text-muted-foreground">
+                                          <span className="font-semibold">{slotPhaseLabel(slot)}</span>
+                                          <div className={`h-1 flex-1 rounded-full ${phaseBarClass(currentPhase)}`} />
+                                        </div>
+                                      )}
+                                      <SortableItem id={slot.id}>
+                                        {({ attributes, listeners, setActivatorNodeRef, isDragging }) => (
+                                          <div
+                                            className={cn(
+                                              "flex flex-wrap items-start gap-3 rounded-lg border border-border/70 bg-background/50 px-3 py-3",
+                                              slotAccentClass(slot),
+                                              selectedSlotId === slot.id && "border-primary/40 bg-primary/5",
+                                              isDragging && "ring-1 ring-primary/40"
+                                            )}
+                                            role="button"
+                                            tabIndex={0}
+                                            onClick={() => setSelectedSlotId(slot.id)}
+                                            onKeyDown={(event) => {
+                                              if (event.key === "Enter" || event.key === " ") {
+                                                event.preventDefault();
+                                                setSelectedSlotId(slot.id);
+                                              }
+                                            }}
+                                          >
+                                            <button
+                                              type="button"
+                                              ref={setActivatorNodeRef}
+                                              className="mt-0.5 inline-flex items-center justify-center rounded-md border border-border p-1 text-muted-foreground hover:text-foreground"
+                                              {...attributes}
+                                              {...listeners}
+                                              aria-label="並び替え"
+                                              onClick={(event) => event.stopPropagation()}
+                                            >
+                                              <GripVertical className="w-4 h-4" />
+                                            </button>
+                                            <div className="flex-1 min-w-[180px] space-y-1">
+                                              <div className="flex flex-wrap items-center gap-2">
+                                                <Badge variant="outline">#{slot.order_in_event ?? index + 1}</Badge>
+                                                <Badge variant={slotPhaseBadgeVariant(slot)}>
+                                                  {slotPhaseLabel(slot)}
+                                                </Badge>
+                                                <Badge variant={slot.slot_type === "band" ? "default" : "outline"}>
+                                                  {slot.slot_type.toUpperCase()}
+                                                </Badge>
+                                              </div>
+                                              <p className="text-sm font-semibold text-foreground">{slotLabel(slot)}</p>
+                                          <p className="text-sm text-muted-foreground">{slotTimeLabel(slot)}</p>
+                                            </div>
+                                            <div className="flex flex-wrap items-center gap-1 text-xs">
+                                              <button
+                                                type="button"
+                                                className="rounded-md border border-border px-2 py-1 text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                                                onClick={(event) => {
+                                                  event.stopPropagation();
+                                                  handleInsertAbove(slot.id);
+                                                }}
+                                              >
+                                                上に追加
+                                              </button>
+                                              <button
+                                                type="button"
+                                                className="rounded-md border border-border px-2 py-1 text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                                                onClick={(event) => {
+                                                  event.stopPropagation();
+                                                  handleInsertBelow(slot.id);
+                                                }}
+                                              >
+                                                下に追加
+                                              </button>
+                                              <button
+                                                type="button"
+                                                className="rounded-md border border-border px-2 py-1 text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                                                onClick={(event) => {
+                                                  event.stopPropagation();
+                                                  handleInsertChangeover(slot.id);
+                                                }}
+                                              >
+                                                転換
+                                              </button>
+                                              <button
+                                                type="button"
+                                                className="rounded-md border border-border px-2 py-1 text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                                                onClick={(event) => {
+                                                  event.stopPropagation();
+                                                  handleDuplicateSlot(slot.id);
+                                                }}
+                                              >
+                                                複製
+                                              </button>
+                                              <button
+                                                type="button"
+                                                className="rounded-md border border-border px-2 py-1 text-muted-foreground hover:border-destructive/60 hover:text-destructive"
+                                                onClick={(event) => {
+                                                  event.stopPropagation();
+                                                  handleDeleteSlot(slot.id);
+                                                }}
+                                              >
+                                                削除
+                                              </button>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </SortableItem>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </SortableContext>
+                          </DndContext>
+                          <p className="text-xs text-muted-foreground">
+                            ドラッグで順番変更、クリックで詳細編集できます。
+                          </p>
+                        </div>
+
+                        <div className="rounded-lg border border-border/70 bg-background/40 p-4 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-semibold">詳細編集</p>
+                            {selectedSlot && (
+                              <Badge variant={slotPhaseBadgeVariant(selectedSlot)}>
+                                {slotPhaseLabel(selectedSlot)}
+                              </Badge>
+                            )}
+                          </div>
+                          {!selectedSlot ? (
+                            <p className="text-sm text-muted-foreground">左のリストから選択してください。</p>
+                          ) : (
+                            <div className="space-y-3">
+                              <label className="space-y-1 text-xs block">
+                                <span className="text-muted-foreground">並び順</span>
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  value={selectedSlot.order_in_event ?? ""}
+                                  onChange={(e) =>
+                                    handleSlotChange(
+                                      selectedSlot.id,
+                                      "order_in_event",
+                                      Number(e.target.value)
+                                    )
+                                  }
+                                />
+                              </label>
+                              <label className="space-y-1 text-xs block">
+                                <span className="text-muted-foreground">区分</span>
+                                <select
+                                  className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                  value={selectedSlot.slot_phase}
+                                  onChange={(e) =>
+                                    handleSlotChange(
+                                      selectedSlot.id,
+                                      "slot_phase",
+                                      e.target.value as EventSlot["slot_phase"]
+                                    )
+                                  }
+                                >
+                                  {slotPhaseOptions.map((opt) => (
+                                    <option key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label className="space-y-1 text-xs block">
+                                <span className="text-muted-foreground">種別</span>
+                                <select
+                                  className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                  value={selectedSlot.slot_type}
+                                  onChange={(e) =>
+                                    handleSlotChange(
+                                      selectedSlot.id,
+                                      "slot_type",
+                                      e.target.value as EventSlot["slot_type"]
+                                    )
+                                  }
+                                >
+                                  {slotTypeOptions.map((opt) => (
+                                    <option key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              {selectedSlot.slot_type === "band" && (
+                                <label className="space-y-1 text-xs block">
+                                  <span className="text-muted-foreground">バンド</span>
+                                  <select
+                                    className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                    value={selectedSlot.band_id ?? ""}
+                                    onChange={(e) =>
+                                      handleSlotChange(selectedSlot.id, "band_id", e.target.value || null)
+                                    }
+                                  >
+                                    <option value="">バンドを選択</option>
+                                    {bands.map((band) => (
+                                      <option key={band.id} value={band.id}>
+                                        {band.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                              )}
+                              <div className="grid gap-3 sm:grid-cols-2">
+                                <label className="space-y-1 text-xs">
+                                  <span className="text-muted-foreground">開始</span>
+                                  <Input
+                                    type="time"
+                                    value={selectedSlot.start_time ?? ""}
+                                    onChange={(e) =>
+                                      handleSlotChange(selectedSlot.id, "start_time", e.target.value || null)
+                                    }
+                                  />
+                                </label>
+                                <label className="space-y-1 text-xs">
+                                  <span className="text-muted-foreground">終了</span>
+                                  <Input
+                                    type="time"
+                                    value={selectedSlot.end_time ?? ""}
+                                    onChange={(e) =>
+                                      handleSlotChange(selectedSlot.id, "end_time", e.target.value || null)
+                                    }
+                                  />
+                                </label>
+                              </div>
+                              <label className="space-y-1 text-xs block">
+                                <span className="text-muted-foreground">転換(分)</span>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  value={selectedSlot.changeover_min ?? ""}
+                                  onChange={(e) =>
+                                    handleSlotChange(selectedSlot.id, "changeover_min", Number(e.target.value))
+                                  }
+                                />
+                              </label>
+                              <label className="space-y-1 text-xs block">
+                                <span className="text-muted-foreground">メモ</span>
+                                <Input
+                                  value={selectedSlot.note ?? ""}
+                                  onChange={(e) => handleSlotChange(selectedSlot.id, "note", e.target.value)}
+                                  placeholder="MC / 休憩 / 備考"
+                                />
+                              </label>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => handleDeleteSlot(selectedSlot.id)}
+                                className="text-destructive border-destructive/40 hover:border-destructive hover:text-destructive"
+                              >
+                                この枠を削除
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </CardContent>
               </Card>

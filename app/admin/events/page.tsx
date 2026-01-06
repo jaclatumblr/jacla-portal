@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -306,7 +306,7 @@ export default function AdminEventsPage() {
 
                   <div className="grid sm:grid-cols-2 gap-3">
                     <label className="space-y-1 block text-sm">
-                      <span className="text-foreground">開場時間</span>
+                      <span className="text-foreground">集合時間</span>
                       <Input
                         type="time"
                         value={form.open_time ?? ""}

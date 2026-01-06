@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { ChevronDown } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -53,6 +53,9 @@ type BandMemberRow = {
   position_x: number | null;
   position_y: number | null;
   is_mc: boolean | null;
+  monitor_request: string | null;
+  monitor_note: string | null;
+  order_index: number | null;
   profiles?:
     | { display_name: string | null; real_name: string | null; part: string | null }
     | { display_name: string | null; real_name: string | null; part: string | null }[]
@@ -77,6 +80,16 @@ type StageMember = {
 };
 
 type EventGroup = EventRow & { bands: BandNoteRow[] };
+
+type BandMemberDetail = {
+  id: string;
+  name: string;
+  instrument: string | null;
+  monitorRequest: string | null;
+  monitorNote: string | null;
+  isMc: boolean;
+  orderIndex: number | null;
+};
 
 const statusLabel = (status: string | null) =>
   status === "submitted" ? "提出済み" : "下書き";
@@ -103,6 +116,12 @@ const clampPercent = (value: number) => Math.min(95, Math.max(5, value));
 const normalizeLabel = (value?: string | null) => (value ?? "").trim();
 
 const isNumberedLabel = (label: string) => /\d+$/.test(label);
+
+const splitLabelParts = (label: string) =>
+  label
+    .split(/[\\/／]/)
+    .map((part) => normalizeLabel(part))
+    .filter(Boolean);
 
 const normalizeKey = (value: string) =>
   value
@@ -168,27 +187,29 @@ const buildChannelSummary = (members: StageMember[], items: StageItem[]) => {
 const buildChannelKeySet = (labels: string[]) => {
   const keys = new Set<string>();
   labels.forEach((label) => {
-    const key = normalizeKey(label);
-    if (!key) return;
-    keys.add(key);
-    if (key === "dr" || key === "drum" || key === "drums") {
-      [
-        "topl",
-        "topr",
-        "ftom",
-        "ltom",
-        "htom",
-        "bdr",
-        "sdrtop",
-        "sdrbottom",
-        "hh",
-      ].forEach((item) => keys.add(item));
-    }
-    if (key === "gt") keys.add("gt1");
-    if (key === "ba" || key === "bass") keys.add("bassdi");
-    if (key === "line") keys.add("line1");
-    if (key === "管") keys.add("管1");
-    if (key === "mc") keys.add("mc1");
+    splitLabelParts(label).forEach((part) => {
+      const key = normalizeKey(part);
+      if (!key) return;
+      keys.add(key);
+      if (key === "dr" || key === "drum" || key === "drums") {
+        [
+          "topl",
+          "topr",
+          "ftom",
+          "ltom",
+          "htom",
+          "bdr",
+          "sdrtop",
+          "sdrbottom",
+          "hh",
+        ].forEach((item) => keys.add(item));
+      }
+      if (key === "gt") keys.add("gt1");
+      if (key === "ba" || key === "bass") keys.add("bassdi");
+      if (key === "line") keys.add("line1");
+      if (key === "管") keys.add("管1");
+      if (key === "mc") keys.add("mc1");
+    });
   });
   return keys;
 };
@@ -247,7 +268,7 @@ export default function PAInstructionsPage() {
         supabase
           .from("band_members")
           .select(
-            "id, band_id, instrument, position_x, position_y, is_mc, profiles(display_name, real_name, part)"
+            "id, band_id, instrument, position_x, position_y, is_mc, monitor_request, monitor_note, order_index, profiles(display_name, real_name, part)"
           )
           .order("created_at", { ascending: true }),
         supabase
@@ -338,6 +359,36 @@ export default function PAInstructionsPage() {
     return next;
   }, [bandMembers]);
 
+  const bandMemberDetailsByBand = useMemo<Record<string, BandMemberDetail[]>>(() => {
+    const next: Record<string, BandMemberDetail[]> = {};
+    bandMembers.forEach((row) => {
+      const profile = Array.isArray(row.profiles)
+        ? row.profiles[0] ?? null
+        : row.profiles ?? null;
+      const name = profile?.real_name ?? profile?.display_name ?? "名前未登録";
+      const instrument = row.instrument ?? profile?.part ?? null;
+      if (!next[row.band_id]) next[row.band_id] = [];
+      next[row.band_id].push({
+        id: row.id,
+        name,
+        instrument,
+        monitorRequest: row.monitor_request ?? null,
+        monitorNote: row.monitor_note ?? null,
+        isMc: Boolean(row.is_mc),
+        orderIndex: row.order_index ?? null,
+      });
+    });
+    Object.values(next).forEach((list) => {
+      list.sort((a, b) => {
+        const orderA = a.orderIndex ?? Number.MAX_SAFE_INTEGER;
+        const orderB = b.orderIndex ?? Number.MAX_SAFE_INTEGER;
+        if (orderA !== orderB) return orderA - orderB;
+        return a.name.localeCompare(b.name, "ja");
+      });
+    });
+    return next;
+  }, [bandMembers]);
+
   const songsByBand = useMemo<Record<string, SongRow[]>>(() => {
     const next: Record<string, SongRow[]> = {};
     songs.forEach((song) => {
@@ -413,6 +464,7 @@ export default function PAInstructionsPage() {
                         event.bands.map((band) => {
                           const stageItems = stageItemsByBand[band.id] ?? [];
                           const stageMembers = bandMembersByBand[band.id] ?? [];
+                          const memberDetails = bandMemberDetailsByBand[band.id] ?? [];
                           const bandSongs = songsByBand[band.id] ?? [];
                           const hasStagePlot =
                             stageItems.length > 0 || stageMembers.length > 0;
@@ -538,6 +590,97 @@ export default function PAInstructionsPage() {
                                     <p className="text-sm text-muted-foreground">
                                       立ち位置は未入力です。
                                     </p>
+                                  )}
+                                </div>
+                                <div className="rounded-md border border-border/60 bg-card/60 p-3 space-y-2">
+                                  <div className="text-xs font-semibold text-primary">
+                                    メンバー / 返しの希望
+                                  </div>
+                                  {memberDetails.length === 0 ? (
+                                    <p className="text-sm text-muted-foreground">
+                                      メンバー情報は未入力です。
+                                    </p>
+                                  ) : (
+                                    <div className="space-y-3">
+                                      <div className="space-y-2 md:hidden">
+                                        {memberDetails.map((member) => (
+                                          <div
+                                            key={member.id}
+                                            className="rounded-md border border-border bg-background/50 p-3 text-xs"
+                                          >
+                                            <div className="flex items-center justify-between">
+                                              <span className="font-semibold">
+                                                {member.instrument || "Part"}
+                                              </span>
+                                              {member.isMc && (
+                                                <Badge variant="secondary">MC</Badge>
+                                              )}
+                                            </div>
+                                            <div className="mt-1 text-sm">
+                                              {member.name}
+                                            </div>
+                                            <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                                              <div>
+                                                返し:{" "}
+                                                <span className="text-foreground">
+                                                  {member.monitorRequest?.trim() || "-"}
+                                                </span>
+                                              </div>
+                                              <div>
+                                                備考:{" "}
+                                                <span className="text-foreground">
+                                                  {member.monitorNote?.trim() || "-"}
+                                                </span>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                      <div className="hidden md:block">
+                                        <div className="overflow-x-auto rounded-md border border-border bg-background/40">
+                                          <Table className="min-w-[720px]">
+                                            <TableHeader>
+                                              <TableRow>
+                                                <TableHead className="w-[140px]">
+                                                  パート
+                                                </TableHead>
+                                                <TableHead>名前</TableHead>
+                                                <TableHead className="w-[180px]">
+                                                  返しの希望
+                                                </TableHead>
+                                                <TableHead className="w-[200px]">
+                                                  備考
+                                                </TableHead>
+                                                <TableHead className="w-[80px] text-center">
+                                                  MC
+                                                </TableHead>
+                                              </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                              {memberDetails.map((member) => (
+                                                <TableRow key={member.id}>
+                                                  <TableCell className="text-xs font-medium">
+                                                    {member.instrument || "Part"}
+                                                  </TableCell>
+                                                  <TableCell className="text-xs">
+                                                    {member.name}
+                                                  </TableCell>
+                                                  <TableCell className="text-xs">
+                                                    {member.monitorRequest?.trim() || "-"}
+                                                  </TableCell>
+                                                  <TableCell className="text-xs whitespace-pre-wrap">
+                                                    {member.monitorNote?.trim() || "-"}
+                                                  </TableCell>
+                                                  <TableCell className="text-center text-xs">
+                                                    {member.isMc ? "○" : "-"}
+                                                  </TableCell>
+                                                </TableRow>
+                                              ))}
+                                            </TableBody>
+                                          </Table>
+                                        </div>
+                                      </div>
+                                    </div>
                                   )}
                                 </div>
                                 <div className="rounded-md border border-border/60 bg-card/60 p-3 space-y-2">

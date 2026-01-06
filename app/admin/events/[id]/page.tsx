@@ -1,12 +1,10 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
-  BadgeCheck,
   Calendar,
-  CheckCircle2,
   ChevronDown,
   GripVertical,
   MapPin,
@@ -60,13 +58,14 @@ type EventRow = {
   start_time: string | null;
   note: string | null;
   default_changeover_min: number;
+  tt_is_published: boolean;
+  tt_is_provisional: boolean;
 };
 
 type Band = {
   id: string;
   event_id: string;
   name: string;
-  is_approved: boolean;
   note_pa: string | null;
   note_lighting: string | null;
   stage_plot_data: Record<string, any> | null;
@@ -211,7 +210,6 @@ export default function AdminEventDetailPage() {
   const [selectedBandId, setSelectedBandId] = useState<string | null>(null);
   const [bandForm, setBandForm] = useState({
     name: "",
-    is_approved: false,
     note_pa: "",
     note_lighting: "",
     stagePlotNote: "",
@@ -440,13 +438,13 @@ export default function AdminEventDetailPage() {
         supabase
           .from("events")
           .select(
-            "id, name, date, status, event_type, venue, open_time, start_time, note, default_changeover_min"
+            "id, name, date, status, event_type, venue, open_time, start_time, note, default_changeover_min, tt_is_published, tt_is_provisional"
           )
           .eq("id", eventId)
           .maybeSingle(),
         supabase
           .from("bands")
-          .select("id, event_id, name, is_approved, note_pa, note_lighting, stage_plot_data, created_by")
+          .select("id, event_id, name, note_pa, note_lighting, stage_plot_data, created_by")
           .eq("event_id", eventId)
           .order("created_at", { ascending: true }),
         supabase.from("profiles").select("*").order("display_name", { ascending: true }),
@@ -1016,7 +1014,6 @@ export default function AdminEventDetailPage() {
     if (!selectedBand) {
       setBandForm({
         name: "",
-        is_approved: false,
         note_pa: "",
         note_lighting: "",
         stagePlotNote: "",
@@ -1025,7 +1022,6 @@ export default function AdminEventDetailPage() {
     }
     setBandForm({
       name: selectedBand.name,
-      is_approved: Boolean(selectedBand.is_approved),
       note_pa: selectedBand.note_pa ?? "",
       note_lighting: selectedBand.note_lighting ?? "",
       stagePlotNote:
@@ -1163,7 +1159,6 @@ export default function AdminEventDetailPage() {
           event_id: eventId,
           name: newBandName.trim(),
           created_by: userId ?? null,
-          is_approved: false,
         },
       ])
       .select()
@@ -1192,7 +1187,6 @@ export default function AdminEventDetailPage() {
 
     const payload = {
       name: bandForm.name.trim() || "未命名バンド",
-      is_approved: bandForm.is_approved,
       note_pa: bandForm.note_pa || null,
       note_lighting: bandForm.note_lighting || null,
       stage_plot_data: bandForm.stagePlotNote ? { note: bandForm.stagePlotNote } : {},
@@ -1357,6 +1351,7 @@ export default function AdminEventDetailPage() {
   const deleteMatches = deleteConfirmText.trim() === deleteTargetName;
   const bandDeleteTargetName = selectedBand?.name?.trim() ?? "";
   const bandDeleteMatches = bandDeleteText.trim() === bandDeleteTargetName;
+  const shiftUnlocked = event?.tt_is_provisional ?? false;
 
   return (
     <AuthGuard>
@@ -1411,7 +1406,7 @@ export default function AdminEventDetailPage() {
                     </li>
                   </ol>
                   <p className="text-xs text-muted-foreground">
-                    ヒント: タイムテーブルはドラッグで並び替え、保存で反映されます。
+                    ヒント: タイムテーブルとシフトは専用ページで編集します。
                   </p>
                 </CardContent>
               </Card>
@@ -1435,11 +1430,30 @@ export default function AdminEventDetailPage() {
                     TTを編集する
                   </Link>
                   <Link
-                    href={`/admin/events/${eventId}/tt/staff`}
-                    className="inline-flex items-center justify-center rounded-md border border-border px-4 py-2 text-sm text-foreground hover:border-primary/60 hover:text-primary transition-colors"
+                    href={`/admin/events/${eventId}/shift/pa`}
+                    className={`inline-flex items-center justify-center rounded-md border border-border px-4 py-2 text-sm text-foreground transition-colors ${
+                      shiftUnlocked
+                        ? "hover:border-primary/60 hover:text-primary"
+                        : "pointer-events-none opacity-60"
+                    }`}
                   >
-                    シフト割当を編集する
+                    PAシフト作成
                   </Link>
+                  <Link
+                    href={`/admin/events/${eventId}/shift/lighting`}
+                    className={`inline-flex items-center justify-center rounded-md border border-border px-4 py-2 text-sm text-foreground transition-colors ${
+                      shiftUnlocked
+                        ? "hover:border-primary/60 hover:text-primary"
+                        : "pointer-events-none opacity-60"
+                    }`}
+                  >
+                    照明シフト作成
+                  </Link>
+                  {!shiftUnlocked && (
+                    <span className="text-xs text-muted-foreground">
+                      仮確定前のためシフト作成はロック中です。
+                    </span>
+                  )}
                 </CardContent>
               </Card>
 
@@ -1520,7 +1534,7 @@ export default function AdminEventDetailPage() {
                     <div className="grid md:grid-cols-2 gap-4">
                       <div className="grid sm:grid-cols-2 gap-3">
                         <label className="space-y-1 block text-sm">
-                          <span className="text-foreground">開場時間</span>
+                        <span className="text-foreground">集合時間</span>
                           <Input
                             type="time"
                             value={eventForm.open_time ?? ""}
@@ -1577,635 +1591,6 @@ export default function AdminEventDetailPage() {
                       </Button>
                     </div>
                   </form>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-card/60 border-border">
-                <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <CardTitle className="text-xl">タイムテーブル（手動）</CardTitle>
-                    <CardDescription>クリックで展開、ドラッグで並び替え、保存で反映します。</CardDescription>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button type="button" variant="outline" onClick={handleAddSlot}>
-                      <Plus className="w-4 h-4" />
-                      スロット追加
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleGenerateSlots}
-                      disabled={slotsGenerating}
-                    >
-                      {slotsGenerating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                      自動生成
-                    </Button>
-                    <Button type="button" onClick={handleSaveSlots} disabled={slotsSaving || slotsLoading}>
-                      {slotsSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                      保存
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {slotsLoading ? (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      読み込み中です...
-                    </div>
-                  ) : orderedSlots.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">スロットがまだありません。</div>
-                  ) : (
-                    <DndContext
-                      sensors={sensors}
-                      collisionDetection={closestCenter}
-                      onDragEnd={handleSlotDragEnd}
-                    >
-                      <SortableContext
-                        items={orderedSlots.map((slot) => slot.id)}
-                        strategy={verticalListSortingStrategy}
-                      >
-                        <div className="space-y-3">
-                          {orderedSlots.map((slot, index) => {
-                            const isExpanded = Boolean(expandedSlots[slot.id]);
-                            return (
-                              <SortableItem key={slot.id} id={slot.id}>
-                                {({ attributes, listeners, setActivatorNodeRef, isDragging }) => (
-                                  <div
-                                    className={cn(
-                                      "rounded-lg border border-border p-3 space-y-3",
-                                      isDragging && "ring-1 ring-primary/40 bg-background/70"
-                                    )}
-                                  >
-                                    <div className="flex items-start gap-2">
-                                      <button
-                                        type="button"
-                                        onClick={() => toggleSlotExpanded(slot.id)}
-                                        className="flex-1 flex items-center justify-between gap-3 text-left"
-                                        aria-expanded={isExpanded}
-                                      >
-                                        <div className="space-y-1">
-                                          <p className="text-sm font-medium">
-                                            #{slot.order_in_event ?? index + 1} {slotLabel(slot)}
-                                          </p>
-                                          <p className="text-xs text-muted-foreground">
-                                            {slotTimeLabel(slot)}
-                                          </p>
-                                        </div>
-                                        <ChevronDown
-                                          className={`w-4 h-4 text-muted-foreground transition-transform ${
-                                            isExpanded ? "rotate-180" : ""
-                                          }`}
-                                        />
-                                      </button>
-                                      <button
-                                        ref={setActivatorNodeRef}
-                                        type="button"
-                                        aria-label="ドラッグして順番を変更"
-                                        className="mt-1 inline-flex items-center justify-center rounded-md border border-border bg-background/60 p-1 text-muted-foreground hover:text-foreground"
-                                        {...attributes}
-                                        {...(listeners ?? {})}
-                                      >
-                                        <GripVertical className="w-4 h-4" />
-                                      </button>
-                                    </div>
-
-                                    {isExpanded && (
-                                      <div className="space-y-3">
-                                        <div className="grid gap-2 md:grid-cols-[70px,110px,1fr,120px,120px,1fr,auto]">
-                                          <label className="space-y-1 text-xs">
-                                            <span className="text-muted-foreground">順番</span>
-                                            <Input
-                                              type="number"
-                                              min={1}
-                                              value={slot.order_in_event ?? ""}
-                                              onChange={(e) =>
-                                                handleSlotChange(
-                                                  slot.id,
-                                                  "order_in_event",
-                                                  Number(e.target.value)
-                                                )
-                                              }
-                                            />
-                                          </label>
-                                          <label className="space-y-1 text-xs">
-                                            <span className="text-muted-foreground">種別</span>
-                                            <select
-                                              className="h-10 w-full rounded-md border border-input bg-card px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-                                              value={slot.slot_type}
-                                              onChange={(e) =>
-                                                handleSlotChange(slot.id, "slot_type", e.target.value)
-                                              }
-                                            >
-                                              {slotTypeOptions.map((opt) => (
-                                                <option key={opt.value} value={opt.value}>
-                                                  {opt.label}
-                                                </option>
-                                              ))}
-                                            </select>
-                                          </label>
-                                          <label className="space-y-1 text-xs">
-                                            <span className="text-muted-foreground">バンド</span>
-                                            <select
-                                              className="h-10 w-full rounded-md border border-input bg-card px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-                                              value={slot.band_id ?? ""}
-                                              onChange={(e) =>
-                                                handleSlotChange(
-                                                  slot.id,
-                                                  "band_id",
-                                                  e.target.value || null
-                                                )
-                                              }
-                                              disabled={slot.slot_type !== "band"}
-                                            >
-                                              <option value="">選択なし</option>
-                                              {bands.map((band) => (
-                                                <option key={band.id} value={band.id}>
-                                                  {band.name}
-                                                </option>
-                                              ))}
-                                            </select>
-                                          </label>
-                                          <label className="space-y-1 text-xs">
-                                            <span className="text-muted-foreground">開始</span>
-                                            <Input
-                                              type="time"
-                                              value={slot.start_time ?? ""}
-                                              onChange={(e) =>
-                                                handleSlotChange(
-                                                  slot.id,
-                                                  "start_time",
-                                                  e.target.value || null
-                                                )
-                                              }
-                                            />
-                                          </label>
-                                          <label className="space-y-1 text-xs">
-                                            <span className="text-muted-foreground">終了</span>
-                                            <Input
-                                              type="time"
-                                              value={slot.end_time ?? ""}
-                                              onChange={(e) =>
-                                                handleSlotChange(
-                                                  slot.id,
-                                                  "end_time",
-                                                  e.target.value || null
-                                                )
-                                              }
-                                            />
-                                          </label>
-                                          <label className="space-y-1 text-xs">
-                                            <span className="text-muted-foreground">メモ</span>
-                                            <Input
-                                              value={slot.note ?? ""}
-                                              onChange={(e) =>
-                                                handleSlotChange(slot.id, "note", e.target.value)
-                                              }
-                                              placeholder="MC / 休憩など"
-                                            />
-                                          </label>
-                                          <div className="flex items-end">
-                                            <Button
-                                              type="button"
-                                              variant="ghost"
-                                              size="icon"
-                                              onClick={() => handleDeleteSlot(slot.id)}
-                                              className="text-muted-foreground hover:text-destructive"
-                                            >
-                                              <Trash2 className="w-4 h-4" />
-                                            </Button>
-                                          </div>
-                                        </div>
-                                        <label className="space-y-1 text-xs block">
-                                          <span className="text-muted-foreground">転換(分)</span>
-                                          <Input
-                                            type="number"
-                                            min={0}
-                                            value={slot.changeover_min ?? ""}
-                                            onChange={(e) =>
-                                              handleSlotChange(
-                                                slot.id,
-                                                "changeover_min",
-                                                Number(e.target.value)
-                                              )
-                                            }
-                                            className="max-w-[160px]"
-                                          />
-                                        </label>
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-                              </SortableItem>
-                            );
-                          })}
-                        </div>
-                      </SortableContext>
-                    </DndContext>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card className="bg-card/60 border-border">
-                <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <CardTitle className="text-xl">当日スタッフ</CardTitle>
-                    <CardDescription>PA / 照明の担当メンバーを登録します。</CardDescription>
-                  </div>
-                  <Button
-                    type="button"
-                    onClick={handleSaveStaff}
-                    disabled={savingStaff || eventStaff.length === 0}
-                    className="gap-2"
-                  >
-                    {savingStaff ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                    保存
-                  </Button>
-                </CardHeader>
-                <CardContent className="space-y-5">
-                  <form onSubmit={handleAddStaff} className="space-y-3">
-                    <div className="grid md:grid-cols-[1fr,200px,200px] gap-3">
-                      <label className="space-y-1 block text-sm">
-                        <span className="text-foreground">メンバー</span>
-                        <select
-                          required
-                          className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-                          value={staffForm.profileId}
-                          onChange={(e) =>
-                            setStaffForm((prev) => ({ ...prev, profileId: e.target.value }))
-                          }
-                        >
-                          <option value="">選択してください</option>
-                          {availableStaffOptions.map((profile) => (
-                            <option key={profile.id} value={profile.id}>
-                              {profile.display_name}
-                              {profile.crew ? ` / ${profile.crew}` : ""}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="space-y-1 block text-sm">
-                        <span className="text-foreground">担当区分</span>
-                        <div className="flex items-center gap-4 rounded-md border border-input bg-card px-3 py-2 text-sm">
-                          <label className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={staffForm.can_pa}
-                              onChange={(e) =>
-                                setStaffForm((prev) => ({ ...prev, can_pa: e.target.checked }))
-                              }
-                            />
-                            PA
-                          </label>
-                          <label className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={staffForm.can_light}
-                              onChange={(e) =>
-                                setStaffForm((prev) => ({ ...prev, can_light: e.target.checked }))
-                              }
-                            />
-                            照明
-                          </label>
-                        </div>
-                      </label>
-                      <label className="space-y-1 block text-sm">
-                        <span className="text-foreground">メモ</span>
-                        <Input
-                          value={staffForm.note}
-                          onChange={(e) => setStaffForm((prev) => ({ ...prev, note: e.target.value }))}
-                          placeholder="希望や注意点など"
-                        />
-                      </label>
-                    </div>
-                    <Button
-                      type="submit"
-                      disabled={
-                        savingStaff ||
-                        !staffForm.profileId ||
-                        (!staffForm.can_pa && !staffForm.can_light)
-                      }
-                      className="gap-2"
-                    >
-                      {savingStaff ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                      追加
-                    </Button>
-                  </form>
-
-                  {eventStaff.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">登録されたスタッフがいません。</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {eventStaff.map((staff) => {
-                        const profile = profilesMap.get(staff.profile_id);
-                        return (
-                          <div
-                            key={staff.id}
-                            className="grid gap-3 rounded-lg border border-border p-3 md:grid-cols-[1fr,200px,1fr,auto] md:items-center"
-                          >
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium truncate">
-                                {profile?.display_name ?? "不明なユーザー"}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                Discord: {profile?.discord ?? "未連携"}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-4 text-xs">
-                              <label className="flex items-center gap-2">
-                                <input
-                                  type="checkbox"
-                                  checked={staff.can_pa}
-                                  onChange={(e) => handleUpdateStaffLocal(staff.id, { can_pa: e.target.checked })}
-                                />
-                                PA
-                              </label>
-                              <label className="flex items-center gap-2">
-                                <input
-                                  type="checkbox"
-                                  checked={staff.can_light}
-                                  onChange={(e) =>
-                                    handleUpdateStaffLocal(staff.id, { can_light: e.target.checked })
-                                  }
-                                />
-                                照明
-                              </label>
-                            </div>
-                            <Input
-                              value={staff.note ?? ""}
-                              onChange={(e) => handleUpdateStaffLocal(staff.id, { note: e.target.value })}
-                              placeholder="メモ"
-                            />
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleRemoveStaff(staff.id)}
-                              className="text-muted-foreground hover:text-destructive"
-                              aria-label="スタッフを削除"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card className="bg-card/60 border-border">
-                <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <CardTitle className="text-xl">シフト割当</CardTitle>
-                    <CardDescription>スロットごとにPA / 照明の担当を割り当てます。</CardDescription>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleAutoAssign}
-                    disabled={savingAssignments || eventStaff.length === 0}
-                  >
-                    {savingAssignments ? (
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <RefreshCw className="w-4 h-4" />
-                    )}
-                    自動割当
-                  </Button>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {doubleBookings.length > 0 && (
-                    <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-                      <p className="font-medium">ダブルブッキングの可能性があります。</p>
-                      <div className="text-xs mt-2 space-y-1 text-destructive/90">
-                        {doubleBookings.map((conflict, index) => {
-                          const profile = profilesMap.get(conflict.profileId);
-                          return (
-                            <p key={`${conflict.profileId}-${index}`}>
-                              {profile?.display_name ?? "不明"} ({conflict.role.toUpperCase()}):{" "}
-                              {slotLabel(conflict.slotA)} / {slotTimeLabel(conflict.slotA)} と{" "}
-                              {slotLabel(conflict.slotB)} / {slotTimeLabel(conflict.slotB)}
-                            </p>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                  {orderedSlots.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">スロットがまだありません。</p>
-                  ) : (
-                    orderedSlots.map((slot, index) => {
-                      const assignment = assignmentsBySlot.get(slot.id) ?? { pa: [], light: [] };
-                      const paStaff = eventStaff.filter((staff) => staff.can_pa);
-                      const lightStaff = eventStaff.filter((staff) => staff.can_light);
-                      const usedPa = new Set(assignment.pa.map((item) => item.profile_id));
-                      const usedLight = new Set(assignment.light.map((item) => item.profile_id));
-                      const paOptions = paStaff.filter((staff) => !usedPa.has(staff.profile_id));
-                      const lightOptions = lightStaff.filter((staff) => !usedLight.has(staff.profile_id));
-                      const paKey = `${slot.id}:pa`;
-                      const lightKey = `${slot.id}:light`;
-
-                      return (
-                        <div key={slot.id} className="rounded-lg border border-border p-4 space-y-4">
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div className="space-y-1">
-                              <p className="text-sm font-semibold">
-                                #{slot.order_in_event ?? index + 1} {slotLabel(slot)}
-                              </p>
-                              <p className="text-xs text-muted-foreground">{slotTimeLabel(slot)}</p>
-                            </div>
-                            <Badge variant={slot.slot_type === "band" ? "default" : "outline"}>
-                              {slot.slot_type.toUpperCase()}
-                            </Badge>
-                          </div>
-
-                          <div className="grid gap-4 md:grid-cols-2">
-                            <div className="space-y-3">
-                              <p className="text-xs text-muted-foreground">PA担当</p>
-                              {assignment.pa.length === 0 ? (
-                                <p className="text-xs text-muted-foreground">未割当</p>
-                              ) : (
-                                <div className="space-y-2">
-                                  {assignment.pa.map((item) => {
-                                    const profile = profilesMap.get(item.profile_id);
-                                    return (
-                                      <div key={item.id} className="rounded-md border border-border p-2 space-y-2">
-                                        <div className="flex items-center justify-between gap-2">
-                                          <p className="text-sm">{profile?.display_name ?? "不明"}</p>
-                                          <div className="flex items-center gap-2 text-xs">
-                                            <label className="flex items-center gap-1">
-                                              <input
-                                                type="checkbox"
-                                                checked={item.is_fixed}
-                                                onChange={(e) => {
-                                                  const checked = e.target.checked;
-                                                  setStaffAssignments((prev) =>
-                                                    prev.map((assignmentItem) =>
-                                                      assignmentItem.id === item.id
-                                                        ? { ...assignmentItem, is_fixed: checked }
-                                                        : assignmentItem
-                                                    )
-                                                  );
-                                                  handleUpdateAssignment(item.id, { is_fixed: checked });
-                                                }}
-                                              />
-                                              固定
-                                            </label>
-                                            <button
-                                              type="button"
-                                              onClick={() => handleRemoveAssignment(item.id)}
-                                              className="text-muted-foreground hover:text-destructive"
-                                            >
-                                              削除
-                                            </button>
-                                          </div>
-                                        </div>
-                                        <Input
-                                          value={item.note ?? ""}
-                                          onChange={(e) => {
-                                            const value = e.target.value;
-                                            setStaffAssignments((prev) =>
-                                              prev.map((assignmentItem) =>
-                                                assignmentItem.id === item.id
-                                                  ? { ...assignmentItem, note: value }
-                                                  : assignmentItem
-                                              )
-                                            );
-                                          }}
-                                          onBlur={(e) => handleUpdateAssignment(item.id, { note: e.target.value })}
-                                          placeholder="メモ"
-                                        />
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                              <div className="flex flex-wrap items-center gap-2">
-                                <select
-                                  className="h-10 w-full md:w-auto flex-1 rounded-md border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-                                  value={assignmentDrafts[paKey] ?? ""}
-                                  onChange={(e) =>
-                                    setAssignmentDrafts((prev) => ({ ...prev, [paKey]: e.target.value }))
-                                  }
-                                >
-                                  <option value="">追加するスタッフ</option>
-                                  {paOptions.map((staff) => {
-                                    const profile = profilesMap.get(staff.profile_id);
-                                    return (
-                                      <option key={staff.profile_id} value={staff.profile_id}>
-                                        {profile?.display_name ?? "不明"}
-                                      </option>
-                                    );
-                                  })}
-                                </select>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  disabled={!assignmentDrafts[paKey]}
-                                  onClick={() =>
-                                    handleAddAssignment(slot.id, "pa", assignmentDrafts[paKey] ?? "")
-                                  }
-                                >
-                                  追加
-                                </Button>
-                              </div>
-                            </div>
-
-                            <div className="space-y-3">
-                              <p className="text-xs text-muted-foreground">照明担当</p>
-                              {assignment.light.length === 0 ? (
-                                <p className="text-xs text-muted-foreground">未割当</p>
-                              ) : (
-                                <div className="space-y-2">
-                                  {assignment.light.map((item) => {
-                                    const profile = profilesMap.get(item.profile_id);
-                                    return (
-                                      <div key={item.id} className="rounded-md border border-border p-2 space-y-2">
-                                        <div className="flex items-center justify-between gap-2">
-                                          <p className="text-sm">{profile?.display_name ?? "不明"}</p>
-                                          <div className="flex items-center gap-2 text-xs">
-                                            <label className="flex items-center gap-1">
-                                              <input
-                                                type="checkbox"
-                                                checked={item.is_fixed}
-                                                onChange={(e) => {
-                                                  const checked = e.target.checked;
-                                                  setStaffAssignments((prev) =>
-                                                    prev.map((assignmentItem) =>
-                                                      assignmentItem.id === item.id
-                                                        ? { ...assignmentItem, is_fixed: checked }
-                                                        : assignmentItem
-                                                    )
-                                                  );
-                                                  handleUpdateAssignment(item.id, { is_fixed: checked });
-                                                }}
-                                              />
-                                              固定
-                                            </label>
-                                            <button
-                                              type="button"
-                                              onClick={() => handleRemoveAssignment(item.id)}
-                                              className="text-muted-foreground hover:text-destructive"
-                                            >
-                                              削除
-                                            </button>
-                                          </div>
-                                        </div>
-                                        <Input
-                                          value={item.note ?? ""}
-                                          onChange={(e) => {
-                                            const value = e.target.value;
-                                            setStaffAssignments((prev) =>
-                                              prev.map((assignmentItem) =>
-                                                assignmentItem.id === item.id
-                                                  ? { ...assignmentItem, note: value }
-                                                  : assignmentItem
-                                              )
-                                            );
-                                          }}
-                                          onBlur={(e) => handleUpdateAssignment(item.id, { note: e.target.value })}
-                                          placeholder="メモ"
-                                        />
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                              <div className="flex flex-wrap items-center gap-2">
-                                <select
-                                  className="h-10 w-full md:w-auto flex-1 rounded-md border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-                                  value={assignmentDrafts[lightKey] ?? ""}
-                                  onChange={(e) =>
-                                    setAssignmentDrafts((prev) => ({ ...prev, [lightKey]: e.target.value }))
-                                  }
-                                >
-                                  <option value="">追加するスタッフ</option>
-                                  {lightOptions.map((staff) => {
-                                    const profile = profilesMap.get(staff.profile_id);
-                                    return (
-                                      <option key={staff.profile_id} value={staff.profile_id}>
-                                        {profile?.display_name ?? "不明"}
-                                      </option>
-                                    );
-                                  })}
-                                </select>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  disabled={!assignmentDrafts[lightKey]}
-                                  onClick={() =>
-                                    handleAddAssignment(slot.id, "light", assignmentDrafts[lightKey] ?? "")
-                                  }
-                                >
-                                  追加
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
                 </CardContent>
               </Card>
 
@@ -2289,11 +1674,6 @@ export default function AdminEventDetailPage() {
                                   {band.note_pa ? "PAメモあり" : "PAメモなし"}
                                 </span>
                               </div>
-                              {band.is_approved ? (
-                                <CheckCircle2 className="w-4 h-4 text-primary" />
-                              ) : (
-                                <BadgeCheck className="w-4 h-4 text-muted-foreground" />
-                              )}
                             </button>
                           ))}
                         </div>
@@ -2321,7 +1701,7 @@ export default function AdminEventDetailPage() {
                   <Card className="bg-card/60 border-border">
                     <CardHeader>
                       <CardTitle className="text-lg">バンド詳細</CardTitle>
-                      <CardDescription>承認状態・PA/照明メモ・ステージプロット</CardDescription>
+                      <CardDescription>PA/照明メモ・ステージプロット</CardDescription>
                     </CardHeader>
                     <CardContent>
                       {!selectedBand ? (
@@ -2335,24 +1715,6 @@ export default function AdminEventDetailPage() {
                                 value={bandForm.name}
                                 onChange={(e) => setBandForm((prev) => ({ ...prev, name: e.target.value }))}
                               />
-                            </label>
-                            <label className="space-y-2 block text-sm">
-                              <span className="text-foreground">承認状態</span>
-                              <div className="flex items-center gap-3">
-                                <button
-                                  type="button"
-                                  onClick={() => setBandForm((prev) => ({ ...prev, is_approved: !prev.is_approved }))}
-                                  className={cn(
-                                    "flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors",
-                                    bandForm.is_approved
-                                      ? "border-primary text-primary bg-primary/10"
-                                      : "border-border text-muted-foreground hover:border-primary/40"
-                                  )}
-                                >
-                                  {bandForm.is_approved ? <CheckCircle2 className="w-4 h-4" /> : <BadgeCheck className="w-4 h-4" />}
-                                  {bandForm.is_approved ? "承認済み" : "未承認"}
-                                </button>
-                              </div>
                             </label>
                           </div>
 
@@ -2398,7 +1760,6 @@ export default function AdminEventDetailPage() {
                               onClick={() => {
                                 setBandForm({
                                   name: selectedBand.name,
-                                  is_approved: Boolean(selectedBand.is_approved),
                                   note_pa: selectedBand.note_pa ?? "",
                                   note_lighting: selectedBand.note_lighting ?? "",
                                   stagePlotNote:

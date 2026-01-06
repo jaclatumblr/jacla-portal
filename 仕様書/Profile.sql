@@ -1,4 +1,4 @@
-﻿-- =========================================================
+-- =========================================================
 -- Jacla Portal: profiles ロール設計
 -- =========================================================
 -- 目的：
@@ -190,6 +190,7 @@ begin
       'Treasurer',
       'PA Chief',
       'Lighting Chief',
+      'Public Relations',
       'Web Secretary'
     );
   end if;
@@ -199,6 +200,7 @@ do $$
 begin
   if exists (select 1 from pg_type where typname = 'position_role') then
     execute 'alter type position_role add value if not exists ''Official''';
+    execute 'alter type position_role add value if not exists ''Public Relations''';
   end if;
 end $$;
 
@@ -617,7 +619,7 @@ execute function public.profiles_block_privilege_escalation();
 
 
 -- =========================================================
--- 7. （任意）退避ENUMがもう不要なら消す（依存が残ってたらスキップ）
+-- 7. 退避ENUMがもう不要なら消す（依存が残ってたらスキップ）
 -- =========================================================
 do $$
 begin

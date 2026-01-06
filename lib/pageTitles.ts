@@ -1,4 +1,4 @@
-﻿export const siteTitle = "Jacla Portal";
+export const siteTitle = "Jacla Portal";
 export const titleTemplate = "%s | Jacla Portal";
 
 const exactTitles: Record<string, string> = {
@@ -22,6 +22,7 @@ const exactTitles: Record<string, string> = {
   "/admin/roles": "ユーザー管理",
   "/admin/events": "イベント管理",
   "/admin/announcements": "お知らせ管理",
+  "/admin/forms": "フォーム管理",
   "/admin/feedback": "フィードバック",
   "/me": "マイページ",
   "/me/profile": "プロフィール",
@@ -62,6 +63,10 @@ export function getPageTitle(pathname: string): string | null {
     if (pathname.includes("/repertoire/view")) return "レパ表一覧";
     if (pathname.includes("/tt/view")) return "タイムテーブル";
     return "イベント詳細";
+  }
+
+  if (pathname.startsWith("/forms/")) {
+    return "フォーム入力";
   }
 
   return null;

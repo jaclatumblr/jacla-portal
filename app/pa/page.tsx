@@ -1,5 +1,5 @@
-﻿import Link from "next/link";
-import { NotebookPen, Package, SlidersHorizontal, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { NotebookPen, Package, SlidersHorizontal } from "lucide-react";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { PageHeader } from "@/components/PageHeader";
@@ -14,7 +14,7 @@ export default function PAPage() {
           <PageHeader
             kicker="PA"
             title="PAダッシュボード"
-            description="PA指示・Live Adviser・PA機材・PAコンソールをまとめました。必要なセクションを選んで確認してください。"
+            description="PA指示・PA機材・PAコンソールをまとめました。必要なセクションを選んで確認してください。"
             size="lg"
             tone="secondary"
             meta={
@@ -30,16 +30,6 @@ export default function PAPage() {
                   <p className="text-xs text-muted-foreground mt-2">
                     セトリ進行やキューの共通メモ
                   </p>
-                </Link>
-                <Link
-                  href="/pa/live-adviser"
-                  className="p-4 rounded-lg border border-border bg-card/60 hover:border-secondary/70 transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-secondary" />
-                    <span className="text-sm font-semibold">Live Adviser</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2">リアルタイムのアドバイス</p>
                 </Link>
                 <Link
                   href="/pa/equipment"

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -23,10 +23,11 @@ import {
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
-import { safeSignOut } from "@/lib/supabaseClient";
+import { safeSignOut, supabase } from "@/lib/supabaseClient";
 import { useRoleFlags } from "@/lib/useRoleFlags";
 import { useAuth } from "@/contexts/AuthContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { toast } from "@/lib/toast";
 
 const navItems = [
   { id: "home", href: "/", label: "ホーム", icon: Home },
@@ -63,6 +64,7 @@ export function SideNav() {
   const { setTheme } = useTheme();
   const { canAccessAdmin } = useRoleFlags();
   const { session } = useAuth();
+  const userId = session?.user.id;
 
   useEffect(() => {
     document.body.dataset.hasSidenav = "1";
@@ -70,6 +72,38 @@ export function SideNav() {
       delete document.body.dataset.hasSidenav;
     };
   }, []);
+
+  useEffect(() => {
+    if (!userId) return;
+    if (typeof window === "undefined") return;
+    const storageKey = `crewNoticeShown:${userId}`;
+    if (window.sessionStorage.getItem(storageKey)) return;
+    let cancelled = false;
+
+    (async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("crew")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (cancelled) return;
+      if (error) {
+        console.error(error);
+        return;
+      }
+
+      const crewValue = (data as { crew?: string | null } | null)?.crew ?? "User";
+      if (crewValue === "User") {
+        toast.info("jobが未設定です。PAか照明を選択してください。");
+        window.sessionStorage.setItem(storageKey, "1");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   const avatarUrl =
     session?.user.user_metadata?.avatar_url ||

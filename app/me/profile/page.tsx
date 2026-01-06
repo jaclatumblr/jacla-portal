@@ -57,6 +57,7 @@ const positionLabels: Record<string, string> = {
   Treasurer: "会計",
   "PA Chief": "PA長",
   "Lighting Chief": "照明長",
+  "Public Relations": "広報",
   "Web Secretary": "Web幹事",
 };
 
@@ -67,7 +68,8 @@ const positionPriority: Record<string, number> = {
   Treasurer: 3,
   "PA Chief": 4,
   "Lighting Chief": 4,
-  "Web Secretary": 5,
+  "Public Relations": 5,
+  "Web Secretary": 6,
 };
 
 export default function ProfilePage() {
@@ -454,7 +456,7 @@ export default function ProfilePage() {
                         <Users className="w-5 h-5 text-secondary" />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-xs text-muted-foreground">クルー</p>
+                        <p className="text-xs text-muted-foreground">job</p>
                         <p className="font-medium text-sm md:text-base truncate">{crewLabel}</p>
                       </div>
                     </div>

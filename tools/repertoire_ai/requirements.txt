@@ -1,0 +1,6 @@
+﻿# Repertoire AI tooling (local use)
+pandas
+scikit-learn
+numpy
+matplotlib
+joblib

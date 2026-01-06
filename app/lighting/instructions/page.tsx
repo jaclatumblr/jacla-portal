@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { PageHeader } from "@/components/PageHeader";
 import { useEffect, useMemo, useState } from "react";

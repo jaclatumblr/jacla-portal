@@ -7,26 +7,26 @@ type MetadataResponse = {
   duration_sec: number | null;
 };
 
-const providers = [
+const providerConfigs = [
   {
     name: "youtube",
     test: (host: string) => host.includes("youtube.com") || host === "youtu.be",
-    build: (url: string) =>
+    oembed: (url: string) =>
       `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(url)}`,
   },
   {
     name: "spotify",
     test: (host: string) => host.includes("open.spotify.com"),
-    build: (url: string) =>
+    oembed: (url: string) =>
       `https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`,
   },
   {
     name: "apple-music",
     test: (host: string) => host.includes("music.apple.com"),
-    build: (url: string) =>
+    oembed: (url: string) =>
       `https://music.apple.com/oembed?url=${encodeURIComponent(url)}`,
   },
-];
+] as const;
 
 const privateHostPatterns = [
   /^localhost$/i,
@@ -95,6 +95,90 @@ const parseDurationSeconds = (raw: string | null) => {
   return null;
 };
 
+const fetchHtml = async (url: string) => {
+  const res = await fetch(url, {
+    cache: "no-store",
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
+    },
+  });
+  if (!res.ok) {
+    throw new Error(`Fetch failed: ${res.status}`);
+  }
+  return res.text();
+};
+
+const extractHtmlMetadata = (html: string) => {
+  const title =
+    parseMeta(html, "og:title") ??
+    parseMeta(html, "twitter:title") ??
+    parseMeta(html, "title");
+  const artist =
+    parseMeta(html, "music:musician") ??
+    parseMeta(html, "artist") ??
+    parseMeta(html, "author") ??
+    parseMeta(html, "og:site_name");
+  const durationRaw =
+    parseMeta(html, "music:duration") ??
+    parseMeta(html, "video:duration") ??
+    parseMeta(html, "og:video:duration") ??
+    parseMeta(html, "og:duration") ??
+    parseMeta(html, "duration");
+  return {
+    title,
+    artist,
+    duration_sec: parseDurationSeconds(durationRaw),
+  };
+};
+
+const extractYouTubeDuration = (html: string) => {
+  const lengthMatch = html.match(/"lengthSeconds":"(\\d+)"/);
+  if (lengthMatch) return parseDurationSeconds(lengthMatch[1]);
+  const approxMatch = html.match(/"approxDurationMs":"(\\d+)"/);
+  if (approxMatch) {
+    const ms = Number.parseInt(approxMatch[1], 10);
+    return Number.isNaN(ms) ? null : Math.round(ms / 1000);
+  }
+  return null;
+};
+
+const extractSpotifyDuration = (html: string) => {
+  const match = html.match(/"duration_ms":(\\d+)/);
+  if (!match) return null;
+  const ms = Number.parseInt(match[1], 10);
+  return Number.isNaN(ms) ? null : Math.round(ms / 1000);
+};
+
+const extractAppleMusicDuration = (html: string) => {
+  const match =
+    html.match(/"durationInMillis":(\\d+)/) ??
+    html.match(/"durationInMs":(\\d+)/);
+  if (match) {
+    const ms = Number.parseInt(match[1], 10);
+    return Number.isNaN(ms) ? null : Math.round(ms / 1000);
+  }
+  return null;
+};
+
+const mergeMetadata = (
+  base: MetadataResponse | null,
+  htmlMeta: { title: string | null; artist: string | null; duration_sec: number | null },
+  durationOverride: number | null,
+  source: string
+): MetadataResponse => {
+  return {
+    title: base?.title ?? htmlMeta.title ?? null,
+    artist: base?.artist ?? htmlMeta.artist ?? null,
+    source,
+    duration_sec:
+      durationOverride ??
+      base?.duration_sec ??
+      htmlMeta.duration_sec ??
+      null,
+  };
+};
+
 const fetchOembed = async (url: string, source: string): Promise<MetadataResponse> => {
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) {
@@ -121,34 +205,13 @@ const fetchOembed = async (url: string, source: string): Promise<MetadataRespons
 };
 
 const fetchOpenGraph = async (url: string): Promise<MetadataResponse> => {
-  const res = await fetch(url, {
-    cache: "no-store",
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
-    },
-  });
-  if (!res.ok) {
-    throw new Error(`Fetch failed: ${res.status}`);
-  }
-  const html = await res.text();
-  const title =
-    parseMeta(html, "og:title") ??
-    parseMeta(html, "twitter:title") ??
-    parseMeta(html, "title");
-  const siteName =
-    parseMeta(html, "og:site_name") ?? parseMeta(html, "author");
-  const durationRaw =
-    parseMeta(html, "music:duration") ??
-    parseMeta(html, "video:duration") ??
-    parseMeta(html, "og:video:duration") ??
-    parseMeta(html, "og:duration") ??
-    parseMeta(html, "duration");
+  const html = await fetchHtml(url);
+  const meta = extractHtmlMetadata(html);
   return {
-    title,
-    artist: siteName,
+    title: meta.title,
+    artist: meta.artist,
     source: null,
-    duration_sec: parseDurationSeconds(durationRaw),
+    duration_sec: meta.duration_sec,
   };
 };
 
@@ -174,14 +237,32 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Blocked host" }, { status: 400 });
   }
 
-  const provider = providers.find((entry) => entry.test(parsed.hostname));
-  try {
-    if (provider) {
-      const data = await fetchOembed(provider.build(parsed.toString()), provider.name);
-      return NextResponse.json(data);
+  const provider = providerConfigs.find((entry) => entry.test(parsed.hostname));
+  if (provider) {
+    let oembedData: MetadataResponse | null = null;
+    try {
+      oembedData = await fetchOembed(provider.oembed(parsed.toString()), provider.name);
+    } catch {
+      oembedData = null;
     }
-  } catch {
-    // Fall through to Open Graph parsing.
+
+    try {
+      const html = await fetchHtml(parsed.toString());
+      const htmlMeta = extractHtmlMetadata(html);
+      const durationOverride =
+        provider.name === "youtube"
+          ? extractYouTubeDuration(html)
+          : provider.name === "spotify"
+          ? extractSpotifyDuration(html)
+          : provider.name === "apple-music"
+          ? extractAppleMusicDuration(html)
+          : null;
+      return NextResponse.json(
+        mergeMetadata(oembedData, htmlMeta, durationOverride, provider.name)
+      );
+    } catch {
+      if (oembedData) return NextResponse.json(oembedData);
+    }
   }
 
   try {

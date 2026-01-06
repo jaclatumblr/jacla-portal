@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# repertoire ai outputs
+/tools/repertoire_ai/models/
+/tools/repertoire_ai/outputs/

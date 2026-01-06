@@ -69,7 +69,7 @@ export function StagePlotPreview({
         <div
           key={item.id}
           className={cn(
-            "absolute -translate-x-1/2 -translate-y-1/2 border text-[10px] font-semibold shadow-sm bg-muted/60 text-muted-foreground pointer-events-none rounded-md px-2 py-1",
+            "absolute -translate-x-1/2 -translate-y-1/2 border text-[12px] font-semibold shadow-sm bg-muted/60 text-muted-foreground pointer-events-none rounded-md px-2 py-1",
             item.dashed ? "border-dashed" : "border-solid"
           )}
           style={{ left: `${item.x}%`, top: `${item.y}%` }}
@@ -82,7 +82,7 @@ export function StagePlotPreview({
         <div
           key={item.id}
           className={cn(
-            "absolute -translate-x-1/2 -translate-y-1/2 rounded-md border px-2 py-1 text-[10px] font-semibold bg-card/80 text-foreground",
+            "absolute -translate-x-1/2 -translate-y-1/2 rounded-md border px-2 py-1 text-[12px] font-semibold bg-card/80 text-foreground",
             item.dashed ? "border-dashed" : "border-solid"
           )}
           style={{
@@ -97,14 +97,14 @@ export function StagePlotPreview({
       {members.map((member) => (
         <div
           key={member.id}
-          className="absolute -translate-x-1/2 -translate-y-1/2 rounded-md border border-border bg-card px-2 py-1 text-[10px] font-semibold text-foreground shadow-sm"
+          className="absolute -translate-x-1/2 -translate-y-1/2 rounded-md border border-border bg-card px-2 py-1 text-[12px] font-semibold text-foreground shadow-sm"
           style={{
             left: `${clampPercent(member.x)}%`,
             top: `${clampPercent(member.y)}%`,
           }}
         >
           {member.instrument ?? "Part"}
-          <div className="text-[9px] text-muted-foreground">{member.name}</div>
+          <div className="text-[11px] text-muted-foreground">{member.name}</div>
         </div>
       ))}
     </div>

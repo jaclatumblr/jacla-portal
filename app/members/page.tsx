@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowUp, MessageCircle, Music, RefreshCw, Search } from "lucide-react";
+import { ArrowUp, Download, MessageCircle, Music, RefreshCw, Search } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,9 @@ import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsAdministrator } from "@/lib/useIsAdministrator";
 import { useCanViewStudentId } from "@/lib/useCanViewStudentId";
+import { useRoleFlags } from "@/lib/useRoleFlags";
 import { toast } from "@/lib/toast";
+import { downloadExcelFile } from "@/lib/exportExcel";
 
 type Member = {
   id: string;
@@ -80,6 +82,7 @@ const positionLabels: Record<string, string> = {
   Treasurer: "会計",
   "PA Chief": "PA長",
   "Lighting Chief": "照明長",
+  "Public Relations": "広報",
   "Web Secretary": "Web幹事",
 };
 
@@ -90,7 +93,8 @@ const positionPriority: Record<string, number> = {
   Treasurer: 3,
   "PA Chief": 4,
   "Lighting Chief": 4,
-  "Web Secretary": 5,
+  "Public Relations": 5,
+  "Web Secretary": 6,
 };
 
 const sortOptions = [
@@ -106,12 +110,15 @@ export default function MembersPage() {
   const { session, loading: authLoading } = useAuth();
   const { isAdministrator, loading: adminLoading } = useIsAdministrator();
   const { canViewStudentId, loading: studentAccessLoading } = useCanViewStudentId();
+  const { isAdministrator: isAdminRole, isSupervisor, isPaLeader, isLightingLeader, isPartLeader } =
+    useRoleFlags();
   const [members, setMembers] = useState<Member[]>([]);
   const [searchText, setSearchText] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("role");
   const [loading, setLoading] = useState(true);
   const [discordFallbackFor, setDiscordFallbackFor] = useState<string | null>(null);
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const canExport = isAdminRole || isSupervisor || isPaLeader || isLightingLeader || isPartLeader;
 
   const getDiscordAppUrl = (id: string) => {
     const encoded = encodeURIComponent(id);
@@ -119,6 +126,28 @@ export default function MembersPage() {
       return `intent://discord.com/users/${encoded}#Intent;scheme=https;package=com.discord;end`;
     }
     return `discord://discord.com/users/${encoded}`;
+  };
+
+  const handleExport = (scope: "all" | "pa" | "lighting") => {
+    if (!canExport) {
+      toast.error("エクスポートはleaderロール保持者のみ利用できます。");
+      return;
+    }
+    if (!canViewStudentId) {
+      toast.error("学籍番号の閲覧権限がありません。");
+      return;
+    }
+    const scopeLabel =
+      scope === "pa" ? "PA" : scope === "lighting" ? "照明" : "全体";
+    const filtered =
+      scope === "all"
+        ? members
+        : members.filter((member) => member.crew === (scope === "pa" ? "PA" : "Lighting"));
+    const rows = filtered.map((member) => [
+      member.realName ?? member.name ?? "",
+      member.studentId ?? "",
+    ]);
+    downloadExcelFile(`名簿_${scopeLabel}`, ["本名", "学籍番号"], rows);
   };
 
   useEffect(() => {
@@ -405,27 +434,71 @@ export default function MembersPage() {
             description="部員情報と担当パートを確認できます。"
             size="lg"
             meta={
-              <div className="flex flex-col sm:flex-row gap-3 md:gap-4 max-w-xl">
-                <div className="flex-1 relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    value={searchText}
-                    onChange={(event) => setSearchText(event.target.value)}
-                    placeholder="名前、役職、パート、バンドで検索..."
-                    className="pl-10 bg-card/50 border-border"
-                  />
+              <div className="space-y-3 max-w-2xl">
+                <div className="flex flex-col sm:flex-row gap-3 md:gap-4">
+                  <div className="flex-1 relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      value={searchText}
+                      onChange={(event) => setSearchText(event.target.value)}
+                      placeholder="名前、役職、パート、バンドで検索..."
+                      className="pl-10 bg-card/50 border-border"
+                    />
+                  </div>
+                  <select
+                    value={sortKey}
+                    onChange={(event) => setSortKey(event.target.value as SortKey)}
+                    className="h-10 w-full sm:w-auto rounded-md border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  >
+                    {sortOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-                <select
-                  value={sortKey}
-                  onChange={(event) => setSortKey(event.target.value as SortKey)}
-                  className="h-10 w-full sm:w-auto rounded-md border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-                >
-                  {sortOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => handleExport("all")}
+                    disabled={!canExport || !canViewStudentId}
+                  >
+                    <Download className="w-4 h-4" />
+                    全体名簿（Excel）
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => handleExport("pa")}
+                    disabled={!canExport || !canViewStudentId}
+                  >
+                    <Download className="w-4 h-4" />
+                    PA名簿（Excel）
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => handleExport("lighting")}
+                    disabled={!canExport || !canViewStudentId}
+                  >
+                    <Download className="w-4 h-4" />
+                    照明名簿（Excel）
+                  </Button>
+                </div>
+                {!canExport && (
+                  <p className="text-xs text-muted-foreground">
+                    エクスポートはleaderロール保持者のみ利用できます。
+                  </p>
+                )}
+                {canExport && !canViewStudentId && (
+                  <p className="text-xs text-muted-foreground">
+                    学籍番号の閲覧権限がないためエクスポートはできません。
+                  </p>
+                )}
               </div>
             }
           />

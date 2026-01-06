@@ -829,7 +829,7 @@ export default function OnboardingClient({
 
                       <div className="grid md:grid-cols-2 gap-4">
                         <label className="space-y-1 block text-sm">
-                          <span className="text-foreground">クルー</span>
+                          <span className="text-foreground">job</span>
                           <select
                             value={crew}
                             onChange={(e) => setCrew(e.target.value)}
@@ -844,7 +844,7 @@ export default function OnboardingClient({
                           </select>
                           {!canEditCrew && (
                             <p className="text-xs text-muted-foreground mt-1">
-                              クルーは管理者が設定します。
+                              jobは管理者が設定します。
                             </p>
                           )}
                         </label>

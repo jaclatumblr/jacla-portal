@@ -513,6 +513,7 @@ export default function RepertoireSubmitPage() {
   const [stagePan, setStagePan] = useState({ x: 0, y: 0 });
   const [panMode, setPanMode] = useState(false);
   const [snapEnabled, setSnapEnabled] = useState(true);
+  const collisionEnabled = false;
   const [isCoarsePointer, setIsCoarsePointer] = useState(false);
   const [isShiftPressed, setIsShiftPressed] = useState(false);
   const [stagePreset, setStagePreset] = useState(stagePresets[0]?.label ?? "");
@@ -895,7 +896,6 @@ export default function RepertoireSubmitPage() {
           name,
           created_by: userId,
           representative_name: currentUserName.trim() || null,
-          is_approved: false,
         },
       ])
       .select(
@@ -2008,6 +2008,9 @@ export default function RepertoireSubmitPage() {
       baseX = clampPercent(snapToGrid(baseX));
       baseY = clampPercent(snapToGrid(baseY));
     }
+    if (!collisionEnabled) {
+      return { x: baseX, y: baseY };
+    }
     const radius = getCollisionRadius(type, excludeId);
     const occupants = stageOccupants.filter(
       (entry) => !(entry.type === type && entry.id === excludeId)
@@ -3026,7 +3029,7 @@ export default function RepertoireSubmitPage() {
                     </CardContent>
                   </Card>
 
-﻿
+
                   <Tabs defaultValue="common" className="space-y-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <TabsList className="w-full sm:w-auto">
@@ -3381,7 +3384,7 @@ export default function RepertoireSubmitPage() {
                                             <div
                                               key={item.id}
                                               className={cn(
-                                                "absolute -translate-x-1/2 -translate-y-1/2 border text-[11px] font-semibold shadow-sm bg-muted/60 text-muted-foreground pointer-events-none",
+                                                "absolute -translate-x-1/2 -translate-y-1/2 border text-[13px] font-semibold shadow-sm bg-muted/60 text-muted-foreground pointer-events-none",
                                                 item.id === "fixed-drums"
                                                   ? "h-40 w-44 rounded-2xl flex items-center justify-center"
                                                   : "rounded-md px-2 py-1",
@@ -3409,7 +3412,7 @@ export default function RepertoireSubmitPage() {
                                                 handleStageItemDoubleClick(item.id)
                                               }
                                               className={cn(
-                                                "absolute -translate-x-1/2 -translate-y-1/2 rounded-md border px-2 py-1 text-[11px] font-semibold shadow-sm touch-none bg-card/90",
+                                                "absolute -translate-x-1/2 -translate-y-1/2 rounded-md border px-2 py-1 text-[13px] font-semibold shadow-sm touch-none bg-card/90",
                                                 item.dashed
                                                   ? "border-dashed"
                                                   : "border-solid",
@@ -3456,10 +3459,10 @@ export default function RepertoireSubmitPage() {
                                                 top: `${member.y}%`,
                                               }}
                                             >
-                                      <span className="block text-[11px] font-semibold leading-tight">
+                                      <span className="block text-[13px] font-semibold leading-tight">
                                         {member.instrument || member.part || "Part"}
                                       </span>
-                                      <span className="block text-[11px] text-muted-foreground leading-tight">
+                                      <span className="block text-[12px] text-muted-foreground leading-tight">
                                         {member.name}
                                       </span>
                                             </button>

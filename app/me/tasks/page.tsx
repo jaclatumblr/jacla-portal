@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { ArrowLeft, Calendar, Clock } from "lucide-react";
+import { Calendar, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SideNav } from "@/components/SideNav";
@@ -24,15 +23,47 @@ type AssignmentEventSlot = {
   events: { name: string; date: string } | { name: string; date: string }[] | null;
 };
 
+type AssignmentRole =
+  | "pa_main"
+  | "pa_sub"
+  | "pa_extra"
+  | "light_op1"
+  | "light_op2"
+  | "light_spot"
+  | "light_assist"
+  | "pa"
+  | "light";
+
 type AssignmentRow = {
   id: string;
-  role: "pa" | "light";
+  role: AssignmentRole;
   is_fixed: boolean;
   note: string | null;
   event_slots: AssignmentEventSlot | AssignmentEventSlot[] | null;
 };
 
-const roleLabel = (role: AssignmentRow["role"]) => (role === "pa" ? "PA" : "照明");
+const roleLabel = (role: AssignmentRole) => {
+  switch (role) {
+    case "pa_main":
+      return "PA1";
+    case "pa_sub":
+      return "PA2";
+    case "pa_extra":
+      return "PA3";
+    case "light_op1":
+      return "卓操作①";
+    case "light_op2":
+      return "卓操作②";
+    case "light_spot":
+      return "スポット";
+    case "light_assist":
+      return "補助";
+    case "light":
+      return "照明";
+    default:
+      return "PA";
+  }
+};
 
 const resolveSlot = (slot: AssignmentRow["event_slots"]) =>
   Array.isArray(slot) ? slot[0] ?? null : slot;
@@ -53,7 +84,7 @@ const resolveEventMeta = (slot: AssignmentEventSlot | null) => {
 
 const slotLabel = (slotInput: AssignmentRow["event_slots"]) => {
   const slot = resolveSlot(slotInput);
-  if (!slot) return "不明なスロット";
+  if (!slot) return "スロット未設定";
   if (slot.slot_type === "band") return resolveBandName(slot) ?? "バンド未設定";
   if (slot.slot_type === "break") return "休憩";
   if (slot.slot_type === "mc") return "MC";
@@ -122,7 +153,7 @@ export default function MyTasksPage() {
       if (!slot?.event_id) return;
       const eventId = slot.event_id;
       const eventMeta = resolveEventMeta(slot);
-      const eventName = eventMeta?.name ?? "イベント名未設定";
+      const eventName = eventMeta?.name ?? "イベント未設定";
       const eventDate = eventMeta?.date ?? null;
       const entry = map.get(eventId) ?? { eventId, eventName, eventDate, items: [] };
       entry.items.push(assignment);
@@ -145,7 +176,7 @@ export default function MyTasksPage() {
         <main className="flex-1 md:ml-20">
           <PageHeader
             kicker="My Shifts"
-            title="担当シフト"
+            title="シフト一覧"
             description="参加イベントごとの担当シフトを一覧で確認できます。"
             backHref="/me/profile"
             backLabel="マイページ"
@@ -162,7 +193,7 @@ export default function MyTasksPage() {
                 ) : groupedAssignments.length === 0 ? (
                   <Card className="bg-card/60 border-border">
                     <CardContent className="py-10 text-center text-sm text-muted-foreground">
-                      現在の担当シフトはありません。
+                      現在のシフトはありません。
                     </CardContent>
                   </Card>
                 ) : (
@@ -184,7 +215,7 @@ export default function MyTasksPage() {
                             {group.eventName}
                           </CardTitle>
                           <CardDescription>
-                            {group.eventDate ? `${group.eventDate} 開催` : "開催日未設定"}
+                            {group.eventDate ? `${group.eventDate} 開催` : "日程未設定"}
                           </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-3">
@@ -198,25 +229,18 @@ export default function MyTasksPage() {
                                 <div className="space-y-1 min-w-0">
                                   <div className="flex flex-wrap items-center gap-2">
                                     <Badge variant="outline">{roleLabel(assignment.role)}</Badge>
-                                    {assignment.is_fixed && (
-                                      <Badge variant="secondary">固定</Badge>
-                                    )}
-                                    <p className="text-sm font-medium truncate">
-                                      {slotLabel(slot)}
-                                    </p>
+                                    {assignment.is_fixed && <Badge variant="secondary">確定</Badge>}
+                                    <p className="text-sm font-medium truncate">{slotLabel(slot)}</p>
                                   </div>
                                   <p className="text-xs text-muted-foreground">
-                                    {slot?.slot_type?.toUpperCase() ?? "-"} / {timeLabel(slot?.start_time ?? null, slot?.end_time ?? null)}
+                                    {slot?.slot_type?.toUpperCase() ?? "-"} /{" "}
+                                    {timeLabel(slot?.start_time ?? null, slot?.end_time ?? null)}
                                   </p>
                                   {slot?.note && (
-                                    <p className="text-xs text-muted-foreground">
-                                      {slot.note}
-                                    </p>
+                                    <p className="text-xs text-muted-foreground">{slot.note}</p>
                                   )}
                                   {assignment.note && (
-                                    <p className="text-xs text-muted-foreground">
-                                      {assignment.note}
-                                    </p>
+                                    <p className="text-xs text-muted-foreground">{assignment.note}</p>
                                   )}
                                 </div>
                               </div>

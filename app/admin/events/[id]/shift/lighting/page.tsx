@@ -709,8 +709,8 @@ export default function AdminEventShiftLightingPage() {
             backLabel="イベント編集"
           />
 
-          <section className="flex-1 overflow-hidden py-6 md:py-8">
-            <div className="container mx-auto px-4 sm:px-6 h-full flex flex-col gap-6 md:gap-8">
+          <section className="flex-1 py-6 md:py-8 md:overflow-hidden">
+            <div className="container mx-auto px-4 sm:px-6 flex flex-col gap-6 md:gap-8 md:h-full">
               <Card className="bg-card/60 border-border shrink-0">
                 <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                   <div>
@@ -780,12 +780,12 @@ export default function AdminEventShiftLightingPage() {
                     LL / Admin
                   </Badge>
                 </CardHeader>
-                <CardContent className="space-y-4 max-h-[36vh] overflow-auto">
+                <CardContent className="space-y-4 md:max-h-[36vh] md:overflow-auto">
                   <form onSubmit={handleAddStaff} className="flex flex-wrap items-end gap-2">
                     <label className="text-xs text-muted-foreground">
                       お手伝いメンバー
                       <select
-                        className="mt-1 h-9 min-w-[220px] rounded-md border border-input bg-card px-2 text-xs text-foreground"
+                        className="mt-1 h-9 w-full sm:min-w-[220px] rounded-md border border-input bg-card px-2 text-xs text-foreground"
                         value={staffForm.profileId}
                         onChange={(event) => setStaffForm({ profileId: event.target.value })}
                         disabled={!canEdit}
@@ -860,7 +860,7 @@ export default function AdminEventShiftLightingPage() {
                     {event?.date ?? "日程未登録"}
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-4 flex-1 min-h-0 overflow-auto">
+                <CardContent className="space-y-4 md:flex-1 md:min-h-0 md:overflow-auto">
                   {orderedSlots.length === 0 ? (
                     <p className="text-sm text-muted-foreground">スロットがまだありません。</p>
                   ) : (

@@ -24,7 +24,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"
-          enableSystem
+          enableSystem={false}
+          forcedTheme="dark"
           disableTransitionOnChange
         >
           <AuthProvider>

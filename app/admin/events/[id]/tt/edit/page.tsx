@@ -1016,8 +1016,8 @@ export default function AdminEventTimetableEditPage() {
             }
           />
 
-          <section className="flex-1 overflow-hidden pb-6 md:pb-8">
-            <div className="container mx-auto px-4 sm:px-6 h-full flex flex-col gap-6">
+          <section className="flex-1 pb-6 md:pb-8 md:overflow-hidden">
+            <div className="container mx-auto px-4 sm:px-6 flex flex-col gap-6 md:h-full">
               <Card className="bg-card/60 border-border shrink-0">
                 <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                   <div>
@@ -1124,7 +1124,7 @@ export default function AdminEventTimetableEditPage() {
                     </Button>
                   </div>
                 </CardHeader>
-                <CardContent className="flex-1 min-h-0 overflow-auto">
+                <CardContent className="flex-1 min-h-0 md:overflow-auto">
                   {orderedSlots.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
                       スロットがまだありません。テンプレート作成か追加ボタンで枠を用意してください。

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -338,6 +338,389 @@ const GRID_STEP = 2.5;
 const MIN_STAGE_ZOOM = 0.7;
 const MAX_STAGE_ZOOM = 2.4;
 
+type SongValueGetter = <K extends keyof SongEntry>(
+  entry: SongEntry,
+  key: K
+) => SongEntry[K];
+type SongFieldUpdater = <K extends keyof SongEntry>(
+  id: string,
+  key: K,
+  value: SongEntry[K]
+) => void;
+
+type SongCardProps = {
+  entry: SongEntry;
+  index: number;
+  totalCount: number;
+  getValue: SongValueGetter;
+  onUpdateField: SongFieldUpdater;
+  onMove: (fromIndex: number, toIndex: number) => void;
+  onRemove: (id: string) => void;
+  onScheduleMetadata: (id: string, url: string, entryType: EntryType) => void;
+  fetchingMeta: Record<string, boolean>;
+  dragAttributes?: DragHandleProps;
+  dragListeners?: DragHandleProps;
+  setActivatorRef?: (node: HTMLElement | null) => void;
+  setNodeRef?: (node: HTMLElement | null) => void;
+  style?: CSSProperties;
+  isDragging?: boolean;
+  isOverlay?: boolean;
+};
+
+const SongCard = ({
+  entry,
+  index,
+  totalCount,
+  getValue,
+  onUpdateField,
+  onMove,
+  onRemove,
+  onScheduleMetadata,
+  fetchingMeta,
+  dragAttributes,
+  dragListeners,
+  setActivatorRef,
+  setNodeRef,
+  style,
+  isDragging,
+  isOverlay,
+}: SongCardProps) => {
+  const isSong = entry.entry_type === "song";
+  const readOnly = isOverlay === true;
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "rounded-lg border border-border bg-card/70 px-4 py-3 space-y-3",
+        isDragging ? "opacity-60" : "",
+        isOverlay ? "shadow-xl pointer-events-none" : ""
+      )}
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            className="rounded-md border border-border p-1 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing"
+            aria-label="並び替え"
+            disabled={readOnly}
+            ref={setActivatorRef}
+            {...dragAttributes}
+            {...dragListeners}
+          >
+            <GripVertical className="h-4 w-4" />
+          </button>
+          <span className="text-xs text-muted-foreground w-8">
+            {String(index + 1).padStart(2, "0")}
+          </span>
+          <Badge variant="outline">{entryTypeLabels[entry.entry_type]}</Badge>
+        </div>
+        <div className="flex-1 min-w-0">
+          <Input
+            value={getValue(entry, "title")}
+            onChange={(event) => onUpdateField(entry.id, "title", event.target.value)}
+            onPointerDown={(event) => event.stopPropagation()}
+            placeholder={entry.entry_type === "mc" ? "MCタイトル" : "曲名"}
+            className="w-full"
+            disabled={readOnly}
+          />
+        </div>
+        <div className="flex items-center gap-1 sm:ml-auto">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => onMove(index, Math.max(0, index - 1))}
+            disabled={readOnly || index === 0}
+          >
+            <ArrowUp className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => onMove(index, Math.min(totalCount - 1, index + 1))}
+            disabled={readOnly || index === totalCount - 1}
+          >
+            <ArrowDown className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => onRemove(entry.id)}
+            disabled={readOnly}
+          >
+            <Trash2 className="h-4 w-4 text-destructive" />
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <label className="space-y-1 text-sm">
+          <span className="text-muted-foreground">アーティスト</span>
+          <Input
+            value={getValue(entry, "artist")}
+            onChange={(event) => onUpdateField(entry.id, "artist", event.target.value)}
+            onPointerDown={(event) => event.stopPropagation()}
+            disabled={!isSong || readOnly}
+            placeholder={isSong ? "アーティスト" : "-"}
+          />
+        </label>
+        <label className="space-y-1 text-sm">
+          <span className="text-muted-foreground">URL</span>
+          <div className="relative">
+            <Input
+              value={getValue(entry, "url")}
+              onChange={(event) => {
+                const nextValue = event.target.value;
+                onUpdateField(entry.id, "url", nextValue);
+                if (!readOnly) {
+                  onScheduleMetadata(entry.id, nextValue, entry.entry_type);
+                }
+              }}
+              onPointerDown={(event) => event.stopPropagation()}
+              disabled={!isSong || readOnly}
+              placeholder={isSong ? "URLを貼ると自動で曲名やアーティストが入力されます" : "-"}
+            />
+            {fetchingMeta[entry.id] && (
+              <Loader2 className="absolute right-2 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />
+            )}
+          </div>
+        </label>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-[160px,1fr]">
+        <label className="space-y-1 text-sm">
+          <span className="text-muted-foreground">時間(分:秒)</span>
+          <div className="flex items-center gap-2">
+            <Input
+              type="number"
+              min={0}
+              value={getValue(entry, "durationMin")}
+              onChange={(event) =>
+                onUpdateField(entry.id, "durationMin", event.target.value)
+              }
+              onPointerDown={(event) => event.stopPropagation()}
+              className="w-20"
+              disabled={readOnly}
+            />
+            <span className="text-muted-foreground">:</span>
+            <Input
+              type="number"
+              min={0}
+              max={59}
+              value={getValue(entry, "durationSec")}
+              onChange={(event) =>
+                onUpdateField(entry.id, "durationSec", event.target.value)
+              }
+              onPointerDown={(event) => event.stopPropagation()}
+              className="w-20"
+              disabled={readOnly}
+            />
+          </div>
+        </label>
+        <label className="space-y-1 text-sm">
+          <span className="text-muted-foreground">メモ</span>
+          <Textarea
+            rows={2}
+            value={getValue(entry, "memo")}
+            onChange={(event) => onUpdateField(entry.id, "memo", event.target.value)}
+            onPointerDown={(event) => event.stopPropagation()}
+            disabled={readOnly}
+          />
+        </label>
+      </div>
+    </div>
+  );
+};
+
+type LightingEntryCardProps = {
+  entry: SongEntry;
+  index: number;
+  getValue: SongValueGetter;
+  onUpdateField: SongFieldUpdater;
+  onScheduleMetadata: (id: string, url: string, entryType: EntryType) => void;
+  fetchingMeta: Record<string, boolean>;
+};
+
+const LightingEntryCard = ({
+  entry,
+  index,
+  getValue,
+  onUpdateField,
+  onScheduleMetadata,
+  fetchingMeta,
+}: LightingEntryCardProps) => {
+  const isSong = entry.entry_type === "song";
+  return (
+    <div className="rounded-lg border border-border bg-card/60 px-4 py-3 space-y-3">
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span>{String(index + 1).padStart(2, "0")}</span>
+        <Badge variant="outline">{entryTypeLabels[entry.entry_type]}</Badge>
+      </div>
+      <div className="space-y-2">
+        <Input
+          value={getValue(entry, "title")}
+          onChange={(event) => onUpdateField(entry.id, "title", event.target.value)}
+          placeholder={isSong ? "曲名" : "MC"}
+          className="h-8 text-xs"
+        />
+        <Input
+          value={getValue(entry, "artist")}
+          onChange={(event) => onUpdateField(entry.id, "artist", event.target.value)}
+          placeholder="アーティスト"
+          className="h-8 text-xs"
+          disabled={!isSong}
+        />
+        <div className="relative">
+          <Input
+            value={getValue(entry, "url")}
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              onUpdateField(entry.id, "url", nextValue);
+              if (isSong) {
+                onScheduleMetadata(entry.id, nextValue, entry.entry_type);
+              }
+            }}
+            placeholder="URL"
+            className="h-8 text-xs"
+            disabled={!isSong}
+          />
+          {fetchingMeta[entry.id] && (
+            <Loader2 className="absolute right-2 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <Input
+            type="number"
+            min={0}
+            value={getValue(entry, "durationMin")}
+            onChange={(event) => onUpdateField(entry.id, "durationMin", event.target.value)}
+            className="h-8 w-16 text-xs"
+          />
+          <span className="text-xs text-muted-foreground">:</span>
+          <Input
+            type="number"
+            min={0}
+            max={59}
+            value={getValue(entry, "durationSec")}
+            onChange={(event) => onUpdateField(entry.id, "durationSec", event.target.value)}
+            className="h-8 w-16 text-xs"
+          />
+        </div>
+        <Textarea
+          rows={2}
+          value={getValue(entry, "arrangementNote")}
+          onChange={(event) =>
+            onUpdateField(entry.id, "arrangementNote", event.target.value)
+          }
+          placeholder="アレンジ/ソロ等"
+          className="text-xs"
+          disabled={!isSong}
+        />
+        <div className="grid gap-2 sm:grid-cols-3 text-xs">
+          {[
+            { key: "lightingSpot", label: "スポット" },
+            { key: "lightingStrobe", label: "ストロボ" },
+            { key: "lightingMoving", label: "ムービング" },
+          ].map((item) => (
+            <label key={item.key} className="space-y-1">
+              <span className="text-muted-foreground">{item.label}</span>
+              <select
+                value={getValue(entry, item.key as keyof SongEntry) as string}
+                onChange={(event) =>
+                  onUpdateField(
+                    entry.id,
+                    item.key as keyof SongEntry,
+                    event.target.value as LightingChoice
+                  )
+                }
+                className="h-8 w-full rounded-md border border-input bg-card px-2 text-xs"
+                disabled={!isSong}
+              >
+                {lightingChoiceOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))}
+        </div>
+        <Textarea
+          rows={2}
+          value={getValue(entry, "lightingColor")}
+          onChange={(event) =>
+            onUpdateField(entry.id, "lightingColor", event.target.value)
+          }
+          placeholder="色の要望"
+          className="text-xs"
+          disabled={!isSong}
+        />
+      </div>
+    </div>
+  );
+};
+
+type SortableSongCardProps = {
+  entry: SongEntry;
+  index: number;
+  totalCount: number;
+  getValue: SongValueGetter;
+  onUpdateField: SongFieldUpdater;
+  onMove: (fromIndex: number, toIndex: number) => void;
+  onRemove: (id: string) => void;
+  onScheduleMetadata: (id: string, url: string, entryType: EntryType) => void;
+  fetchingMeta: Record<string, boolean>;
+};
+
+const SortableSongCard = ({
+  entry,
+  index,
+  totalCount,
+  getValue,
+  onUpdateField,
+  onMove,
+  onRemove,
+  onScheduleMetadata,
+  fetchingMeta,
+}: SortableSongCardProps) => {
+  const sortableId = String(entry.id);
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: sortableId });
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+  return (
+    <SongCard
+      entry={entry}
+      index={index}
+      totalCount={totalCount}
+      getValue={getValue}
+      onUpdateField={onUpdateField}
+      onMove={onMove}
+      onRemove={onRemove}
+      onScheduleMetadata={onScheduleMetadata}
+      fetchingMeta={fetchingMeta}
+      dragAttributes={attributes}
+      dragListeners={listeners}
+      setActivatorRef={setActivatorNodeRef}
+      setNodeRef={setNodeRef}
+      style={style}
+      isDragging={isDragging}
+    />
+  );
+};
+
 const snapToGrid = (value: number) => Math.round(value / GRID_STEP) * GRID_STEP;
 
 const getCollisionRadius = (type: "member" | "item" | "fixed", id?: string) => {
@@ -441,6 +824,9 @@ export default function RepertoireSubmitPage() {
   const [songCounts, setSongCounts] = useState<Record<string, number>>({});
   const [selectedBandId, setSelectedBandId] = useState<string | null>(null);
   const [songs, setSongs] = useState<SongEntry[]>([]);
+  const [songDrafts, setSongDrafts] = useState<Record<string, Partial<SongEntry>>>(
+    {}
+  );
   const [repertoireStatus, setRepertoireStatus] =
     useState<RepertoireStatus>("draft");
   const [removedIds, setRemovedIds] = useState<string[]>([]);
@@ -736,14 +1122,26 @@ export default function RepertoireSubmitPage() {
     return occupants;
   }, [bandMembers, fixedStageItems, stageItems]);
 
-  const orderedSongs = useMemo(() => orderEntries(songs), [songs]);
+  const orderedSongs = useMemo(() => songs, [songs]);
+  const getSongFieldValue = useCallback(
+    <K extends keyof SongEntry>(entry: SongEntry, key: K): SongEntry[K] => {
+      const draft = songDrafts[String(entry.id)];
+      if (draft && Object.prototype.hasOwnProperty.call(draft, key)) {
+        return draft[key] as SongEntry[K];
+      }
+      return entry[key];
+    },
+    [songDrafts]
+  );
   const totalDurationSec = useMemo(
     () =>
       orderedSongs.reduce((sum, entry) => {
-        const sec = toDurationSec(entry.durationMin, entry.durationSec);
+        const durationMin = getSongFieldValue(entry, "durationMin");
+        const durationSec = getSongFieldValue(entry, "durationSec");
+        const sec = toDurationSec(durationMin, durationSec);
         return sum + (sec ?? 0);
       }, 0),
-    [orderedSongs]
+    [getSongFieldValue, orderedSongs]
   );
 
   const sensors = useSensors(
@@ -778,9 +1176,11 @@ export default function RepertoireSubmitPage() {
     if (error) {
       console.error(error);
       setSongs([]);
+      setSongDrafts({});
       toast.error("レパートリーの取得に失敗しました。");
     } else {
       setSongs(normalizeSongs((data ?? []) as SongRow[]));
+      setSongDrafts({});
     }
     setRemovedIds([]);
     setSongsLoading(false);
@@ -1481,6 +1881,10 @@ export default function RepertoireSubmitPage() {
     value: SongEntry[K]
   ) => {
     const normalizedId = String(id);
+    setSongDrafts((prev) => ({
+      ...prev,
+      [normalizedId]: { ...(prev[normalizedId] ?? {}), [key]: value },
+    }));
     setSongs((prev) =>
       prev.map((entry) =>
         String(entry.id) === normalizedId ? { ...entry, [key]: value } : entry
@@ -1582,6 +1986,12 @@ export default function RepertoireSubmitPage() {
   const removeEntry = (id: string) => {
     const normalizedId = String(id);
     setSongs((prev) => prev.filter((entry) => String(entry.id) !== normalizedId));
+    setSongDrafts((prev) => {
+      if (!prev[normalizedId]) return prev;
+      const next = { ...prev };
+      delete next[normalizedId];
+      return next;
+    });
     if (!isTemp(normalizedId)) {
       setRemovedIds((prev) => [...prev, normalizedId]);
     }
@@ -1589,8 +1999,7 @@ export default function RepertoireSubmitPage() {
 
   const moveEntry = (fromIndex: number, toIndex: number) => {
     setSongs((prev) => {
-      const ordered = orderEntries(prev);
-      const next = arrayMove(ordered, fromIndex, toIndex);
+      const next = arrayMove(prev, fromIndex, toIndex);
       return next.map((entry, index) => ({ ...entry, order_index: index + 1 }));
     });
   };
@@ -1615,11 +2024,10 @@ export default function RepertoireSubmitPage() {
     const overIdStr = String(over.id);
     if (activeIdStr === overIdStr) return;
     setSongs((prev) => {
-      const ordered = orderEntries(prev);
-      const oldIndex = ordered.findIndex((entry) => String(entry.id) === activeIdStr);
-      const newIndex = ordered.findIndex((entry) => String(entry.id) === overIdStr);
+      const oldIndex = prev.findIndex((entry) => String(entry.id) === activeIdStr);
+      const newIndex = prev.findIndex((entry) => String(entry.id) === overIdStr);
       if (oldIndex < 0 || newIndex < 0) return prev;
-      const next = arrayMove(ordered, oldIndex, newIndex);
+      const next = arrayMove(prev, oldIndex, newIndex);
       return next.map((entry, index) => ({ ...entry, order_index: index + 1 }));
     });
   };
@@ -2450,27 +2858,52 @@ export default function RepertoireSubmitPage() {
   const saveSongs = async (showToast: boolean) => {
     if (!selectedBandId || saving) return false;
     setSaving(true);
-    const payloads = orderedSongs.map((entry, index) => ({
-      id: entry.id,
-      band_id: selectedBandId,
-      title: entry.title.trim() || (entry.entry_type === "mc" ? "MC" : ""),
-      artist: entry.entry_type === "mc" ? null : entry.artist.trim() || null,
-      entry_type: entry.entry_type,
-      url: entry.entry_type === "mc" ? null : entry.url.trim() || null,
-      order_index: index + 1,
-      duration_sec: toDurationSec(entry.durationMin, entry.durationSec),
-      arrangement_note:
-        entry.entry_type === "mc" ? null : entry.arrangementNote.trim() || null,
-      lighting_spot:
-        entry.entry_type === "mc" ? null : entry.lightingSpot || null,
-      lighting_strobe:
-        entry.entry_type === "mc" ? null : entry.lightingStrobe || null,
-      lighting_moving:
-        entry.entry_type === "mc" ? null : entry.lightingMoving || null,
-      lighting_color:
-        entry.entry_type === "mc" ? null : entry.lightingColor.trim() || null,
-      memo: entry.memo.trim() || null,
-    }));
+    const payloads = orderedSongs.map((entry, index) => {
+      const draft = songDrafts[String(entry.id)];
+      const resolvedEntry = draft ? { ...entry, ...draft } : entry;
+      return {
+        id: resolvedEntry.id,
+        band_id: selectedBandId,
+        title:
+          resolvedEntry.title.trim() ||
+          (resolvedEntry.entry_type === "mc" ? "MC" : ""),
+        artist:
+          resolvedEntry.entry_type === "mc"
+            ? null
+            : resolvedEntry.artist.trim() || null,
+        entry_type: resolvedEntry.entry_type,
+        url:
+          resolvedEntry.entry_type === "mc"
+            ? null
+            : resolvedEntry.url.trim() || null,
+        order_index: index + 1,
+        duration_sec: toDurationSec(
+          resolvedEntry.durationMin,
+          resolvedEntry.durationSec
+        ),
+        arrangement_note:
+          resolvedEntry.entry_type === "mc"
+            ? null
+            : resolvedEntry.arrangementNote.trim() || null,
+        lighting_spot:
+          resolvedEntry.entry_type === "mc"
+            ? null
+            : resolvedEntry.lightingSpot || null,
+        lighting_strobe:
+          resolvedEntry.entry_type === "mc"
+            ? null
+            : resolvedEntry.lightingStrobe || null,
+        lighting_moving:
+          resolvedEntry.entry_type === "mc"
+            ? null
+            : resolvedEntry.lightingMoving || null,
+        lighting_color:
+          resolvedEntry.entry_type === "mc"
+            ? null
+            : resolvedEntry.lightingColor.trim() || null,
+        memo: resolvedEntry.memo.trim() || null,
+      };
+    });
 
     const updates = payloads.filter((entry) => !isTemp(entry.id));
     const inserts = payloads.filter((entry) => isTemp(entry.id)).map(({ id, ...rest }) => rest);
@@ -2566,322 +2999,6 @@ export default function RepertoireSubmitPage() {
       toast.error("保存に失敗しました。");
     }
     setSavingAll(false);
-  };
-
-  const SongCard = ({
-    entry,
-    index,
-    dragAttributes,
-    dragListeners,
-    setActivatorRef,
-    setNodeRef,
-    style,
-    isDragging,
-    isOverlay,
-  }: {
-    entry: SongEntry;
-    index: number;
-    dragAttributes?: DragHandleProps;
-    dragListeners?: DragHandleProps;
-    setActivatorRef?: (node: HTMLElement | null) => void;
-    setNodeRef?: (node: HTMLElement | null) => void;
-    style?: CSSProperties;
-    isDragging?: boolean;
-    isOverlay?: boolean;
-  }) => {
-    const isSong = entry.entry_type === "song";
-    const readOnly = isOverlay === true;
-    return (
-      <div
-        ref={setNodeRef}
-        style={style}
-        className={cn(
-          "rounded-lg border border-border bg-card/70 px-4 py-3 space-y-3",
-          isDragging ? "opacity-60" : "",
-          isOverlay ? "shadow-xl pointer-events-none" : ""
-        )}
-      >
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              className="rounded-md border border-border p-1 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing"
-              aria-label="並び替え"
-              disabled={readOnly}
-              ref={setActivatorRef}
-              {...dragAttributes}
-              {...dragListeners}
-            >
-              <GripVertical className="h-4 w-4" />
-            </button>
-            <span className="text-xs text-muted-foreground w-8">
-              {String(index + 1).padStart(2, "0")}
-            </span>
-            <Badge variant="outline">{entryTypeLabels[entry.entry_type]}</Badge>
-          </div>
-          <div className="flex-1 min-w-0">
-            <Input
-              value={entry.title}
-              onChange={(event) =>
-                updateSongField(entry.id, "title", event.target.value)
-              }
-              onPointerDown={(event) => event.stopPropagation()}
-              placeholder={entry.entry_type === "mc" ? "MCタイトル" : "曲名"}
-              className="w-full"
-              disabled={readOnly}
-            />
-          </div>
-          <div className="flex items-center gap-1 sm:ml-auto">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => moveEntry(index, Math.max(0, index - 1))}
-              disabled={readOnly || index === 0}
-            >
-              <ArrowUp className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() =>
-                moveEntry(index, Math.min(orderedSongs.length - 1, index + 1))
-              }
-              disabled={readOnly || index === orderedSongs.length - 1}
-            >
-              <ArrowDown className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => removeEntry(entry.id)}
-              disabled={readOnly}
-            >
-              <Trash2 className="h-4 w-4 text-destructive" />
-            </Button>
-          </div>
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-2">
-          <label className="space-y-1 text-sm">
-            <span className="text-muted-foreground">アーティスト</span>
-            <Input
-              value={entry.artist}
-              onChange={(event) =>
-                updateSongField(entry.id, "artist", event.target.value)
-              }
-              onPointerDown={(event) => event.stopPropagation()}
-              disabled={!isSong || readOnly}
-              placeholder={isSong ? "アーティスト" : "-"}
-            />
-          </label>
-          <label className="space-y-1 text-sm">
-            <span className="text-muted-foreground">URL</span>
-            <div className="relative">
-              <Input
-                value={entry.url}
-                onChange={(event) => {
-                  const nextValue = event.target.value;
-                  updateSongField(entry.id, "url", nextValue);
-                  if (!readOnly) {
-                    scheduleMetadataFetch(entry.id, nextValue, entry.entry_type);
-                  }
-                }}
-                onPointerDown={(event) => event.stopPropagation()}
-                disabled={!isSong || readOnly}
-                placeholder={isSong ? "URLを貼ると自動で曲名やアーティストが入力されます" : "-"}
-              />
-              {fetchingMeta[entry.id] && (
-                <Loader2 className="absolute right-2 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />
-              )}
-            </div>
-          </label>
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-[160px,1fr]">
-          <label className="space-y-1 text-sm">
-            <span className="text-muted-foreground">時間(分:秒)</span>
-            <div className="flex items-center gap-2">
-              <Input
-                type="number"
-                min={0}
-                value={entry.durationMin}
-                onChange={(event) =>
-                  updateSongField(entry.id, "durationMin", event.target.value)
-                }
-                onPointerDown={(event) => event.stopPropagation()}
-                className="w-20"
-                disabled={readOnly}
-              />
-              <span className="text-muted-foreground">:</span>
-              <Input
-                type="number"
-                min={0}
-                max={59}
-                value={entry.durationSec}
-                onChange={(event) =>
-                  updateSongField(entry.id, "durationSec", event.target.value)
-                }
-                onPointerDown={(event) => event.stopPropagation()}
-                className="w-20"
-                disabled={readOnly}
-              />
-            </div>
-          </label>
-          <label className="space-y-1 text-sm">
-            <span className="text-muted-foreground">メモ</span>
-            <Textarea
-              rows={2}
-              value={entry.memo}
-              onChange={(event) =>
-                updateSongField(entry.id, "memo", event.target.value)
-              }
-              onPointerDown={(event) => event.stopPropagation()}
-              disabled={readOnly}
-            />
-          </label>
-        </div>
-      </div>
-    );
-  };
-
-  const LightingEntryCard = ({ entry, index }: { entry: SongEntry; index: number }) => {
-    const isSong = entry.entry_type === "song";
-    return (
-      <div className="rounded-lg border border-border bg-card/60 px-4 py-3 space-y-3">
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{String(index + 1).padStart(2, "0")}</span>
-          <Badge variant="outline">{entryTypeLabels[entry.entry_type]}</Badge>
-        </div>
-        <div className="space-y-2">
-          <Input
-            value={entry.title}
-            onChange={(event) => updateSongField(entry.id, "title", event.target.value)}
-            placeholder={isSong ? "曲名" : "MC"}
-            className="h-8 text-xs"
-          />
-          <Input
-            value={entry.artist}
-            onChange={(event) => updateSongField(entry.id, "artist", event.target.value)}
-            placeholder="アーティスト"
-            className="h-8 text-xs"
-            disabled={!isSong}
-          />
-          <div className="relative">
-            <Input
-              value={entry.url}
-              onChange={(event) => {
-                const nextValue = event.target.value;
-                updateSongField(entry.id, "url", nextValue);
-                if (isSong) {
-                  scheduleMetadataFetch(entry.id, nextValue, entry.entry_type);
-                }
-              }}
-              placeholder="URL"
-              className="h-8 text-xs"
-              disabled={!isSong}
-            />
-            {fetchingMeta[entry.id] && (
-              <Loader2 className="absolute right-2 top-2 h-4 w-4 animate-spin text-muted-foreground" />
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Input
-            type="number"
-            min={0}
-            value={entry.durationMin}
-            onChange={(event) => updateSongField(entry.id, "durationMin", event.target.value)}
-            className="h-8 w-16 text-xs"
-          />
-          <span className="text-xs text-muted-foreground">:</span>
-          <Input
-            type="number"
-            min={0}
-            max={59}
-            value={entry.durationSec}
-            onChange={(event) => updateSongField(entry.id, "durationSec", event.target.value)}
-            className="h-8 w-16 text-xs"
-          />
-        </div>
-        <Textarea
-          rows={2}
-          value={entry.arrangementNote}
-          onChange={(event) => updateSongField(entry.id, "arrangementNote", event.target.value)}
-          placeholder="アレンジ/ソロ等"
-          className="text-xs"
-          disabled={!isSong}
-        />
-        <div className="grid gap-2 sm:grid-cols-3 text-xs">
-          {[
-            { key: "lightingSpot", label: "スポット" },
-            { key: "lightingStrobe", label: "ストロボ" },
-            { key: "lightingMoving", label: "ムービング" },
-          ].map((item) => (
-            <label key={item.key} className="space-y-1">
-              <span className="text-muted-foreground">{item.label}</span>
-              <select
-                value={entry[item.key as keyof SongEntry] as string}
-                onChange={(event) =>
-                  updateSongField(
-                    entry.id,
-                    item.key as keyof SongEntry,
-                    event.target.value as LightingChoice
-                  )
-                }
-                className="h-8 w-full rounded-md border border-input bg-card px-2 text-xs"
-                disabled={!isSong}
-              >
-                {lightingChoiceOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ))}
-        </div>
-        <Textarea
-          rows={2}
-          value={entry.lightingColor}
-          onChange={(event) => updateSongField(entry.id, "lightingColor", event.target.value)}
-          placeholder="色の要望"
-          className="text-xs"
-          disabled={!isSong}
-        />
-      </div>
-    );
-  };
-
-  const SortableSongCard = ({ entry, index }: { entry: SongEntry; index: number }) => {
-    const sortableId = String(entry.id);
-    const {
-      attributes,
-      listeners,
-      setNodeRef,
-      setActivatorNodeRef,
-      transform,
-      transition,
-      isDragging,
-    } = useSortable({ id: sortableId });
-    const style: CSSProperties = {
-      transform: CSS.Transform.toString(transform),
-      transition,
-    };
-    return (
-      <SongCard
-        entry={entry}
-        index={index}
-        dragAttributes={attributes}
-        dragListeners={listeners}
-        setActivatorRef={setActivatorNodeRef}
-        setNodeRef={setNodeRef}
-        style={style}
-        isDragging={isDragging}
-      />
-    );
   };
 
   return (
@@ -3215,6 +3332,13 @@ export default function RepertoireSubmitPage() {
                                       key={String(entry.id)}
                                       entry={entry}
                                       index={index}
+                                      totalCount={orderedSongs.length}
+                                      getValue={getSongFieldValue}
+                                      onUpdateField={updateSongField}
+                                      onMove={moveEntry}
+                                      onRemove={removeEntry}
+                                      onScheduleMetadata={scheduleMetadataFetch}
+                                      fetchingMeta={fetchingMeta}
                                     />
                                   ))}
                                 </div>
@@ -3224,6 +3348,13 @@ export default function RepertoireSubmitPage() {
                                   <SongCard
                                     entry={activeEntry}
                                     index={Math.max(0, activeIndex)}
+                                    totalCount={orderedSongs.length}
+                                    getValue={getSongFieldValue}
+                                    onUpdateField={updateSongField}
+                                    onMove={moveEntry}
+                                    onRemove={removeEntry}
+                                    onScheduleMetadata={scheduleMetadataFetch}
+                                    fetchingMeta={fetchingMeta}
                                     isOverlay
                                   />
                                 ) : null}
@@ -3726,25 +3857,91 @@ export default function RepertoireSubmitPage() {
                                       onChange={(event) => setMemberSearch(event.target.value)}
                                       placeholder="名前/パートで検索"
                                     />
-                                    <select
-                                      value={addMemberId}
-                                      onChange={(event) => setAddMemberId(event.target.value)}
-                                      className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-                                    >
-                                      <option value="">追加するメンバーを選択</option>
-                                      {groupedProfiles.map((group) => (
-                                        <optgroup key={group.key} label={group.label}>
-                                          {group.items.map((profile) => (
-                                            <option key={profile.id} value={profile.id}>
-                                              {(profile.real_name ??
-                                                profile.display_name ??
-                                                "名前未登録") +
-                                                (profile.part ? ` (${profile.part})` : "")}
-                                            </option>
-                                          ))}
-                                        </optgroup>
-                                      ))}
-                                    </select>
+                                    <div className="text-xs text-muted-foreground">
+                                      検索結果: {filteredProfiles.length}件
+                                    </div>
+                                    <div className="rounded-lg border border-border bg-card/40 max-h-64 overflow-y-auto">
+                                      <Table>
+                                        <TableHeader>
+                                          <TableRow>
+                                            <TableHead>名前</TableHead>
+                                            <TableHead>パート</TableHead>
+                                            <TableHead className="text-right">選択</TableHead>
+                                          </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                          {groupedProfiles.every(
+                                            (group) => group.items.length === 0
+                                          ) ? (
+                                            <TableRow>
+                                              <TableCell
+                                                colSpan={3}
+                                                className="text-sm text-muted-foreground"
+                                              >
+                                                該当するメンバーがいません。
+                                              </TableCell>
+                                            </TableRow>
+                                          ) : (
+                                            groupedProfiles.map((group) =>
+                                              group.items.length === 0 ? null : (
+                                                <Fragment key={group.key}>
+                                                  <TableRow className="bg-muted/30">
+                                                    <TableCell
+                                                      colSpan={3}
+                                                      className="text-xs font-medium text-muted-foreground"
+                                                    >
+                                                      {group.label}
+                                                    </TableCell>
+                                                  </TableRow>
+                                                  {group.items.map((profile) => {
+                                                    const isSelected =
+                                                      profile.id === addMemberId;
+                                                    return (
+                                                      <TableRow
+                                                        key={profile.id}
+                                                        className={cn(
+                                                          "cursor-pointer",
+                                                          isSelected
+                                                            ? "bg-primary/10"
+                                                            : "hover:bg-muted/40"
+                                                        )}
+                                                        onClick={() =>
+                                                          setAddMemberId(profile.id)
+                                                        }
+                                                      >
+                                                        <TableCell className="font-medium">
+                                                          {profile.real_name ??
+                                                            profile.display_name ??
+                                                            "名前未登録"}
+                                                        </TableCell>
+                                                        <TableCell className="text-xs text-muted-foreground">
+                                                          {profile.part ?? "-"}
+                                                        </TableCell>
+                                                        <TableCell className="text-right">
+                                                          <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            variant={
+                                                              isSelected ? "default" : "outline"
+                                                            }
+                                                            onClick={(event) => {
+                                                              event.stopPropagation();
+                                                              setAddMemberId(profile.id);
+                                                            }}
+                                                          >
+                                                            {isSelected ? "選択中" : "選択"}
+                                                          </Button>
+                                                        </TableCell>
+                                                      </TableRow>
+                                                    );
+                                                  })}
+                                                </Fragment>
+                                              )
+                                            )
+                                          )}
+                                        </TableBody>
+                                      </Table>
+                                    </div>
                                     <div className="flex flex-col sm:flex-row gap-2">
                                       <select
                                         value={addMemberInstrument}
@@ -3999,6 +4196,10 @@ export default function RepertoireSubmitPage() {
                                     key={entry.id}
                                     entry={entry}
                                     index={index}
+                                    getValue={getSongFieldValue}
+                                    onUpdateField={updateSongField}
+                                    onScheduleMetadata={scheduleMetadataFetch}
+                                    fetchingMeta={fetchingMeta}
                                   />
                                 ))}
                               </div>
@@ -4025,7 +4226,7 @@ export default function RepertoireSubmitPage() {
                                           <TableCell className="min-w-[240px]">
                                             <div className="space-y-1">
                                               <Input
-                                                value={entry.title}
+                                                value={getSongFieldValue(entry, "title")}
                                                 onChange={(event) =>
                                                   updateSongField(
                                                     entry.id,
@@ -4037,7 +4238,7 @@ export default function RepertoireSubmitPage() {
                                                 className="h-8 text-xs"
                                               />
                                               <Input
-                                                value={entry.artist}
+                                                value={getSongFieldValue(entry, "artist")}
                                                 onChange={(event) =>
                                                   updateSongField(
                                                     entry.id,
@@ -4051,7 +4252,7 @@ export default function RepertoireSubmitPage() {
                                               />
                                               <div className="relative">
                                                 <Input
-                                                  value={entry.url}
+                                                  value={getSongFieldValue(entry, "url")}
                                                   onChange={(event) => {
                                                     const nextValue = event.target.value;
                                                     updateSongField(
@@ -4082,7 +4283,7 @@ export default function RepertoireSubmitPage() {
                                               <Input
                                                 type="number"
                                                 min={0}
-                                                value={entry.durationMin}
+                                                value={getSongFieldValue(entry, "durationMin")}
                                                 onChange={(event) =>
                                                   updateSongField(
                                                     entry.id,
@@ -4099,7 +4300,7 @@ export default function RepertoireSubmitPage() {
                                                 type="number"
                                                 min={0}
                                                 max={59}
-                                                value={entry.durationSec}
+                                                value={getSongFieldValue(entry, "durationSec")}
                                                 onChange={(event) =>
                                                   updateSongField(
                                                     entry.id,
@@ -4114,7 +4315,7 @@ export default function RepertoireSubmitPage() {
                                           <TableCell className="min-w-[180px]">
                                             <Textarea
                                               rows={2}
-                                              value={entry.arrangementNote}
+                                              value={getSongFieldValue(entry, "arrangementNote")}
                                               onChange={(event) =>
                                                 updateSongField(
                                                   entry.id,
@@ -4169,7 +4370,7 @@ export default function RepertoireSubmitPage() {
                                           <TableCell className="min-w-[180px]">
                                             <Textarea
                                               rows={2}
-                                              value={entry.lightingColor}
+                                              value={getSongFieldValue(entry, "lightingColor")}
                                               onChange={(event) =>
                                                 updateSongField(
                                                   entry.id,
@@ -4363,9 +4564,23 @@ export default function RepertoireSubmitPage() {
                     orderedSongs.map((entry, index) => (
                       <tr key={entry.id}>
                         <td>{index + 1}</td>
-                        <td>{entry.artist ? `${entry.title} / ${entry.artist}` : entry.title}</td>
-                        <td>{formatDuration(toDurationSec(entry.durationMin, entry.durationSec))}</td>
-                        <td>{entry.memo || "-"}</td>
+                        <td>
+                          {getSongFieldValue(entry, "artist")
+                            ? `${getSongFieldValue(entry, "title")} / ${getSongFieldValue(
+                                entry,
+                                "artist"
+                              )}`
+                            : getSongFieldValue(entry, "title")}
+                        </td>
+                        <td>
+                          {formatDuration(
+                            toDurationSec(
+                              getSongFieldValue(entry, "durationMin"),
+                              getSongFieldValue(entry, "durationSec")
+                            )
+                          )}
+                        </td>
+                        <td>{getSongFieldValue(entry, "memo") || "-"}</td>
                       </tr>
                     ))
                   )}
@@ -4424,10 +4639,24 @@ export default function RepertoireSubmitPage() {
                       <tr key={entry.id}>
                         <td>{index + 1}</td>
                         <td>
-                          <div>{entry.artist ? `${entry.title} / ${entry.artist}` : entry.title}</div>
+                          <div>
+                            {getSongFieldValue(entry, "artist")
+                              ? `${getSongFieldValue(entry, "title")} / ${getSongFieldValue(
+                                  entry,
+                                  "artist"
+                                )}`
+                              : getSongFieldValue(entry, "title")}
+                          </div>
                           {entry.url && <div>{entry.url}</div>}
                         </td>
-                        <td>{formatDuration(toDurationSec(entry.durationMin, entry.durationSec))}</td>
+                        <td>
+                          {formatDuration(
+                            toDurationSec(
+                              getSongFieldValue(entry, "durationMin"),
+                              getSongFieldValue(entry, "durationSec")
+                            )
+                          )}
+                        </td>
                         <td>{entry.arrangementNote || "-"}</td>
                         <td>
                           <div>スポット: {formatLightingChoice(entry.lightingSpot)}</div>

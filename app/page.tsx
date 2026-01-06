@@ -194,11 +194,13 @@ export default function HomePage() {
                             ? "bg-orange-500/10 text-orange-500"
                             : "bg-muted text-muted-foreground";
                     return (
-                      <div
+                      <Link
                         key={announcement.id}
-                        className={`group relative p-4 md:p-6 bg-card border rounded-lg transition-all duration-300 hover:border-primary/30 ${
+                        href={`/announcements/${announcement.id}`}
+                        className={`group relative block p-4 md:p-6 bg-card border rounded-lg transition-all duration-300 hover:border-primary/30 ${
                           announcement.isPinned ? "border-primary/50" : "border-border"
                         }`}
+                        aria-label={`お知らせ: ${announcement.title}`}
                       >
                         <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
                           <div className="flex items-center gap-2 shrink-0">
@@ -215,7 +217,7 @@ export default function HomePage() {
                             <p className="text-sm text-muted-foreground line-clamp-2">{announcement.content}</p>
                           </div>
                         </div>
-                      </div>
+                      </Link>
                     );
                   })
                 )}

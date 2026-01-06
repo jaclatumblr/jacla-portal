@@ -13,15 +13,12 @@ import {
   LogOut,
   Menu,
   MessageSquare,
-  Moon,
   Music,
   Settings,
-  Sun,
   User,
   Users,
   X,
 } from "lucide-react";
-import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import { safeSignOut, supabase } from "@/lib/supabaseClient";
 import { useRoleFlags } from "@/lib/useRoleFlags";
@@ -61,7 +58,6 @@ export function SideNav() {
   const topbarRef = useRef<HTMLDivElement | null>(null);
   const pathname = usePathname();
   const router = useRouter();
-  const { setTheme } = useTheme();
   const { canAccessAdmin, isAdministrator } = useRoleFlags();
   const { session } = useAuth();
   const userId = session?.user.id;
@@ -127,16 +123,6 @@ export function SideNav() {
     const el = asideRef.current;
     if (!el) return false;
     return el.matches(":hover");
-  };
-
-  const toggleTheme = () => {
-    const root = document.documentElement;
-    root.classList.add("theme-transition");
-    window.setTimeout(() => {
-      root.classList.remove("theme-transition");
-    }, 520);
-    const isDark = root.classList.contains("dark");
-    setTheme(isDark ? "light" : "dark");
   };
 
   useLayoutEffect(() => {
@@ -439,29 +425,6 @@ export function SideNav() {
               );
             })}
 
-            <button
-              type="button"
-              onClick={toggleTheme}
-              className={cn(
-                "flex items-center gap-2 px-3 py-2.5 rounded-lg transition-all duration-200 group relative",
-                "text-muted-foreground hover:bg-muted hover:text-foreground"
-              )}
-              aria-label="テーマを切り替える"
-            >
-              <div className="w-6 h-6 flex items-center justify-center shrink-0">
-                <Moon className="w-6 h-6 dark:hidden" />
-                <Sun className="w-6 h-6 hidden dark:block" />
-              </div>
-              <span
-                className={cn(
-                  "flex-1 font-medium text-[13px] whitespace-nowrap transition-all duration-300",
-                  isExpanded ? "opacity-100" : "opacity-0 w-0 overflow-hidden"
-                )}
-              >
-                <span className="dark:hidden">ダークモード</span>
-                <span className="hidden dark:inline">ライトモード</span>
-              </span>
-            </button>
           </div>
 
           {canAccessAdmin && (
@@ -618,27 +581,6 @@ export function SideNav() {
         </nav>
 
         <div className="px-8 pb-10 space-y-4">
-          <div className="space-y-1 border-t border-border pt-4">
-            <button
-              type="button"
-              onClick={() => {
-                toggleTheme();
-                setIsMobileMenuOpen(false);
-              }}
-              className="flex items-center gap-3 px-5 py-3 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-all w-full"
-              aria-label="テーマを切り替える"
-            >
-              <div className="w-6 h-6 flex items-center justify-center shrink-0">
-                <Moon className="w-6 h-6 dark:hidden" />
-                <Sun className="w-6 h-6 hidden dark:block" />
-              </div>
-              <span className="text-base font-medium">
-                <span className="dark:hidden">ダークモード</span>
-                <span className="hidden dark:inline">ライトモード</span>
-              </span>
-            </button>
-          </div>
-
           <button
             type="button"
             onClick={handleLogout}

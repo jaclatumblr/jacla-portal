@@ -62,7 +62,7 @@ export function SideNav() {
   const pathname = usePathname();
   const router = useRouter();
   const { setTheme } = useTheme();
-  const { canAccessAdmin } = useRoleFlags();
+  const { canAccessAdmin, isAdministrator } = useRoleFlags();
   const { session } = useAuth();
   const userId = session?.user.id;
 
@@ -75,6 +75,7 @@ export function SideNav() {
 
   useEffect(() => {
     if (!userId) return;
+    if (isAdministrator) return;
     if (typeof window === "undefined") return;
     const storageKey = `crewNoticeShown:${userId}`;
     if (window.sessionStorage.getItem(storageKey)) return;
@@ -103,7 +104,7 @@ export function SideNav() {
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [isAdministrator, userId]);
 
   const avatarUrl =
     session?.user.user_metadata?.avatar_url ||

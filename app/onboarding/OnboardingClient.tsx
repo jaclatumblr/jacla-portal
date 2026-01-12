@@ -7,13 +7,18 @@ import { ProfileForm } from "./components/ProfileForm";
 import { Suspense } from "react";
 import { Loader2 } from "lucide-react";
 
-function OnboardingContent() {
+type OnboardingContentProps = {
+  mode?: "edit" | "new";
+  defaultNext?: string;
+};
+
+function OnboardingContent({ mode, defaultNext }: OnboardingContentProps) {
   const searchParams = useSearchParams();
-  const isEdit = searchParams.get("mode") === "edit";
+  const isEdit = mode === "edit" || searchParams.get("mode") === "edit";
   const { deleting, handleDeleteAccount } = useAccountDeletion();
 
   // Redirect destination after completion
-  const nextTarget = searchParams.get("next") || "/";
+  const nextTarget = defaultNext || searchParams.get("next") || "/";
 
   return (
     <div className="w-full max-w-4xl space-y-8 animate-in fade-in duration-700 slide-in-from-bottom-4">
@@ -55,12 +60,18 @@ function OnboardingContent() {
   );
 }
 
-export default function OnboardingClient() {
+type OnboardingClientProps = {
+  mode?: "edit" | "new";
+  defaultNext?: string;
+};
+
+export default function OnboardingClient({ mode, defaultNext }: OnboardingClientProps) {
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 sm:p-8">
       <Suspense fallback={<Loader2 className="w-8 h-8 animate-spin text-primary" />}>
-        <OnboardingContent />
+        <OnboardingContent mode={mode} defaultNext={defaultNext} />
       </Suspense>
     </div>
   );
 }
+

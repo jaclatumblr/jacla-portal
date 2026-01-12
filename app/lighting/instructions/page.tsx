@@ -78,7 +78,7 @@ export default function LightingInstructionsPage() {
     expandedBands,
   } = useEventInstructions();
 
-  const roleKeys = new Set(LIGHTING_SHIFT_ROLES.map((role) => role.value));
+  const roleKeys: Set<string> = new Set(LIGHTING_SHIFT_ROLES.map((role) => role.value));
   const displayProfileName = (profileId?: string | null) => {
     if (!profileId) return "未割り当て";
     const profile = profilesById[profileId];

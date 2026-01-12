@@ -271,7 +271,7 @@ export default function PAInstructionsPage() {
     expandedBands,
   } = useEventInstructions();
 
-  const roleKeys = new Set(PA_SHIFT_ROLES.map((role) => role.value));
+  const roleKeys: Set<string> = new Set(PA_SHIFT_ROLES.map((role) => role.value));
   const displayProfileName = (profileId?: string | null) => {
     if (!profileId) return "未割り当て";
     const profile = profilesById[profileId];
@@ -444,11 +444,10 @@ export default function PAInstructionsPage() {
                                           return (
                                             <div
                                               key={`ch-${band.id}-${channel.id}`}
-                                              className={`rounded-md border px-1.5 py-2 flex flex-col items-center gap-1 w-10 ${
-                                                isActive
+                                              className={`rounded-md border px-1.5 py-2 flex flex-col items-center gap-1 w-10 ${isActive
                                                   ? "border-blue-500/30 bg-blue-500/10 text-foreground"
                                                   : "border-border/40 bg-background/30 text-muted-foreground opacity-50 grayscale"
-                                              }`}
+                                                }`}
                                             >
                                               <div className="text-[9px] text-muted-foreground">
                                                 {String(index + 1)}
@@ -458,11 +457,10 @@ export default function PAInstructionsPage() {
                                               </div>
                                               <div className="relative h-12 w-1.5 rounded-full bg-border/50 overflow-hidden">
                                                 <div
-                                                  className={`absolute left-0 right-0 h-2 rounded-sm ${
-                                                    isActive
+                                                  className={`absolute left-0 right-0 h-2 rounded-sm ${isActive
                                                       ? "bg-blue-400 shadow-[0_0_5px_rgba(59,130,246,0.5)]"
                                                       : "bg-muted-foreground/40"
-                                                  }`}
+                                                    }`}
                                                   style={{ bottom: isActive ? "50%" : "10%" }}
                                                 />
                                               </div>

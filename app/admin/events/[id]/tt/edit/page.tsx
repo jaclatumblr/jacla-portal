@@ -348,6 +348,7 @@ export default function AdminEventTimetableEditPage() {
           .from("bands")
           .select("id, name")
           .eq("event_id", eventId)
+          .eq("band_type", "event")
           .order("created_at", { ascending: true }),
         supabase
           .from("event_slots")
@@ -663,7 +664,10 @@ export default function AdminEventTimetableEditPage() {
     let cursor = baseStart;
     const changeover = event?.default_changeover_min ?? 15;
 
-    const payloads = bands.map((band, index) => {
+    const payloads: any[] = [];
+    let orderIndex = 1;
+
+    bands.forEach((band, index) => {
       const durationSec = durationMap.get(band.id) ?? 0;
       const durationMin = durationSec > 0 ? Math.ceil(durationSec / 60) : null;
       let startTime: string | null = null;
@@ -672,21 +676,48 @@ export default function AdminEventTimetableEditPage() {
         startTime = formatTimeValue(cursor);
         if (durationMin != null) {
           endTime = formatTimeValue(cursor + durationMin);
-          cursor += durationMin + changeover;
         }
       }
 
-      return {
+      payloads.push({
         event_id: eventId,
         band_id: band.id,
         slot_type: "band",
         slot_phase: "show",
-        order_in_event: index + 1,
+        order_in_event: orderIndex++,
         start_time: startTime,
         end_time: endTime,
         changeover_min: changeover,
         note: null,
-      };
+      });
+
+      if (cursor != null && durationMin != null) {
+        cursor += durationMin;
+      }
+
+      if (index < bands.length - 1 && changeover > 0) {
+        let changeoverStart: string | null = null;
+        let changeoverEnd: string | null = null;
+        if (cursor != null) {
+          changeoverStart = formatTimeValue(cursor);
+          changeoverEnd = formatTimeValue(cursor + changeover);
+        }
+        payloads.push({
+          event_id: eventId,
+          band_id: null,
+          slot_type: "other",
+          slot_phase: "show",
+          order_in_event: orderIndex++,
+          start_time: changeoverStart,
+          end_time: changeoverEnd,
+          changeover_min: changeover,
+          note: "転換",
+        });
+
+        if (cursor != null) {
+          cursor += changeover;
+        }
+      }
     });
 
     const { data, error } = await supabase

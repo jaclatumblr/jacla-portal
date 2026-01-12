@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { cn } from "@/lib/utils";
+import { StagePlotDrumKit } from "@/components/StagePlotDrumKit";
 
 type StageItem = {
   id: string;
@@ -20,15 +21,7 @@ type StageMember = {
   isMc?: boolean;
 };
 
-const fixedBaseItems: StageItem[] = [
-  { id: "fixed-main-l", label: "MAIN L", dashed: true, x: 18, y: 84 },
-  { id: "fixed-main-r", label: "MAIN R", dashed: true, x: 82, y: 84 },
-  { id: "fixed-mon-1", label: "MON1", dashed: true, x: 12, y: 68 },
-  { id: "fixed-mon-2", label: "MON2", dashed: true, x: 58, y: 22 },
-  { id: "fixed-mon-3", label: "MON3", dashed: true, x: 50, y: 82 },
-  { id: "fixed-mon-4", label: "MON4", dashed: true, x: 88, y: 68 },
-];
-
+const GRID_STEP = 2.5;
 const clampPercent = (value: number) => Math.min(95, Math.max(5, value));
 
 export function StagePlotPreview({
@@ -41,9 +34,18 @@ export function StagePlotPreview({
   className?: string;
 }) {
   const fixedItems = useMemo(() => {
-    const next = [...fixedBaseItems];
-    if (members.some((member) => member.isMc)) {
-      next.push({ id: "fixed-mc", label: "MC", dashed: false, x: 50, y: 72 });
+    const next: StageItem[] = [
+      { id: "fixed-main-l", label: "MAIN L", dashed: true, x: 21, y: 81 },
+      { id: "fixed-main-r", label: "MAIN R", dashed: true, x: 79, y: 81 },
+      { id: "fixed-mon-1", label: "MON1", dashed: true, x: 14, y: 62 },
+      { id: "fixed-mon-2", label: "MON2", dashed: true, x: 62, y: 13 },
+      { id: "fixed-mon-3", label: "MON3", dashed: true, x: 50, y: 87 },
+      { id: "fixed-mon-4", label: "MON4", dashed: true, x: 86, y: 62 },
+    ];
+
+    const mcCount = members.filter((member) => member.isMc).length;
+    if (mcCount > 0) {
+      next.push({ id: "fixed-mc", label: "MCエリア", dashed: false, x: 50, y: 75 });
     }
     return next;
   }, [members]);
@@ -51,38 +53,65 @@ export function StagePlotPreview({
   return (
     <div
       className={cn(
-        "relative w-full h-[220px] sm:h-[260px] rounded-lg border border-border bg-gradient-to-b from-muted/10 to-muted/30 overflow-hidden",
+        "relative w-full aspect-[2/1] rounded-lg border border-border bg-zinc-900 overflow-hidden",
         className
       )}
     >
-      <div className="absolute top-2 left-1/2 -translate-x-1/2 text-[10px] text-muted-foreground">
-        STAGE
-      </div>
-      <div className="absolute top-2 left-3 text-[10px] text-muted-foreground">舞台奥</div>
-      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] text-muted-foreground bg-background/70 px-1 rounded">
-        客席
-      </div>
-      <div className="absolute bottom-2 left-3 text-[10px] text-muted-foreground">下手</div>
-      <div className="absolute bottom-2 right-3 text-[10px] text-muted-foreground">上手</div>
+      <div
+        className="absolute inset-0 opacity-20 pointer-events-none"
+        style={{
+          backgroundImage:
+            "linear-gradient(to right, #333 1px, transparent 1px), linear-gradient(to bottom, #333 1px, transparent 1px)",
+          backgroundSize: `${GRID_STEP}% ${GRID_STEP}%`,
+        }}
+      />
 
-      {fixedItems.map((item) => (
-        <div
-          key={item.id}
-          className={cn(
-            "absolute -translate-x-1/2 -translate-y-1/2 border text-[12px] font-semibold shadow-sm bg-muted/60 text-muted-foreground pointer-events-none rounded-md px-2 py-1",
-            item.dashed ? "border-dashed" : "border-solid"
-          )}
-          style={{ left: `${item.x}%`, top: `${item.y}%` }}
-        >
-          {item.label}
-        </div>
-      ))}
+      <div className="absolute top-2 left-4 text-xs font-bold text-muted-foreground pointer-events-none select-none">
+        舞台奥 (Stage Back)
+      </div>
+      <div className="absolute bottom-2 left-4 text-xs font-bold text-muted-foreground pointer-events-none select-none">
+        下手 (Shimote)
+      </div>
+      <div className="absolute bottom-2 right-4 text-xs font-bold text-muted-foreground pointer-events-none select-none">
+        上手 (Kamite)
+      </div>
+      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs font-bold text-muted-foreground pointer-events-none select-none">
+        客席 (Audience)
+      </div>
+
+      <div
+        className="absolute left-1/2 -translate-x-1/2 top-[8%] w-[20%] h-[25%] opacity-40 pointer-events-none select-none"
+        style={{ zIndex: 0 }}
+      >
+        <StagePlotDrumKit className="w-full h-full text-zinc-600" />
+      </div>
+
+      {fixedItems.map((item) => {
+        const isMain = item.label.startsWith("MAIN");
+        return (
+          <div
+            key={item.id}
+            className={cn(
+              "absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center text-[10px] font-bold text-zinc-400 bg-zinc-800 border border-zinc-600 rounded select-none pointer-events-none",
+              !isMain && "border-dashed"
+            )}
+            style={{
+              left: `${item.x}%`,
+              top: `${item.y}%`,
+              width: isMain ? "12%" : "8%",
+              height: isMain ? "8%" : "8%",
+            }}
+          >
+            <span>{item.label}</span>
+          </div>
+        );
+      })}
 
       {items.map((item) => (
         <div
           key={item.id}
           className={cn(
-            "absolute -translate-x-1/2 -translate-y-1/2 rounded-md border px-2 py-1 text-[12px] font-semibold bg-card/80 text-foreground",
+            "absolute -translate-x-1/2 -translate-y-1/2 rounded-md border px-2 py-1 text-[12px] font-semibold bg-blue-900/80 border-blue-700 text-white shadow-sm z-10",
             item.dashed ? "border-dashed" : "border-solid"
           )}
           style={{
@@ -97,14 +126,16 @@ export function StagePlotPreview({
       {members.map((member) => (
         <div
           key={member.id}
-          className="absolute -translate-x-1/2 -translate-y-1/2 rounded-md border border-border bg-card px-2 py-1 text-[12px] font-semibold text-foreground shadow-sm"
+          className="absolute -translate-x-1/2 -translate-y-1/2 rounded-md border border-emerald-600 bg-emerald-900/80 px-2 py-1 text-[12px] font-semibold text-white shadow-sm z-20"
           style={{
             left: `${clampPercent(member.x)}%`,
             top: `${clampPercent(member.y)}%`,
           }}
         >
-          {member.instrument ?? "Part"}
-          <div className="text-[11px] text-muted-foreground">{member.name}</div>
+          <div className="text-[10px] opacity-80 leading-tight">
+            {member.instrument ?? "Part"}
+          </div>
+          <div>{member.name}</div>
         </div>
       ))}
     </div>

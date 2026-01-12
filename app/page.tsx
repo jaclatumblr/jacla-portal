@@ -8,6 +8,7 @@ import {
   Bell,
   Calendar,
   ChevronDown,
+  Guitar,
   Lightbulb,
   Music,
   Pin,
@@ -108,7 +109,7 @@ export default function HomePage() {
             <div className="relative z-10 text-center py-16 sm:py-20 md:py-24">
               <div className="mb-6 md:mb-8">
                 <Image
-                  src="/images/e3-83-ad-e3-82-b42-20-281-29.png"
+                  src="/images/jacla-logo.png"
                   alt="Jacla logo"
                   width={200}
                   height={120}
@@ -131,10 +132,10 @@ export default function HomePage() {
                   はじめる
                 </Link>
                 <Link
-                  href="/events"
+                  href="/bands"
                   className="w-full sm:w-auto px-8 py-3 border border-border text-foreground font-medium rounded hover:border-primary hover:text-primary transition-colors text-center"
                 >
-                  イベントを見る
+                  バンドを組む
                 </Link>
               </div>
             </div>
@@ -197,9 +198,8 @@ export default function HomePage() {
                       <Link
                         key={announcement.id}
                         href={`/announcements/${announcement.id}`}
-                        className={`group relative block p-4 md:p-6 bg-card border rounded-lg transition-all duration-300 hover:border-primary/30 ${
-                          announcement.isPinned ? "border-primary/50" : "border-border"
-                        }`}
+                        className={`group relative block p-4 md:p-6 bg-card border rounded-lg transition-all duration-300 hover:border-primary/30 ${announcement.isPinned ? "border-primary/50" : "border-border"
+                          }`}
                         aria-label={`お知らせ: ${announcement.title}`}
                       >
                         <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
@@ -225,7 +225,7 @@ export default function HomePage() {
             </div>
           </section>
 
-<section id="features" className="min-h-screen py-16 md:py-24 relative">
+          <section id="features" className="min-h-screen py-16 md:py-24 relative">
             <div className="absolute inset-0 bg-gradient-to-b from-background via-card/50 to-background" />
 
             <div className="relative z-10 container mx-auto px-4 sm:px-6">
@@ -237,154 +237,69 @@ export default function HomePage() {
                   機能一覧
                 </h2>
                 <p className="text-muted-foreground max-w-2xl mx-auto text-sm md:text-base">
-                  サークル活動に必要なすべての機能をここで
+                  活動に欠かせない機能をまとめてアクセス
                 </p>
               </div>
 
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 max-w-6xl mx-auto">
-                <Link href="/events" className="group">
-                  <div className="relative h-56 md:h-64 bg-card border border-border rounded-lg overflow-hidden hover:border-primary/50 transition-all duration-300">
-                    <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                    <div className="relative h-full p-4 md:p-6 flex flex-col">
-                      <div className="flex items-center justify-between mb-3 md:mb-4">
-                        <Calendar className="w-6 h-6 md:w-8 md:h-8 text-primary" />
-                        <span className="text-xs text-muted-foreground font-mono">
-                          01
-                        </span>
-                      </div>
-                      <h3 className="text-lg md:text-xl font-bold mb-2">
-                        イベント一覧
-                      </h3>
-                      <p className="text-xs md:text-sm text-muted-foreground flex-1">
-                        ライブやイベントの一覧、詳細確認、レパートリー提出
-                      </p>
-                      <div className="flex items-center gap-2 text-primary text-sm mt-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <span>詳しく見る</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-
-                <Link href="/pa" className="group">
-                  <div className="relative h-56 md:h-64 bg-card border border-border rounded-lg overflow-hidden hover:border-secondary/50 transition-all duration-300">
-                    <div className="absolute inset-0 bg-gradient-to-br from-secondary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                    <div className="relative h-full p-4 md:p-6 flex flex-col">
-                      <div className="flex items-center justify-between mb-3 md:mb-4">
-                        <Music className="w-6 h-6 md:w-8 md:h-8 text-secondary" />
-                        <span className="text-xs text-muted-foreground font-mono">
-                          02
-                        </span>
-                      </div>
-                      <h3 className="text-lg md:text-xl font-bold mb-2">
-                        PA
-                      </h3>
-                      <p className="text-xs md:text-sm text-muted-foreground flex-1">
-                        音響機材の一覧、貸出状況、イベント別セットリスト
-                      </p>
-                      <div className="flex items-center gap-2 text-secondary text-sm mt-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <span>詳しく見る</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-
-                <Link href="/lighting" className="group">
-                  <div className="relative h-56 md:h-64 bg-card border border-border rounded-lg overflow-hidden hover:border-accent/50 transition-all duration-300">
-                    <div className="absolute inset-0 bg-gradient-to-br from-accent/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                    <div className="relative h-full p-4 md:p-6 flex flex-col">
-                      <div className="flex items-center justify-between mb-3 md:mb-4">
-                        <Lightbulb className="w-6 h-6 md:w-8 md:h-8 text-accent" />
-                        <span className="text-xs text-muted-foreground font-mono">
-                          03
-                        </span>
-                      </div>
-                      <h3 className="text-lg md:text-xl font-bold mb-2">
-                        照明
-                      </h3>
-                      <p className="text-xs md:text-sm text-muted-foreground flex-1">
-                        照明機材の一覧、貸出状況、イベント別セットリスト
-                      </p>
-                      <div className="flex items-center gap-2 text-accent text-sm mt-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <span>詳しく見る</span>
-                        <ArrowRight className="w-4 h-4" />
+                {[
+                  {
+                    href: "/events",
+                    icon: Calendar,
+                    title: "イベント",
+                    description: "ライブの情報、レパ表の提出・確認を一元管理",
+                  },
+                  {
+                    href: "/bands",
+                    icon: Guitar,
+                    title: "バンドを組む",
+                    description: "固定/イベントバンドの構成・メンバー管理を簡単に",
+                  },
+                  {
+                    href: "/members",
+                    icon: Users,
+                    title: "メンバー一覧",
+                    description: "部員・担当パート・サブ楽器をすばやく検索",
+                  },
+                  {
+                    href: "/announcements",
+                    icon: Bell,
+                    title: "お知らせ",
+                    description: "重要連絡やトピックを見逃さない",
+                  },
+                  {
+                    href: "/pa",
+                    icon: Music,
+                    title: "PAダッシュボード",
+                    description: "レパ表からのPA指示やシフト確認、機材管理照会など",
+                  },
+                  {
+                    href: "/lighting",
+                    icon: Lightbulb,
+                    title: "照明ダッシュボード",
+                    description: "レパ表からの照明指示やシフト確認、機材管理照会など",
+                  },
+                ].map((feature, index) => (
+                  <Link key={feature.href} href={feature.href} className="group">
+                    <div className="relative h-56 md:h-64 bg-card border border-border rounded-lg overflow-hidden hover:border-primary/50 transition-all duration-300">
+                      <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <div className="relative h-full p-4 md:p-6 flex flex-col">
+                        <div className="flex items-center justify-between mb-3 md:mb-4">
+                          <feature.icon className="w-6 h-6 md:w-8 md:h-8 text-primary" />
+                          <span className="text-xs text-muted-foreground font-mono">
+                            {String(index + 1).padStart(2, "0")}
+                          </span>
+                        </div>
+                        <h3 className="text-lg md:text-xl font-bold mb-2">{feature.title}</h3>
+                        <p className="text-xs md:text-sm text-muted-foreground flex-1">{feature.description}</p>
+                        <div className="flex items-center gap-2 text-primary text-sm mt-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <span>詳しく見る</span>
+                          <ArrowRight className="w-4 h-4" />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </Link>
-
-                <Link href="/announcements" className="group">
-                  <div className="relative h-56 md:h-64 bg-card border border-border rounded-lg overflow-hidden hover:border-primary/50 transition-all duration-300">
-                    <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                    <div className="relative h-full p-4 md:p-6 flex flex-col">
-                      <div className="flex items-center justify-between mb-3 md:mb-4">
-                        <Bell className="w-6 h-6 md:w-8 md:h-8 text-primary" />
-                        <span className="text-xs text-muted-foreground font-mono">
-                          04
-                        </span>
-                      </div>
-                      <h3 className="text-lg md:text-xl font-bold mb-2">
-                        お知らせ
-                      </h3>
-                      <p className="text-xs md:text-sm text-muted-foreground flex-1">
-                        サークルからの重要なお知らせ、連絡事項
-                      </p>
-                      <div className="flex items-center gap-2 text-primary text-sm mt-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <span>詳しく見る</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-
-                <Link href="/members" className="group">
-                  <div className="relative h-56 md:h-64 bg-card border border-border rounded-lg overflow-hidden hover:border-secondary/50 transition-all duration-300">
-                    <div className="absolute inset-0 bg-gradient-to-br from-secondary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                    <div className="relative h-full p-4 md:p-6 flex flex-col">
-                      <div className="flex items-center justify-between mb-3 md:mb-4">
-                        <Users className="w-6 h-6 md:w-8 md:h-8 text-secondary" />
-                        <span className="text-xs text-muted-foreground font-mono">
-                          05
-                        </span>
-                      </div>
-                      <h3 className="text-lg md:text-xl font-bold mb-2">
-                        メンバー一覧
-                      </h3>
-                      <p className="text-xs md:text-sm text-muted-foreground flex-1">
-                        部員の一覧、連絡先、担当パート情報
-                      </p>
-                      <div className="flex items-center gap-2 text-secondary text-sm mt-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <span>詳しく見る</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-
-                <Link href="/me/profile" className="group">
-                  <div className="relative h-56 md:h-64 bg-card border border-border rounded-lg overflow-hidden hover:border-accent/50 transition-all duration-300">
-                    <div className="absolute inset-0 bg-gradient-to-br from-accent/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                    <div className="relative h-full p-4 md:p-6 flex flex-col">
-                      <div className="flex items-center justify-between mb-3 md:mb-4">
-                        <User className="w-6 h-6 md:w-8 md:h-8 text-accent" />
-                        <span className="text-xs text-muted-foreground font-mono">
-                          06
-                        </span>
-                      </div>
-                      <h3 className="text-lg md:text-xl font-bold mb-2">
-                        アカウント
-                      </h3>
-                      <p className="text-xs md:text-sm text-muted-foreground flex-1">
-                        自分のプロフィール編集、バンド情報管理
-                      </p>
-                      <div className="flex items-center gap-2 text-accent text-sm mt-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <span>詳しく見る</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </div>
-                    </div>
-                  </div>
-                </Link>
+                  </Link>
+                ))}
               </div>
             </div>
           </section>

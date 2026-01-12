@@ -1,264 +1,89 @@
 "use client";
 
-import { PageHeader } from "@/components/PageHeader";
-import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
-import { supabase } from "@/lib/supabaseClient";
-import { StagePlotPreview } from "@/components/StagePlotPreview";
+import { PageHeader } from "@/components/PageHeader";
+import { useEventInstructions } from "@/app/hooks/useEventInstructions";
+import { InstructionCard } from "@/components/instructions/InstructionCard";
+import { InstructionSetlistTable } from "@/components/instructions/InstructionSetlistTable";
+import { InstructionStagePlot } from "@/components/instructions/InstructionStagePlot";
+import { InstructionMemberTable } from "@/components/instructions/InstructionMemberTable";
+import { EventSlotRow } from "@/app/types/instructions";
+import { Info, Lightbulb } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-type EventRow = {
-  id: string;
-  name: string;
-  date: string | null;
-};
-
-type BandNoteRow = {
-  id: string;
-  name: string;
-  event_id: string;
-  sound_note: string | null;
-  lighting_note: string | null;
-  general_note: string | null;
-  repertoire_status: string | null;
-  stage_plot_data?: Record<string, unknown> | null;
-};
-
-type SongRow = {
-  id: string;
-  band_id: string;
-  title: string;
-  artist: string | null;
-  entry_type: "song" | "mc" | null;
-  url: string | null;
-  order_index: number | null;
-  duration_sec: number | null;
-  arrangement_note: string | null;
-  lighting_spot: string | null;
-  lighting_strobe: string | null;
-  lighting_moving: string | null;
-  lighting_color: string | null;
-  memo: string | null;
-  created_at: string | null;
-};
-
-type BandMemberRow = {
-  id: string;
-  band_id: string;
-  instrument: string | null;
-  position_x: number | null;
-  position_y: number | null;
-  is_mc: boolean | null;
-  profiles?:
-    | { display_name: string | null; real_name: string | null; part: string | null }
-    | { display_name: string | null; real_name: string | null; part: string | null }[]
-    | null;
-};
-
-type StageItem = {
-  id: string;
-  label: string;
-  dashed?: boolean;
-  x: number;
-  y: number;
-};
-
-type StageMember = {
-  id: string;
-  name: string;
-  instrument?: string | null;
-  x: number;
-  y: number;
-  isMc?: boolean;
-};
-
-type EventGroup = EventRow & { bands: BandNoteRow[] };
-
-const statusLabel = (status: string | null) =>
-  status === "submitted" ? "提出済み" : "下書き";
+const LIGHTING_SHIFT_ROLES = [
+  { value: "light_op1", label: "卓操作①" },
+  { value: "light_op2", label: "卓操作②" },
+  { value: "light_spot", label: "スポット" },
+  { value: "light_assist", label: "補助" },
+] as const;
 
 const dateLabel = (value: string | null) => (value ? value.slice(0, 10) : "");
 
-const formatDuration = (durationSec: number | null) => {
-  if (durationSec == null) return "-";
-  const minutes = Math.floor(durationSec / 60);
-  const seconds = durationSec % 60;
-  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+const parseTimeValue = (value: string | null) => {
+  if (!value) return null;
+  const [h, m] = value.split(":").map((part) => Number(part));
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  return h * 60 + m;
 };
 
-const formatLightingChoice = (value: string | null) => {
-  if (!value) return "-";
-  if (value === "o") return "○";
-  if (value === "x") return "×";
-  if (value === "auto") return "おまかせ";
-  return value;
+const slotDurationLabel = (slot: EventSlotRow) => {
+  const start = parseTimeValue(slot.start_time ?? null);
+  const end = parseTimeValue(slot.end_time ?? null);
+  if (start == null || end == null) return "";
+  let duration = end - start;
+  if (duration < 0) duration += 24 * 60;
+  if (duration <= 0) return "";
+  return `(${duration})`;
 };
 
-const clampPercent = (value: number) => Math.min(95, Math.max(5, value));
+const slotTimeLabel = (slot: EventSlotRow) => {
+  if (!slot.start_time && !slot.end_time) return "時間未設定";
+  if (slot.start_time && slot.end_time) {
+    return `${slot.start_time}-${slot.end_time}${slotDurationLabel(slot)}`;
+  }
+  return slot.start_time ?? slot.end_time ?? "時間未設定";
+};
 
-const parseStageItems = (
-  value: Record<string, unknown> | null | undefined
-): StageItem[] => {
-  const rawItems = (value as { items?: unknown } | null)?.items;
-  if (!Array.isArray(rawItems)) return [];
-  return rawItems
-    .map((item, index) => {
-      const entry = item as {
-        id?: string;
-        label?: string;
-        dashed?: boolean;
-        x?: number;
-        y?: number;
-      };
-      if (!entry.label) return null;
-      return {
-        id: entry.id ?? `stage-${index}`,
-        label: entry.label,
-        dashed: Boolean(entry.dashed),
-        x: clampPercent(Number(entry.x ?? 50)),
-        y: clampPercent(Number(entry.y ?? 50)),
-      } satisfies StageItem;
-    })
-    .filter(Boolean) as StageItem[];
+const phaseLabel = (phase: EventSlotRow["slot_phase"]) => {
+  if (phase === "rehearsal_normal") return "通常リハ";
+  if (phase === "rehearsal_pre") return "直前リハ";
+  return "本番";
+};
+
+const slotLabel = (slot: EventSlotRow, bandNameMap: Map<string, string>) => {
+  if (slot.slot_type === "band") {
+    return bandNameMap.get(slot.band_id ?? "") ?? "バンド未設定";
+  }
+  if (slot.slot_type === "break") return "休憩";
+  if (slot.slot_type === "mc") return "MC";
+  return slot.note?.trim() || "その他";
 };
 
 export default function LightingInstructionsPage() {
-  const [events, setEvents] = useState<EventRow[]>([]);
-  const [bands, setBands] = useState<BandNoteRow[]>([]);
-  const [bandMembers, setBandMembers] = useState<BandMemberRow[]>([]);
-  const [songs, setSongs] = useState<SongRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    loading,
+    error,
+    groupedEvents,
+    stageItemsByBand,
+    bandMembersByBand,
+    bandMemberDetailsByBand,
+    songsByBand,
+    slotsByEvent,
+    assignmentsBySlot,
+    profilesById,
+    toggleBand,
+    expandedBands,
+  } = useEventInstructions();
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setError(null);
-      const [eventsRes, bandsRes, membersRes, songsRes] = await Promise.all([
-        supabase
-          .from("events")
-          .select("id, name, date")
-          .order("date", { ascending: true }),
-        supabase
-          .from("bands")
-          .select(
-            "id, name, event_id, sound_note, lighting_note, general_note, repertoire_status, stage_plot_data"
-          )
-          .order("created_at", { ascending: true }),
-        supabase
-          .from("band_members")
-          .select(
-            "id, band_id, instrument, position_x, position_y, is_mc, profiles(display_name, real_name, part)"
-          )
-          .order("created_at", { ascending: true }),
-        supabase
-          .from("songs")
-          .select(
-            "id, band_id, title, artist, entry_type, url, order_index, duration_sec, arrangement_note, lighting_spot, lighting_strobe, lighting_moving, lighting_color, memo, created_at"
-          )
-          .order("created_at", { ascending: true }),
-      ]);
-
-      if (cancelled) return;
-
-      if (eventsRes.error || bandsRes.error || membersRes.error || songsRes.error) {
-        console.error(
-          eventsRes.error ?? bandsRes.error ?? membersRes.error ?? songsRes.error
-        );
-        setError("指示の取得に失敗しました。時間をおいて再度お試しください。");
-        setEvents([]);
-        setBands([]);
-        setBandMembers([]);
-        setSongs([]);
-        setLoading(false);
-        return;
-      }
-
-      setEvents((eventsRes.data ?? []) as EventRow[]);
-      setBands((bandsRes.data ?? []) as BandNoteRow[]);
-      setBandMembers((membersRes.data ?? []) as BandMemberRow[]);
-      setSongs((songsRes.data ?? []) as SongRow[]);
-      setLoading(false);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const groupedEvents = useMemo<EventGroup[]>(() => {
-    const map = new Map<string, EventGroup>();
-    events.forEach((event) => {
-      map.set(event.id, { ...event, bands: [] });
-    });
-    bands.forEach((band) => {
-      const entry = map.get(band.event_id);
-      if (entry) entry.bands.push(band);
-    });
-    return Array.from(map.values()).map((group) => ({
-      ...group,
-      bands: group.bands.sort((a, b) => a.name.localeCompare(b.name, "ja")),
-    }));
-  }, [events, bands]);
-
-  const stageItemsByBand = useMemo<Record<string, StageItem[]>>(() => {
-    const next: Record<string, StageItem[]> = {};
-    bands.forEach((band) => {
-      next[band.id] = parseStageItems(band.stage_plot_data);
-    });
-    return next;
-  }, [bands]);
-
-  const bandMembersByBand = useMemo<Record<string, StageMember[]>>(() => {
-    const next: Record<string, StageMember[]> = {};
-    const counters: Record<string, number> = {};
-
-    bandMembers.forEach((row) => {
-      const profile = Array.isArray(row.profiles)
-        ? row.profiles[0] ?? null
-        : row.profiles ?? null;
-      const name = profile?.real_name ?? profile?.display_name ?? "名前未登録";
-      const instrument = row.instrument ?? profile?.part ?? null;
-      const count = counters[row.band_id] ?? 0;
-      counters[row.band_id] = count + 1;
-      const fallbackX = clampPercent(50 + ((count % 3) - 1) * 8);
-      const fallbackY = clampPercent(60 + Math.floor(count / 3) * 8);
-      const x = row.position_x ?? fallbackX;
-      const y = row.position_y ?? fallbackY;
-      if (!next[row.band_id]) next[row.band_id] = [];
-      next[row.band_id].push({
-        id: row.id,
-        name,
-        instrument,
-        x: clampPercent(Number(x ?? 50)),
-        y: clampPercent(Number(y ?? 50)),
-        isMc: Boolean(row.is_mc),
-      });
-    });
-
-    return next;
-  }, [bandMembers]);
-
-  const songsByBand = useMemo<Record<string, SongRow[]>>(() => {
-    const next: Record<string, SongRow[]> = {};
-    songs.forEach((song) => {
-      if (!next[song.band_id]) next[song.band_id] = [];
-      next[song.band_id].push(song);
-    });
-    Object.values(next).forEach((list) => {
-      list.sort((a, b) => {
-        const orderA = a.order_index ?? Number.MAX_SAFE_INTEGER;
-        const orderB = b.order_index ?? Number.MAX_SAFE_INTEGER;
-        if (orderA !== orderB) return orderA - orderB;
-        return (a.created_at ?? "").localeCompare(b.created_at ?? "");
-      });
-    });
-    return next;
-  }, [songs]);
+  const roleKeys = new Set(LIGHTING_SHIFT_ROLES.map((role) => role.value));
+  const displayProfileName = (profileId?: string | null) => {
+    if (!profileId) return "未割り当て";
+    const profile = profilesById[profileId];
+    return profile?.real_name ?? profile?.display_name ?? "未登録";
+  };
 
   return (
     <AuthGuard>
@@ -290,311 +115,160 @@ export default function LightingInstructionsPage() {
                   指示が登録されたイベントがありません。
                 </div>
               ) : (
-                groupedEvents.map((event) => (
-                  <Card key={event.id} className="bg-card/60 border-border">
-                    <CardHeader className="space-y-1">
-                      <CardTitle className="text-xl flex flex-wrap items-center gap-3">
-                        {event.name}
-                        {event.date && (
-                          <span className="text-xs text-muted-foreground">
-                            {dateLabel(event.date)}
-                          </span>
-                        )}
-                      </CardTitle>
-                      <p className="text-xs text-muted-foreground">
-                        {event.bands.length} バンド
-                      </p>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      {event.bands.length === 0 ? (
-                        <div className="text-sm text-muted-foreground">
-                          バンド情報がありません。
-                        </div>
-                      ) : (
-                        event.bands.map((band) => {
-                          const stageItems = stageItemsByBand[band.id] ?? [];
-                          const stageMembers = bandMembersByBand[band.id] ?? [];
-                          const bandSongs = songsByBand[band.id] ?? [];
-                          const hasStagePlot =
-                            stageItems.length > 0 || stageMembers.length > 0;
+                groupedEvents.map((event) => {
+                  const bandNameMap = new Map(event.bands.map((band) => [band.id, band.name]));
+                  const slots = slotsByEvent[event.id] ?? [];
 
-                          return (
-                            <div
-                              key={band.id}
-                              className="rounded-lg border border-border bg-background/40 p-4 space-y-3"
-                            >
-                              <div className="flex flex-wrap items-center justify-between gap-2">
-                                <h3 className="text-base font-semibold">{band.name}</h3>
-                                <Badge
-                                  variant={
-                                    band.repertoire_status === "submitted"
-                                      ? "default"
-                                      : "secondary"
-                                  }
-                                >
-                                  {statusLabel(band.repertoire_status)}
-                                </Badge>
-                              </div>
-                              <div className="space-y-3">
+                  return (
+                    <Card key={event.id} className="bg-card/60 border-border">
+                      <CardHeader className="space-y-1">
+                        <CardTitle className="text-xl flex flex-wrap items-center gap-3">
+                          {event.name}
+                          {event.date && (
+                            <span className="text-xs text-muted-foreground font-normal">
+                              {dateLabel(event.date)}
+                            </span>
+                          )}
+                        </CardTitle>
+                        <p className="text-xs text-muted-foreground">{event.bands.length} バンド</p>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        {event.bands.length === 0 ? (
+                          <div className="text-sm text-muted-foreground">
+                            バンド情報がありません。
+                          </div>
+                        ) : (
+                          event.bands.map((band) => {
+                            const stageItems = stageItemsByBand[band.id] ?? [];
+                            const stageMembers = bandMembersByBand[band.id] ?? [];
+                            const memberDetails = bandMemberDetailsByBand[band.id] ?? [];
+                            const bandSongs = songsByBand[band.id] ?? [];
+                            const isExpanded = expandedBands[band.id] ?? false;
+                            const bandSlots = slots.filter(
+                              (slot) => slot.slot_type === "band" && slot.band_id === band.id
+                            );
+
+                            return (
+                              <InstructionCard
+                                key={band.id}
+                                band={band}
+                                isExpanded={isExpanded}
+                                onToggle={() => toggleBand(band.id)}
+                                role="lighting"
+                              >
+                                <div className="rounded-md border border-purple-200/20 bg-purple-500/5 p-3 space-y-3">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-xs font-semibold text-primary">照明シフト</span>
+                                    <span className="text-xs text-muted-foreground">
+                                      イベント: {event.name}
+                                      {event.date ? ` (${dateLabel(event.date)})` : ""}
+                                    </span>
+                                  </div>
+                                  {bandSlots.length === 0 ? (
+                                    <p className="text-sm text-muted-foreground">
+                                      このバンドの枠がまだありません。
+                                    </p>
+                                  ) : (
+                                    <div className="space-y-3">
+                                      {bandSlots.map((slot) => {
+                                        const slotAssignments = (
+                                          assignmentsBySlot[slot.id] ?? []
+                                        ).filter((assignment) => roleKeys.has(assignment.role));
+
+                                        return (
+                                          <div
+                                            key={slot.id}
+                                            className="rounded-md border border-border/60 bg-background/50 p-3 space-y-2"
+                                          >
+                                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                              <div className="text-sm font-medium">
+                                                {phaseLabel(slot.slot_phase)}
+                                              </div>
+                                              <div className="text-xs text-muted-foreground">
+                                                {slotTimeLabel(slot)}
+                                              </div>
+                                            </div>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                              <Badge variant="outline" className="text-[10px]">
+                                                {phaseLabel(slot.slot_phase)}
+                                              </Badge>
+                                              <Badge variant="secondary" className="text-[10px]">
+                                                {slot.slot_type.toUpperCase()}
+                                              </Badge>
+                                            </div>
+                                            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                                              {LIGHTING_SHIFT_ROLES.map((role) => {
+                                                const assignment = slotAssignments.find(
+                                                  (item) => item.role === role.value
+                                                );
+                                                return (
+                                                  <div
+                                                    key={`${slot.id}-${role.value}`}
+                                                    className="rounded-md border border-border/60 bg-card/60 px-2 py-1 text-xs"
+                                                  >
+                                                    <div className="text-[10px] text-muted-foreground">
+                                                      {role.label}
+                                                    </div>
+                                                    <div className="font-medium">
+                                                      {displayProfileName(assignment?.profile_id)}
+                                                    </div>
+                                                  </div>
+                                                );
+                                              })}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="rounded-md border border-purple-200/20 bg-purple-500/5 p-3 space-y-2">
+                                  <div className="flex items-center gap-2 text-xs font-bold text-purple-400">
+                                    <Lightbulb className="w-3 h-3" />
+                                    照明メモ
+                                  </div>
+                                  <p className="text-sm text-foreground whitespace-pre-wrap">
+                                    {band.lighting_note?.trim() || "未入力"}
+                                  </p>
+                                </div>
+
                                 <div className="rounded-md border border-border/60 bg-card/60 p-3 space-y-2">
-                                  <div className="text-xs font-semibold text-primary">
-                                    共通
+                                  <div className="flex items-center gap-2 text-xs font-semibold text-primary">
+                                    <Info className="w-3 h-3" />
+                                    共通メモ
                                   </div>
                                   <p className="text-sm text-muted-foreground whitespace-pre-wrap">
                                     {band.general_note?.trim() || "未入力"}
                                   </p>
                                 </div>
+
+                                <div className="rounded-md border border-border/60 bg-card/60 p-3 space-y-2">
+                                  <div className="text-xs font-semibold text-primary">立ち位置</div>
+                                  <InstructionStagePlot items={stageItems} members={stageMembers} />
+                                </div>
+
                                 <div className="rounded-md border border-border/60 bg-card/60 p-3 space-y-2">
                                   <div className="text-xs font-semibold text-primary">
-                                    立ち位置
+                                    メンバー情報
                                   </div>
-                                  {hasStagePlot ? (
-                                    <StagePlotPreview
-                                      items={stageItems}
-                                      members={stageMembers}
-                                      className="mt-2"
-                                    />
-                                  ) : (
-                                    <p className="text-sm text-muted-foreground">
-                                      立ち位置は未入力です。
-                                    </p>
-                                  )}
+                                  <InstructionMemberTable members={memberDetails} role="lighting" />
                                 </div>
+
                                 <div className="rounded-md border border-border/60 bg-card/60 p-3 space-y-2">
                                   <div className="text-xs font-semibold text-primary">
-                                    セトリ
+                                    セットリスト / 照明要望
                                   </div>
-                                  {bandSongs.length === 0 ? (
-                                    <p className="text-sm text-muted-foreground">
-                                      セトリは未入力です。
-                                    </p>
-                                  ) : (
-                                    <div className="space-y-3">
-                                      <div className="space-y-2 md:hidden">
-                                        {bandSongs.map((song, index) => {
-                                          const isSong = song.entry_type !== "mc";
-                                          const title = song.title?.trim()
-                                            ? song.title
-                                            : song.entry_type === "mc"
-                                              ? "MC"
-                                              : "-";
-                                          const artist = isSong ? song.artist?.trim() : null;
-                                          return (
-                                            <div
-                                              key={song.id}
-                                              className="rounded-md border border-border bg-background/50 p-3"
-                                            >
-                                              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                                <span>
-                                                  #{String(index + 1).padStart(2, "0")}
-                                                </span>
-                                                <span>{formatDuration(song.duration_sec)}</span>
-                                              </div>
-                                              <div className="mt-1 text-sm font-semibold">
-                                                {artist ? `${title} / ${artist}` : title}
-                                              </div>
-                                              {song.url && (
-                                                <a
-                                                  href={song.url}
-                                                  className="mt-1 block text-xs text-primary underline break-all"
-                                                  target="_blank"
-                                                  rel="noreferrer"
-                                                >
-                                                  {song.url}
-                                                </a>
-                                              )}
-                                              <div className="mt-2 space-y-2 text-xs">
-                                                <div className="flex gap-2">
-                                                  <span className="min-w-[72px] text-muted-foreground">
-                                                    アレンジ
-                                                  </span>
-                                                  <span className="text-foreground whitespace-pre-wrap">
-                                                    {isSong
-                                                      ? song.arrangement_note || "-"
-                                                      : "-"}
-                                                  </span>
-                                                </div>
-                                                <div className="flex gap-2">
-                                                  <span className="min-w-[72px] text-muted-foreground">
-                                                    ライト要望
-                                                  </span>
-                                                  <div className="text-foreground space-y-1">
-                                                    <div>
-                                                      スポット:{" "}
-                                                      {isSong
-                                                        ? formatLightingChoice(
-                                                            song.lighting_spot
-                                                          )
-                                                        : "-"}
-                                                    </div>
-                                                    <div>
-                                                      ストロボ:{" "}
-                                                      {isSong
-                                                        ? formatLightingChoice(
-                                                            song.lighting_strobe
-                                                          )
-                                                        : "-"}
-                                                    </div>
-                                                    <div>
-                                                      ムービング:{" "}
-                                                      {isSong
-                                                        ? formatLightingChoice(
-                                                            song.lighting_moving
-                                                          )
-                                                        : "-"}
-                                                    </div>
-                                                  </div>
-                                                </div>
-                                                <div className="flex gap-2">
-                                                  <span className="min-w-[72px] text-muted-foreground">
-                                                    色要望
-                                                  </span>
-                                                  <span className="text-foreground whitespace-pre-wrap">
-                                                    {isSong ? song.lighting_color || "-" : "-"}
-                                                  </span>
-                                                </div>
-                                                <div className="flex gap-2">
-                                                  <span className="min-w-[72px] text-muted-foreground">
-                                                    備考
-                                                  </span>
-                                                  <span className="text-foreground whitespace-pre-wrap">
-                                                    {song.memo || "-"}
-                                                  </span>
-                                                </div>
-                                              </div>
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
-                                      <div className="hidden md:block">
-                                        <div className="overflow-x-auto rounded-md border border-border bg-background/40">
-                                          <Table className="min-w-[860px]">
-                                            <TableHeader>
-                                              <TableRow>
-                                                <TableHead className="w-[48px]">#</TableHead>
-                                                <TableHead>
-                                                  曲名 / アーティスト / URL
-                                                </TableHead>
-                                                <TableHead className="w-[120px]">
-                                                  時間
-                                                </TableHead>
-                                                <TableHead className="w-[180px]">
-                                                  アレンジ等
-                                                </TableHead>
-                                                <TableHead className="w-[200px]">
-                                                  ライト要望
-                                                </TableHead>
-                                                <TableHead className="w-[180px]">
-                                                  色要望
-                                                </TableHead>
-                                                <TableHead className="w-[180px]">
-                                                  備考
-                                                </TableHead>
-                                              </TableRow>
-                                            </TableHeader>
-                                            <TableBody>
-                                              {bandSongs.map((song, index) => {
-                                                const isSong = song.entry_type !== "mc";
-                                                const title = song.title?.trim()
-                                                  ? song.title
-                                                  : song.entry_type === "mc"
-                                                    ? "MC"
-                                                    : "-";
-                                                const artist = isSong
-                                                  ? song.artist?.trim()
-                                                  : null;
-                                                return (
-                                                  <TableRow key={song.id}>
-                                                    <TableCell className="text-xs text-muted-foreground">
-                                                      {String(index + 1).padStart(2, "0")}
-                                                    </TableCell>
-                                                    <TableCell className="min-w-[220px]">
-                                                      <div className="space-y-1">
-                                                        <div className="text-sm font-medium">
-                                                          {artist
-                                                            ? `${title} / ${artist}`
-                                                            : title}
-                                                        </div>
-                                                        {song.url && (
-                                                          <a
-                                                            href={song.url}
-                                                            className="text-xs text-primary underline break-all"
-                                                            target="_blank"
-                                                            rel="noreferrer"
-                                                          >
-                                                            {song.url}
-                                                          </a>
-                                                        )}
-                                                      </div>
-                                                    </TableCell>
-                                                    <TableCell className="text-xs">
-                                                      {formatDuration(song.duration_sec)}
-                                                    </TableCell>
-                                                    <TableCell className="text-xs whitespace-pre-wrap">
-                                                      {isSong
-                                                        ? song.arrangement_note || "-"
-                                                        : "-"}
-                                                    </TableCell>
-                                                    <TableCell className="text-xs space-y-1">
-                                                      <div>
-                                                        スポット:{" "}
-                                                        {isSong
-                                                          ? formatLightingChoice(
-                                                              song.lighting_spot
-                                                            )
-                                                          : "-"}
-                                                      </div>
-                                                      <div>
-                                                        ストロボ:{" "}
-                                                        {isSong
-                                                          ? formatLightingChoice(
-                                                              song.lighting_strobe
-                                                            )
-                                                          : "-"}
-                                                      </div>
-                                                      <div>
-                                                        ムービング:{" "}
-                                                        {isSong
-                                                          ? formatLightingChoice(
-                                                              song.lighting_moving
-                                                            )
-                                                          : "-"}
-                                                      </div>
-                                                    </TableCell>
-                                                    <TableCell className="text-xs whitespace-pre-wrap">
-                                                      {isSong
-                                                        ? song.lighting_color || "-"
-                                                        : "-"}
-                                                    </TableCell>
-                                                    <TableCell className="text-xs whitespace-pre-wrap">
-                                                      {song.memo || "-"}
-                                                    </TableCell>
-                                                  </TableRow>
-                                                );
-                                              })}
-                                            </TableBody>
-                                          </Table>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  )}
+                                  <InstructionSetlistTable songs={bandSongs} role="lighting" />
                                 </div>
-                                <div className="rounded-md border border-border/60 bg-card/60 p-3 space-y-2">
-                                  <div className="text-xs font-semibold text-accent">
-                                    照明
-                                  </div>
-                                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                                    {band.lighting_note?.trim() || "未入力"}
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
-                    </CardContent>
-                  </Card>
-                ))
+                              </InstructionCard>
+                            );
+                          })
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })
               )}
             </div>
           </section>

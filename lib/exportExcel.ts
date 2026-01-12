@@ -27,7 +27,7 @@ export function downloadExcelFile(
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = filename.endsWith(".xls") ? filename : `${filename}.xls`;
+  link.download = filename.endsWith(".xlsx") ? filename : `${filename}.xlsx`;
   document.body.appendChild(link);
   link.click();
   link.remove();

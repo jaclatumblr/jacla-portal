@@ -41,7 +41,10 @@ type ProfileData = {
 
 type BandMemberRow = {
   instrument: string | null;
-  bands: { id: string; name: string } | { id: string; name: string }[] | null;
+  bands:
+  | { id: string; name: string; band_type?: string | null }
+  | { id: string; name: string; band_type?: string | null }[]
+  | null;
 };
 
 type BandItem = {
@@ -89,7 +92,7 @@ export default function ProfilePage() {
     if (typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent)) {
       return `intent://discord.com/users/${encoded}#Intent;scheme=https;package=com.discord;end`;
     }
-    return `discord://discord.com/users/${encoded}`;
+    return `discord://-/users/${encoded}`;
   };
 
   useEffect(() => {
@@ -102,7 +105,7 @@ export default function ProfilePage() {
         supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle(),
         supabase
           .from("band_members")
-          .select("instrument, bands(id, name)")
+          .select("instrument, bands(id, name, band_type)")
           .eq("user_id", session.user.id),
         supabase
           .from("profile_leaders")
@@ -185,14 +188,16 @@ export default function ProfilePage() {
           const bandEntries = Array.isArray(bandRow.bands)
             ? bandRow.bands
             : bandRow.bands
-            ? [bandRow.bands]
-            : [];
+              ? [bandRow.bands]
+              : [];
           const role = bandRow.instrument?.trim();
-          bandEntries.forEach((band) => {
-            const entry = map.get(band.id) ?? { name: band.name, roles: new Set<string>() };
-            if (role) entry.roles.add(role);
-            map.set(band.id, entry);
-          });
+          bandEntries
+            .filter((band) => band.band_type === "fixed")
+            .forEach((band) => {
+              const entry = map.get(band.id) ?? { name: band.name, roles: new Set<string>() };
+              if (role) entry.roles.add(role);
+              map.set(band.id, entry);
+            });
         });
         const list = Array.from(map.entries()).map(([id, entry]) => ({
           id,
@@ -229,17 +234,17 @@ export default function ProfilePage() {
   const positionBadgeLabel =
     positions.length > 0
       ? [...positions]
-          .filter((value) => value !== "Official")
-          .sort((a, b) => (positionPriority[a] ?? 99) - (positionPriority[b] ?? 99))
-          .map((value) => positionLabels[value] ?? value)
-          .join(" / ")
+        .filter((value) => value !== "Official")
+        .sort((a, b) => (positionPriority[a] ?? 99) - (positionPriority[b] ?? 99))
+        .map((value) => positionLabels[value] ?? value)
+        .join(" / ")
       : null;
   const positionDetailLabel =
     positions.length > 0
       ? [...positions]
-          .sort((a, b) => (positionPriority[a] ?? 99) - (positionPriority[b] ?? 99))
-          .map((value) => positionLabels[value] ?? value)
-          .join(" / ")
+        .sort((a, b) => (positionPriority[a] ?? 99) - (positionPriority[b] ?? 99))
+        .map((value) => positionLabels[value] ?? value)
+        .join(" / ")
       : null;
   const hideCrewByLeader =
     leaderDisplayRoles.includes("PA Leader") || leaderDisplayRoles.includes("Lighting Leader");
@@ -265,9 +270,9 @@ export default function ProfilePage() {
   const discordLabel = discordValue || "未設定";
   const discordLinks = discordId
     ? {
-        app: getDiscordAppUrl(discordId),
-        web: `https://discord.com/users/${encodeURIComponent(discordId)}`,
-      }
+      app: getDiscordAppUrl(discordId),
+      web: `https://discord.com/users/${encodeURIComponent(discordId)}`,
+    }
     : null;
   const avatarUrl =
     profile?.avatar_url ||
@@ -511,7 +516,7 @@ export default function ProfilePage() {
                     <span className="text-xs text-primary tracking-[0.3em] font-mono">BANDS</span>
                     <h2 className="text-xl md:text-2xl font-bold mt-2">所属バンド</h2>
                   </div>
-                  <Link href="/me/bands">
+                  <Link href="/bands">
                     <Button variant="outline" className="bg-transparent w-full sm:w-auto">
                       バンド管理
                     </Button>

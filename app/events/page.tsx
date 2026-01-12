@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowRight, Calendar, Clock, MapPin } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { SkeletonEventCard } from "@/components/ui/skeleton";
 import { SideNav } from "@/components/SideNav";
 import { PageHeader } from "@/components/PageHeader";
 import { AuthGuard } from "@/lib/AuthGuard";
@@ -49,8 +50,8 @@ export default function EventsPage() {
 
       const { data, error } = await supabase
         .from("events")
-        .select("id, name, date, venue, status, open_time, start_time, note")
-        .order("date", { ascending: true });
+        .select("id, name, date, venue, status, open_time, start_time, note, created_at")
+        .order("created_at", { ascending: false });
 
       if (cancelled) return;
 
@@ -86,7 +87,11 @@ export default function EventsPage() {
             <div className="container mx-auto px-4 sm:px-6">
               <div className="max-w-4xl mx-auto space-y-4 md:space-y-6">
                 {loading ? (
-                  <div className="text-sm text-muted-foreground">読み込み中...</div>
+                  <>
+                    {[...Array(3)].map((_, i) => (
+                      <SkeletonEventCard key={i} />
+                    ))}
+                  </>
                 ) : events.length === 0 ? (
                   <div className="text-sm text-muted-foreground">イベントがありません。</div>
                 ) : (

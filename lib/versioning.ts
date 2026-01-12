@@ -1,4 +1,4 @@
-const DEFAULT_BASE_VERSION = "1.000";
+const DEFAULT_BASE_VERSION = "0.000";
 
 const normalizeVersionInput = (value: string) =>
   value.replace(/^ver\.?\s*/i, "").replace(/^v/i, "").trim();
@@ -42,15 +42,46 @@ export const buildVersionMap = (
   logs: VersionedLog[],
   baseVersion: string = BASE_VERSION
 ) => {
+  const parsedBase = parseVersion(baseVersion) ?? parseVersion(DEFAULT_BASE_VERSION);
+  if (!parsedBase) return new Map<string, string>();
+  const { major: baseMajor, minor: baseMinor, width } = parsedBase;
+  const max = 10 ** width;
+
   const sorted = [...logs].sort(
     (a, b) =>
       new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
   );
   const map = new Map<string, string>();
-  let bumpCount = 0;
+  let major = baseMajor;
+  let minor = baseMinor;
+  let isFirstLog = true;
+
+  const bumpMinor = (delta: number) => {
+    let next = minor + delta;
+    if (next >= max) {
+      const carry = Math.floor(next / max);
+      major += carry;
+      next = next % max;
+    }
+    minor = next;
+  };
+
   sorted.forEach((log) => {
-    if (log.is_version_bump) bumpCount += 1;
-    map.set(log.id, bumpVersion(baseVersion, bumpCount));
+    // 大型アップデートは is_version_bump=true で手動指定（整数部を+1して小数部をリセット）
+    if (log.is_version_bump) {
+      major += 1;
+      minor = 0;
+      isFirstLog = false;
+    } else if (isFirstLog) {
+      // 初回ログは基準バージョンをそのまま使用
+      isFirstLog = false;
+    } else {
+      // コミット（ログ）1件につき小数部を+1
+      bumpMinor(1);
+    }
+
+    const version = `${major}.${String(minor).padStart(width, "0")}`;
+    map.set(log.id, version);
   });
   return map;
 };

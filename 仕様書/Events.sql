@@ -191,8 +191,10 @@ grant execute on function public.set_event_tt_provisional(uuid, boolean) to auth
 -- =========================
 create table if not exists public.bands (
   id uuid primary key default gen_random_uuid(),
-  event_id uuid not null references public.events(id) on delete cascade,
+  event_id uuid references public.events(id) on delete cascade,
   name text not null,
+  band_type text not null default 'event',
+  source_band_id uuid references public.bands(id) on delete set null,
 
   stage_plot_data jsonb not null default '{}'::jsonb,
   representative_name text,
@@ -207,6 +209,7 @@ create table if not exists public.bands (
 );
 
 create index if not exists idx_bands_event_id on public.bands(event_id);
+create index if not exists idx_bands_type_event_id on public.bands(band_type, event_id);
 
 drop trigger if exists trg_bands_updated_at on public.bands;
 create trigger trg_bands_updated_at
@@ -221,6 +224,7 @@ drop policy if exists "bands_update_owner_or_admin" on public.bands;
 drop policy if exists "bands_delete_owner_or_admin" on public.bands;
 
 alter table public.bands
+  alter column event_id drop not null,
   drop column if exists is_approved,
   add column if not exists note_pa text,
   add column if not exists note_lighting text,
@@ -229,7 +233,9 @@ alter table public.bands
   add column if not exists sound_note text,
   add column if not exists lighting_note text,
   add column if not exists general_note text,
-  add column if not exists lighting_total_min int4;
+  add column if not exists lighting_total_min int4,
+  add column if not exists band_type text not null default 'event',
+  add column if not exists source_band_id uuid references public.bands(id) on delete set null;
 
 do $$
 begin
@@ -239,6 +245,31 @@ begin
     alter table public.bands
       add constraint bands_repertoire_status_check
       check (repertoire_status in ('draft', 'submitted'));
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'bands_band_type_check'
+  ) then
+    alter table public.bands
+      add constraint bands_band_type_check
+      check (band_type in ('event', 'fixed'));
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'bands_event_binding_check'
+  ) then
+    alter table public.bands
+      add constraint bands_event_binding_check
+      check (
+        (band_type = 'event' and event_id is not null)
+        or (band_type = 'fixed' and event_id is null)
+      );
   end if;
 end $$;
 
@@ -253,10 +284,13 @@ on public.bands for insert
 to authenticated
 with check (
   created_by = auth.uid()  -- ここを必須にして「作成者固定」
-  and exists (
-    select 1 from public.events e
-    where e.id = event_id
-      and e.event_type in ('live', 'camp')
+  and (
+    (band_type = 'event' and exists (
+      select 1 from public.events e
+      where e.id = event_id
+        and e.event_type in ('live', 'camp')
+    ))
+    or (band_type = 'fixed' and event_id is null)
   )
 );
 
@@ -439,9 +473,16 @@ with check (
   and exists (
     select 1
     from public.bands b
-    join public.events e on e.id = b.event_id
     where b.id = band_id
-      and e.event_type in ('live', 'camp')
+      and (
+        b.band_type = 'fixed'
+        or exists (
+          select 1
+          from public.events e
+          where e.id = b.event_id
+            and e.event_type in ('live', 'camp')
+        )
+      )
   )
 );
 

@@ -11,6 +11,7 @@ import {
   MessageSquare,
   Power,
   Shield,
+  Terminal,
 } from "lucide-react";
 import { SideNav } from "@/components/SideNav";
 import { PageHeader } from "@/components/PageHeader";
@@ -212,6 +213,25 @@ export default function AdminPage() {
                         <h3 className="text-base md:text-lg font-bold mb-2">更新履歴</h3>
                         <p className="text-xs md:text-sm text-muted-foreground flex-1">
                           公開向けの更新履歴を管理
+                        </p>
+                        <div className="flex items-center gap-2 text-primary text-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                          <span>開く</span>
+                          <ArrowRight className="w-4 h-4" />
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                )}
+
+                {isAdmin && (
+                  <Link href="/admin/logs" className="group">
+                    <div className="relative h-40 md:h-48 p-4 md:p-6 bg-card/50 border border-border rounded-lg hover:border-primary/50 transition-all">
+                      <div className="absolute inset-0 bg-gradient-to-br from-green-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-lg" />
+                      <div className="relative h-full flex flex-col">
+                        <Terminal className="w-6 md:w-8 h-6 md:h-8 text-green-500 mb-3 md:mb-4" />
+                        <h3 className="text-base md:text-lg font-bold mb-2">Vercel ログ</h3>
+                        <p className="text-xs md:text-sm text-muted-foreground flex-1">
+                          サーバーのランタイムログをリアルタイム表示
                         </p>
                         <div className="flex items-center gap-2 text-primary text-sm opacity-0 group-hover:opacity-100 transition-opacity">
                           <span>開く</span>

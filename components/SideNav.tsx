@@ -8,6 +8,7 @@ import {
   Bell,
   Calendar,
   ClipboardList,
+  Guitar,
   Home,
   Lightbulb,
   LogOut,
@@ -29,6 +30,7 @@ import { toast } from "@/lib/toast";
 const navItems = [
   { id: "home", href: "/", label: "ホーム", icon: Home },
   { id: "events", href: "/events", label: "イベント", icon: Calendar },
+  { id: "band-builder", href: "/bands", label: "バンドを組む", icon: Guitar },
   { id: "pa", href: "/pa", label: "PA", icon: Music },
   { id: "lighting", href: "/lighting", label: "照明", icon: Lightbulb },
   { id: "maintenance", href: "/maintenance", label: "備品管理", icon: ClipboardList },
@@ -227,7 +229,7 @@ export function SideNav() {
           aria-label="ホームへ戻る"
         >
           <Image
-            src="/images/e3-83-ad-e3-82-b42-20-281-29.png"
+            src="/images/jacla-logo.png"
             alt="Jacla logo"
             width={36}
             height={22}
@@ -302,6 +304,8 @@ export function SideNav() {
       {/* デスクトップサイドバー */}
       <aside
         ref={asideRef}
+        role="navigation"
+        aria-label="メインナビゲーション"
         onMouseEnter={() => updateExpanded(true)}
         onMouseLeave={() => {
           const now = Date.now();
@@ -328,7 +332,7 @@ export function SideNav() {
           <Link href="/" className="flex items-center gap-3 w-full">
             <div className="w-10 h-10 flex items-center justify-center shrink-0">
               <Image
-                src="/images/e3-83-ad-e3-82-b42-20-281-29.png"
+                src="/images/jacla-logo.png"
                 alt="Jacla logo"
                 width={36}
                 height={22}
@@ -348,7 +352,7 @@ export function SideNav() {
         </div>
 
         {/* メインナビゲーション */}
-        <nav className="flex-1 py-3 px-3 space-y-0.5 overflow-y-auto no-scrollbar">
+        <nav aria-label="メインメニュー" className="flex-1 py-3 px-3 space-y-0.5 overflow-y-auto no-scrollbar">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive =
@@ -496,7 +500,7 @@ export function SideNav() {
         >
           <Link href="/" onClick={() => setIsMobileMenuOpen(false)} className="flex flex-col items-center gap-2">
             <Image
-              src="/images/e3-83-ad-e3-82-b42-20-281-29.png"
+              src="/images/jacla-logo.png"
               alt="Jacla logo"
               width={80}
               height={48}
@@ -596,4 +600,3 @@ export function SideNav() {
     </>
   );
 }
-

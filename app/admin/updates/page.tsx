@@ -34,6 +34,7 @@ export default function AdminUpdatesPage() {
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [bumping, setBumping] = useState(false);
 
   const versionMap = useMemo(() => buildVersionMap(logs, BASE_VERSION), [logs]);
   const latestVersion = logs.length
@@ -112,6 +113,39 @@ export default function AdminUpdatesPage() {
     await loadLogs();
   };
 
+  const handleManualMajorBump = async () => {
+    if (bumping) return;
+    const accessToken = session?.access_token;
+    if (!accessToken) {
+      toast.error("セッションを取得できませんでした。再ログインしてください。");
+      return;
+    }
+    setBumping(true);
+    // メジャーバージョンを手動で+1するためのダミー行を追加（is_version_bump=true）
+    const { error } = await supabase
+      .from("update_logs")
+      .insert({
+        title: "メジャーバージョン更新",
+        summary: "手動でメジャーバージョンを更新しました。",
+        details: null,
+        is_published: true,
+        is_version_bump: true,
+        commit_sha: null,
+        commit_url: null,
+      });
+
+    if (error) {
+      console.error(error);
+      toast.error("メジャーバージョン更新に失敗しました。");
+      setBumping(false);
+      return;
+    }
+
+    toast.success("メジャーバージョンを+1しました。");
+    setBumping(false);
+    await loadLogs();
+  };
+
   if (accessLoading) {
     return (
       <AuthGuard>
@@ -166,10 +200,15 @@ export default function AdminUpdatesPage() {
               <Card className="bg-card/60 border-border h-fit">
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="text-base">一覧</CardTitle>
-                  <Button size="sm" variant="outline" onClick={handleSync} className="gap-1">
-                    <RefreshCw className="h-4 w-4" />
-                    同期
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" variant="outline" onClick={handleSync} className="gap-1" disabled={syncing}>
+                      <RefreshCw className="h-4 w-4" />
+                      同期
+                    </Button>
+                    <Button size="sm" variant="default" onClick={handleManualMajorBump} disabled={bumping}>
+                      メジャー+1
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-2 max-h-[60vh] overflow-y-auto">
                   {loading ? (

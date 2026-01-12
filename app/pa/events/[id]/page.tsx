@@ -128,6 +128,7 @@ export default function PAEventDetailPage() {
           .from("bands")
           .select("id, name, event_id, repertoire_status, general_note, sound_note, stage_plot_data")
           .eq("event_id", eventId)
+          .eq("band_type", "event")
           .order("created_at", { ascending: true }),
       ]);
 

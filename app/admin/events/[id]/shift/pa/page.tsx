@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, usePathname } from "next/navigation";
 import { Calendar, RefreshCw, Users } from "lucide-react";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { SideNav } from "@/components/SideNav";
@@ -107,6 +107,7 @@ const hiddenShiftNotes = new Set(["転換"]);
 
 export default function AdminEventShiftPaPage() {
   const params = useParams();
+  const pathname = usePathname();
   const eventId =
     typeof params?.id === "string" ? params.id : Array.isArray(params?.id) ? params.id[0] : "";
   const { isAdmin, isPaLeader, canAccessAdmin, loading: roleLoading } = useRoleFlags();
@@ -122,6 +123,7 @@ export default function AdminEventShiftPaPage() {
   const [loading, setLoading] = useState(true);
   const [savingStaff, setSavingStaff] = useState(false);
   const [savingAssignments, setSavingAssignments] = useState(false);
+  const [autoAssigning, setAutoAssigning] = useState(false);
   const [syncingPerformers, setSyncingPerformers] = useState(false);
   const [staffForm, setStaffForm] = useState({ profileId: "" });
   const [assignmentDrafts, setAssignmentDrafts] = useState<Record<string, string>>({});
@@ -170,6 +172,17 @@ export default function AdminEventShiftPaPage() {
     return new Set(bandMembers.map((member) => member.user_id));
   }, [bandMembers]);
 
+  const bandMembersMap = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    bandMembers.forEach((member) => {
+      if (!member.band_id) return;
+      const set = map.get(member.band_id) ?? new Set<string>();
+      set.add(member.user_id);
+      map.set(member.band_id, set);
+    });
+    return map;
+  }, [bandMembers]);
+
   const eligiblePerformerIds = useMemo(() => {
     return new Set(
       bandMembers
@@ -206,6 +219,15 @@ export default function AdminEventShiftPaPage() {
     return map;
   }, [staffAssignments]);
 
+  const slotMap = useMemo(() => {
+    return new Map(slots.map((slot) => [slot.id, slot]));
+  }, [slots]);
+
+  const isPerformerInSlot = (slot: EventSlot | undefined, profileId: string) => {
+    if (!slot || slot.slot_type !== "band" || !slot.band_id) return false;
+    return bandMembersMap.get(slot.band_id)?.has(profileId) ?? false;
+  };
+
   useEffect(() => {
     if (!eventId || roleLoading || !canAccessAdmin) return;
     let cancelled = false;
@@ -223,6 +245,7 @@ export default function AdminEventShiftPaPage() {
           .from("bands")
           .select("id, name")
           .eq("event_id", eventId)
+          .eq("band_type", "event")
           .order("created_at", { ascending: true }),
         supabase
           .from("event_slots")
@@ -571,6 +594,13 @@ export default function AdminEventShiftPaPage() {
   const handleSetAssignment = async (slotId: string, role: RoleValue, profileId: string) => {
     if (!canEdit || savingAssignments) return;
     setSavingAssignments(true);
+    const slot = slotMap.get(slotId);
+
+    if (profileId && isPerformerInSlot(slot, profileId)) {
+      toast.error("演奏中のメンバーは割り当てできません。");
+      setSavingAssignments(false);
+      return;
+    }
 
     const existing = staffAssignments.filter(
       (assignment) => assignment.event_slot_id === slotId && assignment.role === role
@@ -655,6 +685,140 @@ export default function AdminEventShiftPaPage() {
     setSavingAssignments(false);
   };
 
+  const handleAutoAssign = async () => {
+    if (!canEdit || autoAssigning) return;
+    if (orderedSlots.length === 0) {
+      toast.error("割り当て対象のスロットがありません。");
+      return;
+    }
+
+    const confirmed = window.confirm("現在の割当を上書きして自動割当を実行しますか？");
+    if (!confirmed) return;
+
+    const staffPool = paStaffOptions
+      .map((staff) => staff.profile_id)
+      .filter((profileId) => eligibleProfileIds.has(profileId));
+
+    if (staffPool.length === 0) {
+      toast.error("割り当て可能なスタッフがいません。");
+      return;
+    }
+
+    setAutoAssigning(true);
+
+    const slotIds = orderedSlots.map((slot) => slot.id).filter(Boolean);
+    if (slotIds.length > 0) {
+      const { error: deleteError } = await supabase
+        .from("slot_staff_assignments")
+        .delete()
+        .in("event_slot_id", slotIds)
+        .in("role", roleOptions.map((role) => role.value));
+
+      if (deleteError) {
+        console.error(deleteError);
+        toast.error("既存の割当の削除に失敗しました。");
+        setAutoAssigning(false);
+        return;
+      }
+    }
+
+    const assignmentCounts = new Map<string, number>();
+    staffPool.forEach((profileId) => assignmentCounts.set(profileId, 0));
+    let lastAssigned: string | null = null;
+    const payloads: Array<{
+      event_slot_id: string;
+      profile_id: string;
+      role: RoleValue;
+      is_fixed: boolean;
+      note: null;
+    }> = [];
+
+    const pickStaff = (slot: EventSlot, usedInSlot: Set<string>) => {
+      const candidates = staffPool.filter(
+        (profileId) => !usedInSlot.has(profileId) && !isPerformerInSlot(slot, profileId)
+      );
+      if (candidates.length === 0) return null;
+      candidates.sort((a, b) => {
+        const diff = (assignmentCounts.get(a) ?? 0) - (assignmentCounts.get(b) ?? 0);
+        if (diff !== 0) return diff;
+        if (lastAssigned === a) return 1;
+        if (lastAssigned === b) return -1;
+        return a.localeCompare(b);
+      });
+      const chosen = candidates[0];
+      assignmentCounts.set(chosen, (assignmentCounts.get(chosen) ?? 0) + 1);
+      lastAssigned = chosen;
+      usedInSlot.add(chosen);
+      return chosen;
+    };
+
+    orderedSlots.forEach((slot) => {
+      if (!slot.id) return;
+      const usedInSlot = new Set<string>();
+      const mainStaff = pickStaff(slot, usedInSlot);
+      const subStaff = pickStaff(slot, usedInSlot);
+      const extraStaff = pickStaff(slot, usedInSlot);
+
+      if (mainStaff) {
+        payloads.push({
+          event_slot_id: slot.id,
+          profile_id: mainStaff,
+          role: "pa_main",
+          is_fixed: true,
+          note: null,
+        });
+      }
+      if (subStaff) {
+        payloads.push({
+          event_slot_id: slot.id,
+          profile_id: subStaff,
+          role: "pa_sub",
+          is_fixed: true,
+          note: null,
+        });
+      }
+      if (extraStaff) {
+        payloads.push({
+          event_slot_id: slot.id,
+          profile_id: extraStaff,
+          role: "pa_extra",
+          is_fixed: true,
+          note: null,
+        });
+      }
+    });
+
+    if (payloads.length === 0) {
+      toast.error("割り当て可能なスタッフが見つかりませんでした。");
+      setAutoAssigning(false);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("slot_staff_assignments")
+      .insert(payloads)
+      .select("id, event_slot_id, profile_id, role, is_fixed, note");
+
+    if (error || !data) {
+      console.error(error);
+      toast.error("自動割当の保存に失敗しました。");
+      setAutoAssigning(false);
+      return;
+    }
+
+    setStaffAssignments((data ?? []) as SlotStaffAssignment[]);
+    setAssignmentDrafts(() => {
+      const next: Record<string, string> = {};
+      (data ?? []).forEach((assignment) => {
+        next[`${assignment.event_slot_id}:${assignment.role as RoleValue}`] = assignment.profile_id;
+      });
+      return next;
+    });
+
+    toast.success("自動割当を実行しました。");
+    setAutoAssigning(false);
+  };
+
   if (roleLoading || loading) {
     return (
       <AuthGuard>
@@ -706,6 +870,31 @@ export default function AdminEventShiftPaPage() {
             backHref={`/admin/events/${eventId}`}
             backLabel="イベント編集"
           />
+
+          <div className="container mx-auto px-4 sm:px-6">
+            <div className="inline-flex h-9 w-fit items-center justify-center rounded-lg bg-muted p-[3px]">
+              <Link
+                href={`/admin/events/${eventId}/shift/pa`}
+                className={`flex-1 rounded-md px-3 py-1 text-sm font-medium transition-colors ${
+                  pathname?.includes("/shift/pa")
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                PAシフト
+              </Link>
+              <Link
+                href={`/admin/events/${eventId}/shift/lighting`}
+                className={`flex-1 rounded-md px-3 py-1 text-sm font-medium transition-colors ${
+                  pathname?.includes("/shift/lighting")
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                照明シフト
+              </Link>
+            </div>
+          </div>
 
           <section className="flex-1 py-6 md:py-8 md:overflow-hidden">
             <div className="container mx-auto px-4 sm:px-6 flex flex-col gap-6 md:gap-8 md:h-full">
@@ -853,9 +1042,24 @@ export default function AdminEventShiftPaPage() {
                     <CardTitle className="text-lg">PAシフト割当</CardTitle>
                     <CardDescription>各枠にPA担当を割り当てます。</CardDescription>
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Calendar className="w-4 h-4" />
-                    {event?.date ?? "日程未登録"}
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={handleAutoAssign}
+                      disabled={!canEdit || autoAssigning}
+                    >
+                      {autoAssigning ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        "自動割当"
+                      )}
+                    </Button>
+                    <span className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4" />
+                      {event?.date ?? "日程未登録"}
+                    </span>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4 md:flex-1 md:min-h-0 md:overflow-auto">
@@ -927,12 +1131,18 @@ export default function AdminEventShiftPaPage() {
                                         disabled={!canEdit}
                                       >
                                         <option value="">未割当</option>
-                                        {paStaffOptions.map((staff) => (
-                                          <option key={staff.id} value={staff.profile_id}>
-                                            {profileMap.get(staff.profile_id)?.display_name ?? "未登録"}
+                                      {paStaffOptions.map((staff) => {
+                                        const profile = profileMap.get(staff.profile_id);
+                                        const isPerformer = isPerformerInSlot(slot, staff.profile_id);
+                                        const label = profile?.display_name ?? "未登録";
+                                        return (
+                                          <option key={staff.id} value={staff.profile_id} disabled={isPerformer}>
+                                            {label}
+                                            {isPerformer ? "（演奏中）" : ""}
                                           </option>
-                                        ))}
-                                      </select>
+                                        );
+                                      })}
+                                    </select>
                                       <Button
                                         type="button"
                                         size="sm"

@@ -1,9 +1,9 @@
-"use client";
+﻿"use client";
 
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { ArrowRight, Calendar, Music, Users } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Loader2, Music, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { supabase } from "@/lib/supabaseClient";
@@ -11,24 +11,23 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/lib/toast";
 import { PageHeader } from "@/components/PageHeader";
 
-type EventRow = {
-  id: string;
-  name: string;
+type EventInfo = {
+  name: string | null;
   date: string | null;
 };
 
 type BandRow = {
   id: string;
   name: string;
-  event_id: string;
-  repertoire_status: string | null;
-  events?: EventRow | EventRow[] | null;
+  band_type?: string | null;
+  event_id?: string | null;
+  created_by?: string | null;
+  events?: EventInfo | EventInfo[] | null;
 };
 
 type BandMemberRow = {
   band_id: string;
   instrument: string | null;
-  bands?: BandRow | BandRow[] | null;
 };
 
 type BandSummary = {
@@ -36,17 +35,31 @@ type BandSummary = {
   name: string;
   role: string;
   members: number;
-  event: (EventRow & { status: string | null }) | null;
+  eventId?: string | null;
+  eventName?: string | null;
+  eventDate?: string | null;
 };
 
-const statusLabel = (status: string | null) =>
-  status === "submitted" ? "提出済み" : "下書き";
+const pickEventInfo = (band: BandRow): EventInfo | null => {
+  const event = Array.isArray(band.events) ? band.events[0] : band.events;
+  return event ?? null;
+};
 
-const dateLabel = (value: string | null) => (value ? value.slice(0, 10) : "-");
+const formatDate = (value?: string | null) => {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString("ja-JP", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+};
 
 export default function MyBandsPage() {
   const { session } = useAuth();
-  const [bands, setBands] = useState<BandSummary[]>([]);
+  const [fixedBands, setFixedBands] = useState<BandSummary[]>([]);
+  const [eventBands, setEventBands] = useState<BandSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -58,16 +71,8 @@ export default function MyBandsPage() {
       const userId = session.user.id;
 
       const [memberRes, createdRes] = await Promise.all([
-        supabase
-          .from("band_members")
-          .select(
-            "band_id, instrument, bands(id, name, event_id, repertoire_status, events(id, name, date))"
-          )
-          .eq("user_id", userId),
-        supabase
-          .from("bands")
-          .select("id, name, event_id, repertoire_status, events(id, name, date)")
-          .eq("created_by", userId),
+        supabase.from("band_members").select("band_id, instrument").eq("user_id", userId),
+        supabase.from("bands").select("id").eq("created_by", userId),
       ]);
 
       if (cancelled) return;
@@ -75,99 +80,100 @@ export default function MyBandsPage() {
       if (memberRes.error || createdRes.error) {
         console.error(memberRes.error ?? createdRes.error);
         toast.error("マイバンドの取得に失敗しました。");
-        setBands([]);
+        setFixedBands([]);
+        setEventBands([]);
         setLoading(false);
         return;
       }
 
       const memberRows = (memberRes.data ?? []) as BandMemberRow[];
-      const createdBands = (createdRes.data ?? []) as BandRow[];
+      const createdIds = (createdRes.data ?? []).map((row) => (row as { id: string }).id);
+      const bandIds = Array.from(new Set([...memberRows.map((row) => row.band_id), ...createdIds]));
 
-      const bandMap = new Map<
-        string,
-        { name: string; event: BandSummary["event"]; roles: Set<string>; isOwner: boolean }
-      >();
-
-      const addBandEntry = (
-        band: BandRow,
-        role: string | null,
-        isOwner: boolean
-      ) => {
-        const eventValue = Array.isArray(band.events)
-          ? band.events[0] ?? null
-          : band.events ?? null;
-        const event = eventValue
-          ? {
-              id: eventValue.id,
-              name: eventValue.name,
-              date: eventValue.date,
-              status: band.repertoire_status ?? "draft",
-            }
-          : null;
-        const entry = bandMap.get(band.id) ?? {
-          name: band.name,
-          event,
-          roles: new Set<string>(),
-          isOwner: false,
-        };
-        if (role) entry.roles.add(role);
-        if (isOwner) entry.isOwner = true;
-        bandMap.set(band.id, entry);
-      };
-
-      memberRows.forEach((row) => {
-        const bandEntries = Array.isArray(row.bands)
-          ? row.bands
-          : row.bands
-          ? [row.bands]
-          : [];
-        bandEntries.forEach((band) => addBandEntry(band, row.instrument, false));
-      });
-
-      createdBands.forEach((band) => addBandEntry(band, null, true));
-
-      const bandIds = Array.from(bandMap.keys());
-      const memberCountsRes = bandIds.length
-        ? await supabase
-            .from("band_members")
-            .select("band_id, user_id")
-            .in("band_id", bandIds)
-        : { data: [], error: null };
-
-      if (memberCountsRes.error) {
-        console.error(memberCountsRes.error);
+      if (bandIds.length === 0) {
+        setFixedBands([]);
+        setEventBands([]);
+        setLoading(false);
+        return;
       }
 
+      const { data: bandsData, error: bandsError } = await supabase
+        .from("bands")
+        .select("id, name, band_type, event_id, created_by, events(name, date)")
+        .in("id", bandIds);
+
+      if (cancelled) return;
+      if (bandsError) {
+        console.error(bandsError);
+        toast.error("バンド情報の取得に失敗しました。");
+        setFixedBands([]);
+        setEventBands([]);
+        setLoading(false);
+        return;
+      }
+
+      const { data: countsData, error: countsError } = await supabase
+        .from("band_members")
+        .select("band_id, user_id")
+        .in("band_id", bandIds);
+
+      if (countsError) {
+        console.error(countsError);
+      }
+
+      const roleMap = new Map<string, Set<string>>();
+      memberRows.forEach((row) => {
+        if (!row.instrument) return;
+        const entry = roleMap.get(row.band_id) ?? new Set<string>();
+        entry.add(row.instrument);
+        roleMap.set(row.band_id, entry);
+      });
+
       const memberCounts = new Map<string, Set<string>>();
-      (memberCountsRes.data ?? []).forEach((row) => {
+      (countsData ?? []).forEach((row) => {
         const entry = row as { band_id: string; user_id: string };
         const set = memberCounts.get(entry.band_id) ?? new Set<string>();
         set.add(entry.user_id);
         memberCounts.set(entry.band_id, set);
       });
 
-      const list = Array.from(bandMap.entries()).map(([id, entry]) => {
-        const roleLabel = entry.roles.size
-          ? Array.from(entry.roles).join(" / ")
-          : entry.isOwner
-          ? "代表者"
-          : "担当未設定";
-        return {
-          id,
-          name: entry.name,
+      const ownerIds = new Set(createdIds);
+      const fixedList: BandSummary[] = [];
+      const eventList: BandSummary[] = [];
+
+      (bandsData ?? []).forEach((band) => {
+        const bandType = band.band_type ?? (band.event_id ? "event" : "fixed");
+        const roles = roleMap.get(band.id);
+        const roleLabel = roles?.size
+          ? Array.from(roles).join(" / ")
+          : ownerIds.has(band.id)
+          ? "代表"
+          : "参加中";
+        const summary: BandSummary = {
+          id: band.id,
+          name: band.name,
           role: roleLabel,
-          members: memberCounts.get(id)?.size ?? 0,
-          event: entry.event,
-        } satisfies BandSummary;
+          members: memberCounts.get(band.id)?.size ?? 0,
+        };
+
+        if (bandType === "fixed") {
+          fixedList.push(summary);
+        } else {
+          const eventInfo = pickEventInfo(band);
+          eventList.push({
+            ...summary,
+            eventId: band.event_id ?? null,
+            eventName: eventInfo?.name ?? null,
+            eventDate: eventInfo?.date ?? null,
+          });
+        }
       });
 
-      list.sort((a, b) => {
-        const dateA = a.event?.date ?? "";
-        const dateB = b.event?.date ?? "";
-        return dateA.localeCompare(dateB, "ja");
-      });
+      fixedList.sort((a, b) => a.name.localeCompare(b.name, "ja"));
+      eventList.sort((a, b) => (b.eventDate ?? "").localeCompare(a.eventDate ?? ""));
 
-      setBands(list);
+      setFixedBands(fixedList);
+      setEventBands(eventList);
       setLoading(false);
     })();
 
@@ -176,7 +182,100 @@ export default function MyBandsPage() {
     };
   }, [session]);
 
-  const hasBands = bands.length > 0;
+  const hasFixedBands = fixedBands.length > 0;
+  const hasEventBands = eventBands.length > 0;
+
+  const fixedContent = useMemo(() => {
+    if (loading) {
+      return (
+        <div className="rounded-lg border border-border bg-card/60 px-4 py-6 text-sm text-muted-foreground">
+          <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
+          読み込み中...
+        </div>
+      );
+    }
+    if (!hasFixedBands) {
+      return (
+        <div className="rounded-lg border border-border bg-card/60 px-4 py-6 text-sm text-muted-foreground">
+          固定バンドがありません。
+        </div>
+      );
+    }
+    return (
+      <div className="grid gap-3">
+        {fixedBands.map((band) => (
+          <div key={band.id} className="p-4 md:p-5 bg-card/60 border border-border rounded-lg">
+            <div className="flex items-center gap-4">
+              <div className="w-11 h-11 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                <Music className="w-5 h-5 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-sm md:text-base truncate">{band.name}</p>
+                <p className="text-xs md:text-sm text-muted-foreground truncate">{band.role}</p>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Users className="w-4 h-4" />
+                <span>{band.members}人</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }, [fixedBands, hasFixedBands, loading]);
+
+  const eventContent = useMemo(() => {
+    if (loading) {
+      return (
+        <div className="rounded-lg border border-border bg-card/60 px-4 py-6 text-sm text-muted-foreground">
+          <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
+          読み込み中...
+        </div>
+      );
+    }
+    if (!hasEventBands) {
+      return (
+        <div className="rounded-lg border border-border bg-card/60 px-4 py-6 text-sm text-muted-foreground">
+          イベントバンドがありません。
+        </div>
+      );
+    }
+    return (
+      <div className="grid gap-3">
+        {eventBands.map((band) => (
+          <div key={band.id} className="p-4 md:p-5 bg-card/60 border border-border rounded-lg">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-11 h-11 rounded-full bg-secondary/10 flex items-center justify-center shrink-0">
+                  <Music className="w-5 h-5 text-secondary" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-bold text-sm md:text-base truncate">{band.name}</p>
+                  <p className="text-xs md:text-sm text-muted-foreground truncate">{band.role}</p>
+                  {(band.eventName || band.eventDate) && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {band.eventName ?? "イベント"} {band.eventDate ? `(${formatDate(band.eventDate)})` : ""}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Users className="w-4 h-4" />
+                  <span>{band.members}人</span>
+                </div>
+                {band.eventId && (
+                  <Button size="sm" variant="outline" asChild>
+                    <Link href={`/events/${band.eventId}/repertoire/submit`}>レパ表へ</Link>
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }, [eventBands, hasEventBands, loading]);
 
   return (
     <AuthGuard>
@@ -187,89 +286,38 @@ export default function MyBandsPage() {
           <PageHeader
             kicker="My Bands"
             title="マイバンド"
-            description="自分が参加しているバンドとイベントを確認できます。"
-            backHref="/me/profile"
-            backLabel="マイページ"
+            description="所属している固定バンドとイベントバンドを確認できます。"
+            actions={
+              <Button asChild>
+                <Link href="/bands">バンドを組む</Link>
+              </Button>
+            }
           />
 
           <section className="py-8 md:py-12">
             <div className="container mx-auto px-4 sm:px-6">
-              <div className="max-w-4xl mx-auto space-y-4">
-                {loading ? (
-                  <div className="rounded-lg border border-border bg-card/60 px-4 py-6 text-sm text-muted-foreground">
-                    読み込み中...
-                  </div>
-                ) : !hasBands ? (
-                  <div className="rounded-lg border border-border bg-card/60 px-4 py-6 text-sm text-muted-foreground">
-                    所属バンドがありません。
-                  </div>
-                ) : (
-                  bands.map((band) => (
-                    <div
-                      key={band.id}
-                      className="p-4 md:p-6 bg-card/50 border border-border rounded-lg"
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                            <Music className="w-6 h-6 text-primary" />
-                          </div>
-                          <div>
-                            <h3 className="font-bold text-lg">{band.name}</h3>
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <span>{band.role}</span>
-                              <span className="hidden sm:inline">・</span>
-                              <div className="flex items-center gap-1">
-                                <Users className="w-3 h-3" />
-                                <span>{band.members}人</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <p className="text-xs text-muted-foreground font-medium">
-                          参加イベント
-                        </p>
-                        {band.event ? (
-                          <Link
-                            key={band.event.id}
-                            href={`/events/${band.event.id}`}
-                            className="group flex items-center justify-between p-3 bg-background/50 border border-border rounded-lg hover:border-primary/50 transition-all"
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <Calendar className="w-4 h-4 text-primary shrink-0" />
-                              <div className="min-w-0">
-                                <div className="text-sm font-medium truncate group-hover:text-primary transition-colors">
-                                  {band.event.name}
-                                </div>
-                                <div className="text-xs text-muted-foreground">
-                                  {dateLabel(band.event.date)}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <Badge
-                                variant={
-                                  band.event.status === "submitted" ? "default" : "outline"
-                                }
-                                className="text-xs"
-                              >
-                                {statusLabel(band.event.status)}
-                              </Badge>
-                              <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                            </div>
-                          </Link>
-                        ) : (
-                          <div className="text-sm text-muted-foreground">
-                            イベント情報がありません。
-                          </div>
-                        )}
-                      </div>
+              <div className="max-w-5xl mx-auto space-y-10">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-lg md:text-xl font-bold">固定バンド</h2>
+                      <p className="text-sm text-muted-foreground">
+                        いつでも活動できるバンドです。
+                      </p>
                     </div>
-                  ))
-                )}
+                  </div>
+                  {fixedContent}
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <h2 className="text-lg md:text-xl font-bold">イベントバンド</h2>
+                    <p className="text-sm text-muted-foreground">
+                      イベントごとに編成されたバンドです。
+                    </p>
+                  </div>
+                  {eventContent}
+                </div>
               </div>
             </div>
           </section>

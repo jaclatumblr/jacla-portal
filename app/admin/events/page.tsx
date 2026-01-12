@@ -103,9 +103,9 @@ export default function AdminEventsPage() {
       const { data, error } = await supabase
         .from("events")
         .select(
-          "id, name, date, status, event_type, venue, open_time, start_time, note, default_changeover_min"
+          "id, name, date, status, event_type, venue, open_time, start_time, note, default_changeover_min, created_at"
         )
-        .order("date", { ascending: true });
+        .order("created_at", { ascending: false });
       if (cancelled) return;
       if (error) {
         console.error(error);
@@ -152,7 +152,7 @@ export default function AdminEventsPage() {
       return;
     }
 
-    setEvents((prev) => [...prev, data as EventRow].sort((a, b) => a.date.localeCompare(b.date)));
+    setEvents((prev) => [data as EventRow, ...prev]);
     setForm(emptyForm);
     toast.success("イベントを作成しました。");
     setSaving(false);

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowRight, Calendar, Pin } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { SkeletonAnnouncementCard } from "@/components/ui/skeleton";
 import { SideNav } from "@/components/SideNav";
 import { PageHeader } from "@/components/PageHeader";
 import { AuthGuard } from "@/lib/AuthGuard";
@@ -87,7 +88,11 @@ export default function AnnouncementsPage() {
             <div className="container mx-auto px-4 sm:px-6">
               <div className="max-w-4xl mx-auto space-y-4 md:space-y-6">
                 {loading && (
-                  <div className="text-sm text-muted-foreground">読み込み中...</div>
+                  <>
+                    {[...Array(4)].map((_, i) => (
+                      <SkeletonAnnouncementCard key={i} />
+                    ))}
+                  </>
                 )}
 
                 {!loading && pinned.length === 0 && regular.length === 0 && (

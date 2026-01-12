@@ -2,7 +2,19 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, TrendingUp, Users, Eye } from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  Cell,
+} from "recharts";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { supabase } from "@/lib/supabaseClient";
 import { useIsAdmin } from "@/lib/useIsAdmin";
@@ -37,6 +49,11 @@ type EventSummary = {
   count: number;
 };
 
+type DateCount = {
+  date: string;
+  count: number;
+};
+
 const resolveProfileName = (profiles: LoginHistoryRow["profiles"]) => {
   const profile = Array.isArray(profiles) ? profiles[0] ?? null : profiles;
   return profile?.real_name ?? profile?.display_name ?? "未登録";
@@ -47,12 +64,50 @@ const resolveEventName = (events: PageViewRow["events"]) => {
   return event?.name ?? "イベント未登録";
 };
 
+const formatDate = (dateStr: string) => {
+  const date = new Date(dateStr);
+  return `${date.getMonth() + 1}/${date.getDate()}`;
+};
+
+const aggregateByDate = (data: { created_at: string }[], days: number): DateCount[] => {
+  const counts = new Map<string, number>();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Initialize last N days with 0
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    counts.set(d.toISOString().slice(0, 10), 0);
+  }
+
+  // Count entries
+  data.forEach((row) => {
+    const dateKey = row.created_at.slice(0, 10);
+    if (counts.has(dateKey)) {
+      counts.set(dateKey, (counts.get(dateKey) ?? 0) + 1);
+    }
+  });
+
+  return Array.from(counts.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([date, count]) => ({ date: formatDate(date), count }));
+};
+
+const CHART_COLORS = {
+  login: "#3b82f6",
+  pageView: "#10b981",
+  event: ["#6366f1", "#8b5cf6", "#a855f7", "#d946ef", "#ec4899", "#f43f5e"],
+};
+
 export default function AdminAnalyticsPage() {
   const { isAdmin, loading: adminLoading } = useIsAdmin();
   const [loginHistory, setLoginHistory] = useState<LoginHistoryRow[]>([]);
   const [pageViews, setPageViews] = useState<PageViewRow[]>([]);
   const [eventSummary, setEventSummary] = useState<EventSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showLoginTable, setShowLoginTable] = useState(false);
+  const [showPageViewTable, setShowPageViewTable] = useState(false);
 
   useEffect(() => {
     if (adminLoading || !isAdmin) return;
@@ -65,12 +120,12 @@ export default function AdminAnalyticsPage() {
           .from("login_history")
           .select("id, user_id, email, user_agent, created_at, profiles(display_name, real_name)")
           .order("created_at", { ascending: false })
-          .limit(120),
+          .limit(500),
         supabase
           .from("page_views")
           .select("id, user_id, path, event_id, created_at, profiles(display_name, real_name), events(name)")
           .order("created_at", { ascending: false })
-          .limit(300),
+          .limit(1000),
       ]);
 
       if (cancelled) return;
@@ -103,7 +158,7 @@ export default function AdminAnalyticsPage() {
         }
       );
       summaries.sort((a, b) => b.count - a.count);
-      setEventSummary(summaries);
+      setEventSummary(summaries.slice(0, 10));
       setLoading(false);
     })();
 
@@ -111,6 +166,12 @@ export default function AdminAnalyticsPage() {
       cancelled = true;
     };
   }, [adminLoading, isAdmin]);
+
+  const loginsByDate = useMemo(() => aggregateByDate(loginHistory, 14), [loginHistory]);
+  const viewsByDate = useMemo(() => aggregateByDate(pageViews, 14), [pageViews]);
+
+  const totalLogins = useMemo(() => loginsByDate.reduce((sum, d) => sum + d.count, 0), [loginsByDate]);
+  const totalViews = useMemo(() => viewsByDate.reduce((sum, d) => sum + d.count, 0), [viewsByDate]);
 
   if (adminLoading) {
     return (
@@ -157,64 +218,160 @@ export default function AdminAnalyticsPage() {
 
           <section className="pb-12 md:pb-16">
             <div className="container mx-auto px-4 sm:px-6 space-y-6">
-              <Card className="bg-card/60 border-border">
-                <CardHeader>
-                  <CardTitle className="text-lg">ログイン履歴</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {loading ? (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      読み込み中...
-                    </div>
-                  ) : loginHistory.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">ログイン履歴がありません。</p>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>日時</TableHead>
-                            <TableHead>名前</TableHead>
-                            <TableHead>メール</TableHead>
-                            <TableHead>端末情報</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {loginHistory.map((row) => (
-                            <TableRow key={row.id}>
-                              <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                                {new Date(row.created_at).toLocaleString("ja-JP")}
-                              </TableCell>
-                              <TableCell>{resolveProfileName(row.profiles)}</TableCell>
-                              <TableCell>{row.email ?? "-"}</TableCell>
-                              <TableCell className="max-w-[360px] truncate text-xs text-muted-foreground">
-                                {row.user_agent ?? "-"}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+              {/* Summary Cards */}
+              <div className="grid gap-4 md:grid-cols-3">
+                <Card className="bg-card/60 border-border">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">過去14日間のログイン</CardTitle>
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{loading ? "-" : totalLogins}</div>
+                    <p className="text-xs text-muted-foreground">回</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-card/60 border-border">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">過去14日間のPV</CardTitle>
+                    <Eye className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{loading ? "-" : totalViews}</div>
+                    <p className="text-xs text-muted-foreground">ページビュー</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-card/60 border-border">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">イベント数</CardTitle>
+                    <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{loading ? "-" : eventSummary.length}</div>
+                    <p className="text-xs text-muted-foreground">アクティブイベント</p>
+                  </CardContent>
+                </Card>
+              </div>
 
+              {/* Charts */}
               <div className="grid gap-6 lg:grid-cols-2">
+                {/* Login Chart */}
                 <Card className="bg-card/60 border-border">
                   <CardHeader>
-                    <CardTitle className="text-lg">ページ閲覧</CardTitle>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Users className="w-5 h-5 text-blue-500" />
+                      ログイン履歴（日別）
+                    </CardTitle>
                   </CardHeader>
                   <CardContent>
                     {loading ? (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground h-[200px] justify-center">
                         <RefreshCw className="w-4 h-4 animate-spin" />
                         読み込み中...
                       </div>
-                    ) : pageViews.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">閲覧ログがありません。</p>
                     ) : (
-                      <div className="overflow-x-auto">
+                      <ResponsiveContainer width="100%" height={200}>
+                        <BarChart data={loginsByDate}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                          <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                          <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" allowDecimals={false} />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "hsl(var(--card))",
+                              border: "1px solid hsl(var(--border))",
+                              borderRadius: "8px",
+                            }}
+                            labelStyle={{ color: "hsl(var(--foreground))" }}
+                          />
+                          <Bar dataKey="count" fill={CHART_COLORS.login} radius={[4, 4, 0, 0]} name="ログイン数" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                    <button
+                      onClick={() => setShowLoginTable(!showLoginTable)}
+                      className="mt-3 text-xs text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      {showLoginTable ? "詳細を閉じる" : "詳細を表示"}
+                    </button>
+                    {showLoginTable && (
+                      <div className="mt-3 overflow-x-auto max-h-[300px] overflow-y-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>日時</TableHead>
+                              <TableHead>名前</TableHead>
+                              <TableHead>メール</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {loginHistory.slice(0, 50).map((row) => (
+                              <TableRow key={row.id}>
+                                <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                                  {new Date(row.created_at).toLocaleString("ja-JP")}
+                                </TableCell>
+                                <TableCell>{resolveProfileName(row.profiles)}</TableCell>
+                                <TableCell>{row.email ?? "-"}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Page View Chart */}
+                <Card className="bg-card/60 border-border">
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Eye className="w-5 h-5 text-emerald-500" />
+                      ページ閲覧（日別）
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {loading ? (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground h-[200px] justify-center">
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        読み込み中...
+                      </div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height={200}>
+                        <AreaChart data={viewsByDate}>
+                          <defs>
+                            <linearGradient id="colorPageView" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor={CHART_COLORS.pageView} stopOpacity={0.3} />
+                              <stop offset="95%" stopColor={CHART_COLORS.pageView} stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                          <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                          <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" allowDecimals={false} />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "hsl(var(--card))",
+                              border: "1px solid hsl(var(--border))",
+                              borderRadius: "8px",
+                            }}
+                            labelStyle={{ color: "hsl(var(--foreground))" }}
+                          />
+                          <Area
+                            type="monotone"
+                            dataKey="count"
+                            stroke={CHART_COLORS.pageView}
+                            fillOpacity={1}
+                            fill="url(#colorPageView)"
+                            name="ページビュー"
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    )}
+                    <button
+                      onClick={() => setShowPageViewTable(!showPageViewTable)}
+                      className="mt-3 text-xs text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      {showPageViewTable ? "詳細を閉じる" : "詳細を表示"}
+                    </button>
+                    {showPageViewTable && (
+                      <div className="mt-3 overflow-x-auto max-h-[300px] overflow-y-auto">
                         <Table>
                           <TableHeader>
                             <TableRow>
@@ -224,7 +381,7 @@ export default function AdminAnalyticsPage() {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {pageViews.map((row) => (
+                            {pageViews.slice(0, 50).map((row) => (
                               <TableRow key={row.id}>
                                 <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                                   {new Date(row.created_at).toLocaleString("ja-JP")}
@@ -239,42 +396,54 @@ export default function AdminAnalyticsPage() {
                     )}
                   </CardContent>
                 </Card>
-
-                <Card className="bg-card/60 border-border">
-                  <CardHeader>
-                    <CardTitle className="text-lg">イベント別アクセス</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {loading ? (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        読み込み中...
-                      </div>
-                    ) : eventSummary.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">イベントアクセスがありません。</p>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>イベント</TableHead>
-                              <TableHead className="text-right">アクセス数</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {eventSummary.map((row) => (
-                              <TableRow key={row.id}>
-                                <TableCell className="text-sm">{row.name}</TableCell>
-                                <TableCell className="text-right">{row.count}</TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
               </div>
+
+              {/* Event Access Chart */}
+              <Card className="bg-card/60 border-border">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5 text-purple-500" />
+                    イベント別アクセス（Top 10）
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {loading ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground h-[250px] justify-center">
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      読み込み中...
+                    </div>
+                  ) : eventSummary.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">イベントアクセスがありません。</p>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={Math.max(250, eventSummary.length * 40)}>
+                      <BarChart data={eventSummary} layout="vertical" margin={{ left: 100 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis type="number" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" allowDecimals={false} />
+                        <YAxis
+                          type="category"
+                          dataKey="name"
+                          tick={{ fontSize: 11 }}
+                          stroke="hsl(var(--muted-foreground))"
+                          width={100}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "hsl(var(--card))",
+                            border: "1px solid hsl(var(--border))",
+                            borderRadius: "8px",
+                          }}
+                          labelStyle={{ color: "hsl(var(--foreground))" }}
+                        />
+                        <Bar dataKey="count" radius={[0, 4, 4, 0]} name="アクセス数">
+                          {eventSummary.map((entry, index) => (
+                            <Cell key={`cell-${entry.id}`} fill={CHART_COLORS.event[index % CHART_COLORS.event.length]} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
             </div>
           </section>
         </main>
@@ -282,3 +451,4 @@ export default function AdminAnalyticsPage() {
     </AuthGuard>
   );
 }
+

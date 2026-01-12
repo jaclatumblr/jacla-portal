@@ -97,7 +97,7 @@ function LoginPageContent() {
         <div className="relative z-10 flex flex-col justify-center p-12 lg:p-16">
           <div className="mb-8">
             <Image
-              src="/images/e3-83-ad-e3-82-b42-20-281-29.png"
+              src="/images/jacla-logo.png"
               alt="Jacla logo"
               width={120}
               height={72}
@@ -122,7 +122,7 @@ function LoginPageContent() {
         <div className="w-full max-w-md">
           <div className="lg:hidden text-center mb-8">
             <Image
-              src="/images/e3-83-ad-e3-82-b42-20-281-29.png"
+              src="/images/jacla-logo.png"
               alt="Jacla logo"
               width={80}
               height={48}

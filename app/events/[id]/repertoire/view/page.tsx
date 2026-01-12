@@ -70,6 +70,7 @@ export default function RepertoireViewPage() {
           .from("bands")
           .select("id, name, repertoire_status")
           .eq("event_id", eventId)
+          .eq("band_type", "event")
           .order("created_at", { ascending: true }),
       ]);
 

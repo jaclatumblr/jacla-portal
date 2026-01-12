@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
-import { RefreshCw, Terminal, Play, Pause, Trash2 } from "lucide-react";
+import { RefreshCw, Terminal, Play, Pause, Trash2, Users, Eye } from "lucide-react";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import { PageHeader } from "@/components/PageHeader";
@@ -10,7 +10,9 @@ import { SideNav } from "@/components/SideNav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/lib/toast";
+import { supabase } from "@/lib/supabaseClient";
 
 type Deployment = {
     id: string;
@@ -31,6 +33,22 @@ type LogEntry = {
     path?: string;
 };
 
+type LoginLogEntry = {
+    id: string;
+    email: string;
+    display_name: string | null;
+    created_at: string;
+    user_agent: string | null;
+};
+
+type PageViewEntry = {
+    id: string;
+    path: string;
+    display_name: string | null;
+    created_at: string;
+    event_name: string | null;
+};
+
 const LOG_COLORS: Record<string, string> = {
     stdout: "text-green-400",
     stderr: "text-red-400",
@@ -47,6 +65,13 @@ export default function AdminLogsPage() {
     const [autoRefresh, setAutoRefresh] = useState(true);
     const terminalRef = useRef<HTMLDivElement>(null);
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+    // User activity logs
+    const [loginLogs, setLoginLogs] = useState<LoginLogEntry[]>([]);
+    const [pageViewLogs, setPageViewLogs] = useState<PageViewEntry[]>([]);
+    const [activityLoading, setActivityLoading] = useState(false);
+    const activityRef = useRef<HTMLDivElement>(null);
+    const activityIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
     // Fetch deployments
     useEffect(() => {
@@ -77,7 +102,7 @@ export default function AdminLogsPage() {
         };
     }, [adminLoading, isAdmin]);
 
-    // Fetch logs
+    // Fetch Vercel logs
     const fetchLogs = useCallback(async (append = false) => {
         if (!selectedDeploymentId) return;
 
@@ -109,6 +134,56 @@ export default function AdminLogsPage() {
         }
     }, [selectedDeploymentId, logs]);
 
+    // Fetch user activity logs
+    const fetchActivityLogs = useCallback(async () => {
+        setActivityLoading(true);
+        try {
+            const [loginRes, pageViewRes] = await Promise.all([
+                supabase
+                    .from("login_history")
+                    .select("id, email, user_agent, created_at, profiles(display_name)")
+                    .order("created_at", { ascending: false })
+                    .limit(100),
+                supabase
+                    .from("page_views")
+                    .select("id, path, created_at, profiles(display_name), events(name)")
+                    .order("created_at", { ascending: false })
+                    .limit(100),
+            ]);
+
+            if (loginRes.error) console.error(loginRes.error);
+            if (pageViewRes.error) console.error(pageViewRes.error);
+
+            const logins = (loginRes.data ?? []).map((row: any) => ({
+                id: row.id,
+                email: row.email,
+                display_name: row.profiles?.display_name ?? null,
+                created_at: row.created_at,
+                user_agent: row.user_agent,
+            }));
+            setLoginLogs(logins);
+
+            const pageViews = (pageViewRes.data ?? []).map((row: any) => ({
+                id: row.id,
+                path: row.path,
+                display_name: row.profiles?.display_name ?? null,
+                created_at: row.created_at,
+                event_name: row.events?.name ?? null,
+            }));
+            setPageViewLogs(pageViews);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setActivityLoading(false);
+        }
+    }, []);
+
+    // Initial load
+    useEffect(() => {
+        if (adminLoading || !isAdmin) return;
+        fetchActivityLogs();
+    }, [adminLoading, isAdmin, fetchActivityLogs]);
+
     // Initial load and deployment change
     useEffect(() => {
         if (selectedDeploymentId) {
@@ -117,7 +192,7 @@ export default function AdminLogsPage() {
         }
     }, [selectedDeploymentId]);
 
-    // Auto-refresh
+    // Auto-refresh for Vercel logs
     useEffect(() => {
         if (autoRefresh && selectedDeploymentId) {
             intervalRef.current = setInterval(() => {
@@ -135,6 +210,24 @@ export default function AdminLogsPage() {
         };
     }, [autoRefresh, selectedDeploymentId, fetchLogs]);
 
+    // Auto-refresh for activity logs
+    useEffect(() => {
+        if (autoRefresh && isAdmin) {
+            activityIntervalRef.current = setInterval(() => {
+                fetchActivityLogs();
+            }, 10000);
+        } else if (activityIntervalRef.current) {
+            clearInterval(activityIntervalRef.current);
+            activityIntervalRef.current = null;
+        }
+
+        return () => {
+            if (activityIntervalRef.current) {
+                clearInterval(activityIntervalRef.current);
+            }
+        };
+    }, [autoRefresh, isAdmin, fetchActivityLogs]);
+
     // Auto-scroll to bottom
     useEffect(() => {
         if (terminalRef.current) {
@@ -144,6 +237,16 @@ export default function AdminLogsPage() {
 
     const formatDate = (timestamp: number) => {
         return new Date(timestamp).toLocaleString("ja-JP", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+        });
+    };
+
+    const formatDateTime = (dateStr: string) => {
+        return new Date(dateStr).toLocaleString("ja-JP", {
+            month: "2-digit",
+            day: "2-digit",
             hour: "2-digit",
             minute: "2-digit",
             second: "2-digit",
@@ -190,8 +293,8 @@ export default function AdminLogsPage() {
                 <main className="flex-1 md:ml-20">
                     <PageHeader
                         kicker="Admin"
-                        title="Vercel ログビューアー"
-                        description="Serverless Functionsのランタイムログをリアルタイムで確認できます。"
+                        title="ログビューアー"
+                        description="サーバーログとユーザーアクティビティをリアルタイムで確認できます。"
                         backHref="/admin"
                         backLabel="管理ダッシュボードに戻る"
                     />
@@ -201,6 +304,137 @@ export default function AdminLogsPage() {
                             {/* Controls */}
                             <Card className="bg-card/60 border-border">
                                 <CardContent className="pt-4">
+                                    <div className="flex flex-wrap items-center gap-4">
+                                        <div className="flex items-center gap-2">
+                                            <Button
+                                                variant={autoRefresh ? "default" : "outline"}
+                                                size="sm"
+                                                onClick={() => setAutoRefresh(!autoRefresh)}
+                                            >
+                                                {autoRefresh ? (
+                                                    <>
+                                                        <Pause className="w-4 h-4 mr-2" />
+                                                        停止
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Play className="w-4 h-4 mr-2" />
+                                                        自動更新
+                                                    </>
+                                                )}
+                                            </Button>
+                                        </div>
+                                        {autoRefresh && (
+                                            <span className="text-xs text-green-500 flex items-center gap-1">
+                                                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                                                ライブ
+                                            </span>
+                                        )}
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            <Tabs defaultValue="activity" className="space-y-4">
+                                <TabsList className="grid w-full max-w-md grid-cols-2">
+                                    <TabsTrigger value="activity" className="flex items-center gap-2">
+                                        <Users className="w-4 h-4" />
+                                        ユーザーアクティビティ
+                                    </TabsTrigger>
+                                    <TabsTrigger value="server" className="flex items-center gap-2">
+                                        <Terminal className="w-4 h-4" />
+                                        サーバーログ
+                                    </TabsTrigger>
+                                </TabsList>
+
+                                {/* User Activity Tab */}
+                                <TabsContent value="activity" className="space-y-4">
+                                    <div className="grid lg:grid-cols-2 gap-4">
+                                        {/* Login History */}
+                                        <Card className="bg-black border-border overflow-hidden">
+                                            <CardHeader className="bg-zinc-900 border-b border-zinc-700 py-2 px-4">
+                                                <CardTitle className="text-sm font-mono text-zinc-400 flex items-center gap-2">
+                                                    <Users className="w-4 h-4 text-purple-400" />
+                                                    ログイン履歴
+                                                    <span className="text-xs text-zinc-600">
+                                                        ({loginLogs.length} entries)
+                                                    </span>
+                                                </CardTitle>
+                                            </CardHeader>
+                                            <CardContent className="p-0">
+                                                <div
+                                                    ref={activityRef}
+                                                    className="h-[400px] overflow-y-auto font-mono text-sm p-4 space-y-1"
+                                                >
+                                                    {activityLoading && loginLogs.length === 0 ? (
+                                                        <div className="flex items-center gap-2 text-zinc-500">
+                                                            <RefreshCw className="w-4 h-4 animate-spin" />
+                                                            読み込み中...
+                                                        </div>
+                                                    ) : loginLogs.length === 0 ? (
+                                                        <div className="text-zinc-500">
+                                                            ログイン履歴がありません。
+                                                        </div>
+                                                    ) : (
+                                                        loginLogs.map((log) => (
+                                                            <div key={log.id} className="flex gap-2 hover:bg-zinc-900/50 px-1 -mx-1 rounded">
+                                                                <span className="text-zinc-600 shrink-0">
+                                                                    [{formatDateTime(log.created_at)}]
+                                                                </span>
+                                                                <span className="text-purple-400">
+                                                                    {log.display_name ?? log.email}
+                                                                </span>
+                                                            </div>
+                                                        ))
+                                                    )}
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+
+                                        {/* Page Views */}
+                                        <Card className="bg-black border-border overflow-hidden">
+                                            <CardHeader className="bg-zinc-900 border-b border-zinc-700 py-2 px-4">
+                                                <CardTitle className="text-sm font-mono text-zinc-400 flex items-center gap-2">
+                                                    <Eye className="w-4 h-4 text-cyan-400" />
+                                                    ページ遷移
+                                                    <span className="text-xs text-zinc-600">
+                                                        ({pageViewLogs.length} entries)
+                                                    </span>
+                                                </CardTitle>
+                                            </CardHeader>
+                                            <CardContent className="p-0">
+                                                <div className="h-[400px] overflow-y-auto font-mono text-sm p-4 space-y-1">
+                                                    {activityLoading && pageViewLogs.length === 0 ? (
+                                                        <div className="flex items-center gap-2 text-zinc-500">
+                                                            <RefreshCw className="w-4 h-4 animate-spin" />
+                                                            読み込み中...
+                                                        </div>
+                                                    ) : pageViewLogs.length === 0 ? (
+                                                        <div className="text-zinc-500">
+                                                            ページ遷移履歴がありません。
+                                                        </div>
+                                                    ) : (
+                                                        pageViewLogs.map((log) => (
+                                                            <div key={log.id} className="flex gap-2 hover:bg-zinc-900/50 px-1 -mx-1 rounded">
+                                                                <span className="text-zinc-600 shrink-0">
+                                                                    [{formatDateTime(log.created_at)}]
+                                                                </span>
+                                                                <span className="text-cyan-400 shrink-0">
+                                                                    {log.display_name ?? "Guest"}
+                                                                </span>
+                                                                <span className="text-zinc-400 truncate">
+                                                                    → {log.path}
+                                                                </span>
+                                                            </div>
+                                                        ))
+                                                    )}
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    </div>
+                                </TabsContent>
+
+                                {/* Server Logs Tab */}
+                                <TabsContent value="server" className="space-y-4">
                                     <div className="flex flex-wrap items-center gap-4">
                                         <div className="flex-1 min-w-[200px] max-w-[300px]">
                                             <Select
@@ -225,24 +459,6 @@ export default function AdminLogsPage() {
                                                 更新
                                             </Button>
                                             <Button
-                                                variant={autoRefresh ? "default" : "outline"}
-                                                size="sm"
-                                                onClick={() => setAutoRefresh(!autoRefresh)}
-                                                disabled={!selectedDeploymentId}
-                                            >
-                                                {autoRefresh ? (
-                                                    <>
-                                                        <Pause className="w-4 h-4 mr-2" />
-                                                        停止
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Play className="w-4 h-4 mr-2" />
-                                                        自動更新
-                                                    </>
-                                                )}
-                                            </Button>
-                                            <Button
                                                 variant="ghost"
                                                 size="sm"
                                                 onClick={clearLogs}
@@ -252,85 +468,79 @@ export default function AdminLogsPage() {
                                                 クリア
                                             </Button>
                                         </div>
-                                        {autoRefresh && (
-                                            <span className="text-xs text-green-500 flex items-center gap-1">
-                                                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                                                ライブ
-                                            </span>
-                                        )}
                                     </div>
-                                </CardContent>
-                            </Card>
 
-                            {/* Terminal */}
-                            <Card className="bg-black border-border overflow-hidden">
-                                <CardHeader className="bg-zinc-900 border-b border-zinc-700 py-2 px-4">
-                                    <div className="flex items-center gap-2">
-                                        <div className="flex gap-1.5">
-                                            <span className="w-3 h-3 rounded-full bg-red-500" />
-                                            <span className="w-3 h-3 rounded-full bg-yellow-500" />
-                                            <span className="w-3 h-3 rounded-full bg-green-500" />
-                                        </div>
-                                        <CardTitle className="text-sm font-mono text-zinc-400 flex items-center gap-2">
-                                            <Terminal className="w-4 h-4" />
-                                            Runtime Logs
-                                            <span className="text-xs text-zinc-600">
-                                                ({logs.length} entries)
-                                            </span>
-                                        </CardTitle>
-                                    </div>
-                                </CardHeader>
-                                <CardContent className="p-0">
-                                    <div
-                                        ref={terminalRef}
-                                        className="h-[500px] overflow-y-auto font-mono text-sm p-4 space-y-1"
-                                    >
-                                        {loading ? (
-                                            <div className="flex items-center gap-2 text-zinc-500">
-                                                <RefreshCw className="w-4 h-4 animate-spin" />
-                                                読み込み中...
-                                            </div>
-                                        ) : logs.length === 0 ? (
-                                            <div className="text-zinc-500">
-                                                ログがありません。デプロイメントを選択してください。
-                                            </div>
-                                        ) : (
-                                            logs.map((log) => (
-                                                <div key={log.id} className="flex gap-2 hover:bg-zinc-900/50 px-1 -mx-1 rounded">
-                                                    <span className="text-zinc-600 shrink-0">
-                                                        [{formatDate(log.date)}]
-                                                    </span>
-                                                    <span className={`${LOG_COLORS[log.type] ?? "text-zinc-400"}`}>
-                                                        {log.text}
-                                                    </span>
+                                    {/* Terminal */}
+                                    <Card className="bg-black border-border overflow-hidden">
+                                        <CardHeader className="bg-zinc-900 border-b border-zinc-700 py-2 px-4">
+                                            <div className="flex items-center gap-2">
+                                                <div className="flex gap-1.5">
+                                                    <span className="w-3 h-3 rounded-full bg-red-500" />
+                                                    <span className="w-3 h-3 rounded-full bg-yellow-500" />
+                                                    <span className="w-3 h-3 rounded-full bg-green-500" />
                                                 </div>
-                                            ))
-                                        )}
-                                        {logsLoading && logs.length > 0 && (
-                                            <div className="flex items-center gap-2 text-zinc-500">
-                                                <RefreshCw className="w-3 h-3 animate-spin" />
-                                                新しいログを確認中...
+                                                <CardTitle className="text-sm font-mono text-zinc-400 flex items-center gap-2">
+                                                    <Terminal className="w-4 h-4" />
+                                                    Runtime Logs
+                                                    <span className="text-xs text-zinc-600">
+                                                        ({logs.length} entries)
+                                                    </span>
+                                                </CardTitle>
                                             </div>
-                                        )}
-                                    </div>
-                                </CardContent>
-                            </Card>
+                                        </CardHeader>
+                                        <CardContent className="p-0">
+                                            <div
+                                                ref={terminalRef}
+                                                className="h-[500px] overflow-y-auto font-mono text-sm p-4 space-y-1"
+                                            >
+                                                {loading ? (
+                                                    <div className="flex items-center gap-2 text-zinc-500">
+                                                        <RefreshCw className="w-4 h-4 animate-spin" />
+                                                        読み込み中...
+                                                    </div>
+                                                ) : logs.length === 0 ? (
+                                                    <div className="text-zinc-500">
+                                                        ログがありません。デプロイメントを選択してください。
+                                                    </div>
+                                                ) : (
+                                                    logs.map((log) => (
+                                                        <div key={log.id} className="flex gap-2 hover:bg-zinc-900/50 px-1 -mx-1 rounded">
+                                                            <span className="text-zinc-600 shrink-0">
+                                                                [{formatDate(log.date)}]
+                                                            </span>
+                                                            <span className={`${LOG_COLORS[log.type] ?? "text-zinc-400"}`}>
+                                                                {log.text}
+                                                            </span>
+                                                        </div>
+                                                    ))
+                                                )}
+                                                {logsLoading && logs.length > 0 && (
+                                                    <div className="flex items-center gap-2 text-zinc-500">
+                                                        <RefreshCw className="w-3 h-3 animate-spin" />
+                                                        新しいログを確認中...
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </CardContent>
+                                    </Card>
 
-                            {/* Legend */}
-                            <div className="flex items-center gap-6 text-xs text-muted-foreground">
-                                <div className="flex items-center gap-2">
-                                    <span className="w-3 h-3 rounded bg-green-500/20 border border-green-500" />
-                                    <span>stdout</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <span className="w-3 h-3 rounded bg-red-500/20 border border-red-500" />
-                                    <span>stderr</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <span className="w-3 h-3 rounded bg-blue-500/20 border border-blue-500" />
-                                    <span>request</span>
-                                </div>
-                            </div>
+                                    {/* Legend */}
+                                    <div className="flex items-center gap-6 text-xs text-muted-foreground">
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-3 h-3 rounded bg-green-500/20 border border-green-500" />
+                                            <span>stdout</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-3 h-3 rounded bg-red-500/20 border border-red-500" />
+                                            <span>stderr</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-3 h-3 rounded bg-blue-500/20 border border-blue-500" />
+                                            <span>request</span>
+                                        </div>
+                                    </div>
+                                </TabsContent>
+                            </Tabs>
                         </div>
                     </section>
                 </main>
@@ -338,3 +548,4 @@ export default function AdminLogsPage() {
         </AuthGuard>
     );
 }
+

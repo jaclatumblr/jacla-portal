@@ -159,7 +159,7 @@ export function useRepertoireData(eventId: string, userId?: string): UseRepertoi
           )
           .eq("band_id", foundBand.id)
           .order("order_index", { ascending: true }),
-        supabase.from("profiles").select("id, user_id, display_name, real_name, part, leader"),
+        supabase.from("profiles").select("id, display_name, real_name, part, leader"),
       ]);
 
       if (songsRes.error) console.error(songsRes.error);
@@ -169,7 +169,7 @@ export function useRepertoireData(eventId: string, userId?: string): UseRepertoi
 
       const pOptions = (allProfilesRes.data ?? []).map((p: any) => ({
         id: p.id,
-        user_id: p.user_id,
+        user_id: p.id, // profiles.id is the user_id
         display_name: p.display_name,
         real_name: p.real_name,
         part: p.part,
@@ -237,14 +237,14 @@ export function useRepertoireData(eventId: string, userId?: string): UseRepertoi
     setBand((prev) =>
       prev
         ? {
-            ...prev,
-            name: draft.bandName,
-            representative_name: draft.representativeName,
-            general_note: draft.generalNote,
-            sound_note: draft.soundNote,
-            lighting_note: draft.lightingNote,
-            lighting_total_min: Number(draft.lightingTotal) || null,
-          }
+          ...prev,
+          name: draft.bandName,
+          representative_name: draft.representativeName,
+          general_note: draft.generalNote,
+          sound_note: draft.soundNote,
+          lighting_note: draft.lightingNote,
+          lighting_total_min: Number(draft.lightingTotal) || null,
+        }
         : null
     );
 

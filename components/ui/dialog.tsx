@@ -65,8 +65,13 @@ function DialogTrigger({
     if (!context) throw new Error("DialogTrigger must be used within Dialog");
 
     if (asChild && React.isValidElement(children)) {
-        return React.cloneElement(children as React.ReactElement<{ onClick?: () => void }>, {
-            onClick: () => context.onOpenChange(true),
+        const childProps = children.props as { onClick?: (e: React.MouseEvent) => void };
+        const existingOnClick = childProps.onClick;
+        return React.cloneElement(children as React.ReactElement<{ onClick?: (e: React.MouseEvent) => void }>, {
+            onClick: (e: React.MouseEvent) => {
+                existingOnClick?.(e);
+                context.onOpenChange(true);
+            },
         });
     }
 

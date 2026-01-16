@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { SideNav } from "@/components/SideNav";
 import { Select } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
+import { useIsAdmin } from "@/lib/useIsAdmin";
 import { useRepertoireData } from "./hooks/useRepertoireData";
 import { useRepertoireSave } from "./hooks/useRepertoireSave";
 import { useMetadata } from "./hooks/useMetadata";
@@ -16,13 +17,17 @@ import { BandInfoForm } from "./components/BandInfoForm";
 import { MemberManager } from "./components/MemberManager";
 import { SetlistEditor } from "./components/SetlistEditor";
 import { StagePlotEditor } from "./components/StagePlotEditor";
+import { StagePlotPreview } from "@/components/StagePlotPreview";
 import { EntryType, SongEntry, toDurationInputs } from "./types";
 
 export default function RepertoireSubmitPage() {
   const params = useParams();
   const eventId = typeof params?.id === "string" ? params.id : "";
+  const searchParams = useSearchParams();
   const { session } = useAuth();
   const userId = session?.user.id;
+  const { isAdmin } = useIsAdmin();
+  const initialBandId = searchParams?.get("bandId");
 
   const {
     loading,
@@ -46,7 +51,7 @@ export default function RepertoireSubmitPage() {
     refreshData,
     restoreFromDraft,
     clearDraft,
-  } = useRepertoireData(eventId, userId);
+  } = useRepertoireData(eventId, userId, { adminMode: isAdmin, initialBandId });
 
   const { saving, saveRepertoire } = useRepertoireSave({
     eventId,
@@ -59,6 +64,7 @@ export default function RepertoireSubmitPage() {
   });
 
   const { fetchingMeta, fetchMetadata } = useMetadata();
+  const isSubmitted = repertoireStatus === "submitted";
 
   const handleMetadataSchedule = (id: string, url: string, type: EntryType) => {
     fetchMetadata(id, url, (targetId, updates) => {
@@ -156,7 +162,7 @@ export default function RepertoireSubmitPage() {
                 </TabsList>
 
                 <TabsContent value="info">
-                  <BandInfoForm band={band} onChange={handleBandChange} />
+                  <BandInfoForm band={band} onChange={handleBandChange} readOnly={isSubmitted} />
                 </TabsContent>
 
                 <TabsContent value="members">
@@ -165,6 +171,7 @@ export default function RepertoireSubmitPage() {
                     profiles={profiles}
                     myProfileId={myProfileId}
                     setMembers={setStageMembers}
+                    readOnly={isSubmitted}
                   />
                 </TabsContent>
 
@@ -173,16 +180,21 @@ export default function RepertoireSubmitPage() {
                     songs={songs}
                     setSongs={setSongs}
                     onScheduleMetadata={handleMetadataSchedule}
+                    readOnly={isSubmitted}
                   />
                 </TabsContent>
 
                 <TabsContent value="stageplot">
-                  <StagePlotEditor
-                    members={stageMembers}
-                    items={stageItems}
-                    setMembers={setStageMembers}
-                    setItems={setStageItems}
-                  />
+                  {isSubmitted ? (
+                    <StagePlotPreview members={stageMembers} items={stageItems} />
+                  ) : (
+                    <StagePlotEditor
+                      members={stageMembers}
+                      items={stageItems}
+                      setMembers={setStageMembers}
+                      setItems={setStageItems}
+                    />
+                  )}
                 </TabsContent>
               </Tabs>
             </div>

@@ -80,9 +80,8 @@ type EventSlot = {
 
 const slotTypeOptions = [
   { value: "band", label: "バンド" },
-  { value: "break", label: "休憩" },
-  { value: "mc", label: "MC" },
-  { value: "other", label: "その他" },
+  { value: "break", label: "転換" },
+  { value: "other", label: "付帯作業" },
 ];
 
 const slotPhaseOptions = [
@@ -118,12 +117,13 @@ const phaseBadgeVariant = (phase: EventSlot["slot_phase"]) => {
   return "outline" as const;
 };
 
-type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup";
+type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
 
 const slotPhaseKey = (slot: EventSlot): PhaseKey => {
   const note = slot.note?.trim();
   if (note === "集合～準備") return "prep";
   if (note === "終了～撤収" || note === "終了～解散") return "cleanup";
+  if (note === "休憩") return "rest";
   return slot.slot_phase ?? "show";
 };
 
@@ -131,18 +131,19 @@ const slotPhaseLabel = (slot: EventSlot) => {
   const note = slot.note?.trim();
   if (note === "集合～準備") return "集合～準備";
   if (note === "終了～撤収" || note === "終了～解散") return note;
+  if (note === "休憩") return "休憩";
   return phaseLabel(slot.slot_phase);
 };
 
 const slotPhaseBadgeVariant = (slot: EventSlot) => {
   const key = slotPhaseKey(slot);
-  if (key === "prep" || key === "cleanup") return "outline" as const;
+  if (key === "prep" || key === "cleanup" || key === "rest") return "outline" as const;
   return phaseBadgeVariant(slot.slot_phase);
 };
 
 const slotAccentClass = (slot: EventSlot) => {
   const note = slot.note?.trim() ?? "";
-  if (note === "集合～準備" || note === "終了～撤収" || note === "終了～解散") {
+  if (note === "集合～準備" || note === "終了～撤収" || note === "終了～解散" || note === "休憩") {
     return "border-l-4 border-l-amber-400/80";
   }
   if (slot.slot_type === "break" || note.includes("転換")) {
@@ -160,7 +161,7 @@ const slotAccentClass = (slot: EventSlot) => {
 const phaseBarClass = (phase: PhaseKey) => {
   if (phase === "show") return "bg-fuchsia-400/80";
   if (phase === "rehearsal_normal" || phase === "rehearsal_pre") return "bg-sky-400/80";
-  if (phase === "prep" || phase === "cleanup") return "bg-amber-400/80";
+  if (phase === "prep" || phase === "cleanup" || phase === "rest") return "bg-amber-400/80";
   return "bg-muted";
 };
 
@@ -258,9 +259,42 @@ export default function AdminEventTimetableEditPage() {
     if (slot.slot_type === "band") {
       return bandMap.get(slot.band_id ?? "") ?? "バンド未設定";
     }
-    if (slot.slot_type === "break") return "休憩";
-    if (slot.slot_type === "mc") return "MC";
-    return slot.note?.trim() || "その他";
+    const note = slot.note?.trim() ?? "";
+    if (slot.slot_type === "break" || note.includes("転換")) return "転換";
+    if (slot.slot_type === "mc") return "付帯作業";
+    return note || "付帯作業";
+  };
+
+  const resolveSlotTypeValue = (slot: EventSlot) => {
+    if (slot.slot_type === "band") return "band";
+    if (slot.slot_type === "break") return "break";
+    const note = slot.note?.trim() ?? "";
+    if (note.includes("転換")) return "break";
+    return "other";
+  };
+
+  const slotTypeLabel = (slot: EventSlot) => {
+    const value = resolveSlotTypeValue(slot);
+    return slotTypeOptions.find((opt) => opt.value === value)?.label ?? value;
+  };
+
+  const handleSlotTypeSelect = (slot: EventSlot, nextType: "band" | "break" | "other") => {
+    const note = slot.note?.trim() ?? "";
+    if (nextType === "band") {
+      handleSlotChange(slot.id, "slot_type", "band");
+      return;
+    }
+    if (nextType === "break") {
+      handleSlotChange(slot.id, "slot_type", "break");
+      handleSlotChange(slot.id, "band_id", null);
+      handleSlotChange(slot.id, "note", "転換");
+      return;
+    }
+    handleSlotChange(slot.id, "slot_type", "other");
+    handleSlotChange(slot.id, "band_id", null);
+    if (note === "転換") {
+      handleSlotChange(slot.id, "note", "");
+    }
   };
 
   const slotDurationLabel = (slot: EventSlot) => {
@@ -302,6 +336,7 @@ export default function AdminEventTimetableEditPage() {
         note === "集合～準備" ||
         note === "終了～撤収" ||
         note === "終了～解散" ||
+        note === "休憩" ||
         slot.slot_type === "break" ||
         note.includes("転換")
           ? "amber"
@@ -503,7 +538,7 @@ export default function AdminEventTimetableEditPage() {
     insertSlotAt(
       index + 1,
       buildSlot({
-        slot_type: "other",
+        slot_type: "break",
         slot_phase: base.slot_phase,
         band_id: null,
         changeover_min: event?.default_changeover_min ?? 15,
@@ -581,21 +616,34 @@ export default function AdminEventTimetableEditPage() {
     setSaving(true);
     setError(null);
 
-    const payloads = orderedSlots.map((slot, index) => ({
-      id: slot.id,
-      event_id: eventId,
-      band_id: slot.slot_type === "band" ? slot.band_id ?? null : null,
-      slot_type: slot.slot_type,
-      slot_phase: slot.slot_phase ?? "show",
-      order_in_event: slot.order_in_event ?? index + 1,
-      start_time: slot.start_time || null,
-      end_time: slot.end_time || null,
-      changeover_min:
-        slot.changeover_min == null || Number.isNaN(Number(slot.changeover_min))
-          ? null
-          : Number(slot.changeover_min),
-      note: slot.note || null,
-    }));
+    const payloads = orderedSlots.map((slot, index) => {
+      const note = slot.note?.trim() ?? "";
+      let slotType = slot.slot_type;
+      let nextNote = slot.note || null;
+      if (slotType === "mc") slotType = "other";
+      if (slotType === "other" && note.includes("転換")) {
+        slotType = "break";
+        nextNote = "転換";
+      }
+      if (slotType === "break") {
+        nextNote = "転換";
+      }
+      return {
+        id: slot.id,
+        event_id: eventId,
+        band_id: slotType === "band" ? slot.band_id ?? null : null,
+        slot_type: slotType,
+        slot_phase: slot.slot_phase ?? "show",
+        order_in_event: slot.order_in_event ?? index + 1,
+        start_time: slot.start_time || null,
+        end_time: slot.end_time || null,
+        changeover_min:
+          slot.changeover_min == null || Number.isNaN(Number(slot.changeover_min))
+            ? null
+            : Number(slot.changeover_min),
+        note: nextNote,
+      };
+    });
 
     const { data, error } = await supabase
       .from("event_slots")
@@ -705,7 +753,7 @@ export default function AdminEventTimetableEditPage() {
         payloads.push({
           event_id: eventId,
           band_id: null,
-          slot_type: "other",
+          slot_type: "break",
           slot_phase: "show",
           order_in_event: orderIndex++,
           start_time: changeoverStart,
@@ -790,7 +838,7 @@ export default function AdminEventTimetableEditPage() {
         });
         if (index < list.length - 1) {
           seeds.push({
-            slot_type: "other",
+            slot_type: "break",
             slot_phase: phase,
             band_id: null,
             changeover_min: changeover,
@@ -813,7 +861,7 @@ export default function AdminEventTimetableEditPage() {
       },
       ...buildBandSeeds(rehearsalList, "rehearsal_normal"),
       {
-        slot_type: "break",
+        slot_type: "other",
         slot_phase: "rehearsal_normal",
         note: "休憩",
         changeover_min: null,
@@ -1182,7 +1230,7 @@ export default function AdminEventTimetableEditPage() {
                           </span>
                           <span className="inline-flex items-center gap-2">
                             <span className="h-2 w-6 rounded-full bg-amber-400/80" />
-                            転換/休憩/準備/解散
+                            転換/休憩/付帯作業（準備・撤収など）
                           </span>
                         </div>
                         <div className="mt-3 flex gap-1 overflow-x-auto">
@@ -1270,7 +1318,7 @@ export default function AdminEventTimetableEditPage() {
                                                   {slotPhaseLabel(slot)}
                                                 </Badge>
                                                 <Badge variant={slot.slot_type === "band" ? "default" : "outline"}>
-                                                  {slot.slot_type.toUpperCase()}
+                                                  {slotTypeLabel(slot)}
                                                 </Badge>
                                               </div>
                                               <p className="text-sm font-semibold text-foreground">{slotLabel(slot)}</p>
@@ -1394,12 +1442,11 @@ export default function AdminEventTimetableEditPage() {
                                 <span className="text-muted-foreground">種別</span>
                                 <select
                                   className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-                                  value={selectedSlot.slot_type}
+                                  value={resolveSlotTypeValue(selectedSlot)}
                                   onChange={(e) =>
-                                    handleSlotChange(
-                                      selectedSlot.id,
-                                      "slot_type",
-                                      e.target.value as EventSlot["slot_type"]
+                                    handleSlotTypeSelect(
+                                      selectedSlot,
+                                      e.target.value as "band" | "break" | "other"
                                     )
                                   }
                                 >
@@ -1467,7 +1514,7 @@ export default function AdminEventTimetableEditPage() {
                                 <Input
                                   value={selectedSlot.note ?? ""}
                                   onChange={(e) => handleSlotChange(selectedSlot.id, "note", e.target.value)}
-                                  placeholder="MC / 休憩 / 備考"
+                                  placeholder="付帯作業のメモ"
                                 />
                               </label>
                               <Button

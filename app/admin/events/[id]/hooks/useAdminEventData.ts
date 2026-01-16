@@ -61,7 +61,7 @@ export function useAdminEventData(
                 supabase
                     .from("events")
                     .select(
-                        "id, name, date, status, event_type, venue, open_time, start_time, note, default_changeover_min, tt_is_published, tt_is_provisional"
+                        "id, name, date, status, event_type, venue, assembly_time, open_time, start_time, note, default_changeover_min, tt_is_published, tt_is_provisional, normal_rehearsal_order"
                     )
                     .eq("id", eventId)
                     .maybeSingle(),
@@ -75,7 +75,7 @@ export function useAdminEventData(
                 supabase
                     .from("event_slots")
                     .select(
-                        "id, event_id, band_id, slot_type, order_in_event, start_time, end_time, changeover_min, note"
+                        "id, event_id, band_id, slot_type, slot_phase, order_in_event, start_time, end_time, changeover_min, note"
                     )
                     .eq("event_id", eventId)
                     .order("order_in_event", { ascending: true })

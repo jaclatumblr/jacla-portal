@@ -1,29 +1,28 @@
-type ExcelRow = Array<string | number | null | undefined>;
+import * as XLSX from "xlsx";
 
-const escapeCell = (value: string) =>
-  value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\"/g, "&quot;");
+type ExcelRow = Array<string | number | null | undefined>;
 
 export function downloadExcelFile(
   filename: string,
   headers: ExcelRow,
   rows: ExcelRow[]
 ) {
-  const toRow = (row: ExcelRow) =>
-    `<tr>${row
-      .map((cell) => `<td>${escapeCell(String(cell ?? ""))}</td>`)
-      .join("")}</tr>`;
+  // Create worksheet data with headers
+  const wsData = [headers, ...rows];
 
-  const table = `<table><thead>${toRow(headers)}</thead><tbody>${rows
-    .map(toRow)
-    .join("")}</tbody></table>`;
-  const html = `<!doctype html><html><head><meta charset="utf-8" /></head><body>${table}</body></html>`;
-  const blob = new Blob(["\ufeff", html], {
-    type: "application/vnd.ms-excel;charset=utf-8;",
+  // Create worksheet
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+  // Create workbook
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+
+  // Generate Excel file and download
+  const excelBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  const blob = new Blob([excelBuffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
+
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -33,3 +32,4 @@ export function downloadExcelFile(
   link.remove();
   URL.revokeObjectURL(url);
 }
+

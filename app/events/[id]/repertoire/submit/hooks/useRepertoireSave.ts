@@ -3,7 +3,15 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/lib/toast";
-import { BandRow, RepertoireStatus, SongEntry, StageItem, StageMember } from "../types";
+import {
+  BandRow,
+  RepertoireStatus,
+  SongEntry,
+  StageItem,
+  StageMember,
+  getStageCategory,
+  toDurationSec,
+} from "../types";
 
 type UseRepertoireSaveProps = {
   eventId: string;
@@ -37,10 +45,71 @@ export function useRepertoireSave({
 }: UseRepertoireSaveProps) {
   const [saving, setSaving] = useState(false);
 
+  const buildSubmitWarnings = () => {
+    const warnings: string[] = [];
+
+    const hasGuitar = stageMembers.some(
+      (member) => getStageCategory(member.instrument || member.part) === "guitar"
+    );
+    if (hasGuitar) {
+      const labels = stageItems.map((item) => item.label.toLowerCase());
+      const hasMarshall = labels.includes("marshall");
+      const hasJc = labels.includes("jc");
+      if (!hasMarshall || !hasJc) {
+        warnings.push("Gt.がいるのに Marshall / JC が配置されていません。");
+      }
+    }
+
+    const hasMcMember = stageMembers.some((member) => member.isMc);
+    const hasMcEntry = songs.some((entry) => entry.entry_type === "mc");
+    if (!hasMcMember) {
+      warnings.push("MC担当のメンバーが設定されていません。");
+    }
+    if (hasMcMember && !hasMcEntry) {
+      warnings.push("MC担当がいるのにセトリにMCがありません。");
+    }
+
+    const missingDuration = songs.filter(
+      (entry) => toDurationSec(entry.durationMin, entry.durationSec) == null
+    ).length;
+    if (missingDuration > 0) {
+      warnings.push(`演奏時間が未入力の曲が${missingDuration}件あります。`);
+    }
+
+    const missingPa = songs.filter((entry) => !(entry.memo ?? "").trim()).length;
+    if (missingPa > 0) {
+      warnings.push(`PA指示が未入力の曲が${missingPa}件あります。`);
+    }
+
+    const missingLighting = songs.filter((entry) => {
+      const hasChoice =
+        entry.lightingSpot ||
+        entry.lightingStrobe ||
+        entry.lightingMoving ||
+        (entry.lightingColor ?? "").trim();
+      return !hasChoice;
+    }).length;
+    if (missingLighting > 0) {
+      warnings.push(`照明指示が未入力の曲が${missingLighting}件あります。`);
+    }
+
+    return warnings;
+  };
+
   const saveRepertoire = async (status: RepertoireStatus) => {
     if (!band?.id) {
-      toast.error("バンド情報が取得できていません。");
+      toast.error("バンド情報が取得できません。");
       return;
+    }
+
+    if (status === "submitted") {
+      const warnings = buildSubmitWarnings();
+      if (warnings.length > 0) {
+        const message = `未記入・不足があります。\n${warnings.join("\n")}\nこのまま提出しますか？`;
+        if (!window.confirm(message)) {
+          return;
+        }
+      }
     }
 
     setSaving(true);
@@ -126,7 +195,7 @@ export function useRepertoireSave({
       const duration_sec =
         hasDurationInput && (!Number.isNaN(minValue) || !Number.isNaN(secValue))
           ? (Number.isNaN(minValue) ? 0 : Math.max(0, minValue)) * 60 +
-          (Number.isNaN(secValue) ? 0 : Math.max(0, Math.min(59, secValue)))
+            (Number.isNaN(secValue) ? 0 : Math.max(0, Math.min(59, secValue)))
           : null;
 
       return {

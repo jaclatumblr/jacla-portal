@@ -1,19 +1,20 @@
 "use client";
 
+import { useState } from "react";
 import { useParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { SideNav } from "@/components/SideNav";
 import { PageHeader } from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import { useIsAdministrator } from "@/lib/useIsAdministrator";
 import { useAdminEventData } from "./hooks/useAdminEventData";
 import { EventEditForm } from "./components/EventEditForm";
-import { SlotManager } from "./components/SlotManager";
+import { TimetableWithRepertoire } from "./components/TimetableWithRepertoire";
 import { StaffAssignmentManager } from "./components/StaffAssignmentManager";
-import { statusLabel, statusBadge } from "./types";
-import { Badge } from "@/components/ui/badge";
+import { statusBadge, statusLabel } from "./types";
 
 export default function AdminEventDetailPage() {
   const params = useParams();
@@ -30,14 +31,14 @@ export default function AdminEventDetailPage() {
     slots,
     eventStaff,
     staffAssignments,
-    members,
     songs,
     refreshData,
     setSlots,
     setStaffAssignments,
   } = useAdminEventData(eventId, isAdmin, isAdministrator);
+  const [activeTab, setActiveTab] = useState("basic");
 
-  if (adminLoading || (loading && !error)) {
+  if (adminLoading || (!event && loading && !error)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -82,18 +83,18 @@ export default function AdminEventDetailPage() {
             backHref="/admin"
             backLabel="管理画面に戻る"
             actions={
-              <Badge variant={statusBadge(event.status) as any} className="text-sm px-3 py-1">
+              <Badge variant={statusBadge(event.status) as any} className="px-3 py-1 text-sm">
                 {statusLabel(event.status)}
               </Badge>
             }
           />
 
           <section className="py-8">
-            <div className="container mx-auto px-4 max-w-5xl">
-              <Tabs defaultValue="basic" className="space-y-6">
+            <div className="container mx-auto max-w-7xl px-4">
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
                 <TabsList className="grid w-full grid-cols-3 lg:w-[400px]">
                   <TabsTrigger value="basic">基本情報</TabsTrigger>
-                  <TabsTrigger value="timetable">タイムテーブル</TabsTrigger>
+                  <TabsTrigger value="timetable">TT・レパ表</TabsTrigger>
                   <TabsTrigger value="staff">スタッフ配置</TabsTrigger>
                 </TabsList>
 
@@ -102,8 +103,9 @@ export default function AdminEventDetailPage() {
                 </TabsContent>
 
                 <TabsContent value="timetable">
-                  <SlotManager
+                  <TimetableWithRepertoire
                     event={event}
+                    eventId={eventId}
                     bands={bands}
                     songs={songs}
                     slots={slots}

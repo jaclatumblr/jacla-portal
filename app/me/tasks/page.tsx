@@ -86,9 +86,10 @@ const slotLabel = (slotInput: AssignmentRow["event_slots"]) => {
   const slot = resolveSlot(slotInput);
   if (!slot) return "スロット未設定";
   if (slot.slot_type === "band") return resolveBandName(slot) ?? "バンド未設定";
-  if (slot.slot_type === "break") return "休憩";
-  if (slot.slot_type === "mc") return "MC";
-  return slot.note?.trim() || "その他";
+  const note = slot.note?.trim() ?? "";
+  if (slot.slot_type === "break" || note.includes("転換")) return "転換";
+  if (slot.slot_type === "mc") return "付帯作業";
+  return note || "付帯作業";
 };
 
 const timeLabel = (start: string | null, end: string | null) => {

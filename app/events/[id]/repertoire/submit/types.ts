@@ -141,7 +141,14 @@ export type RepertoireDraft = {
   bandMembers: StageMember[];
 };
 
-export type StageCategory = "drums" | "bass" | "guitar" | "keyboard" | "wind" | "vocal" | "other";
+export type StageCategory =
+  | "drums"
+  | "bass"
+  | "guitar"
+  | "keyboard"
+  | "wind"
+  | "vocal"
+  | "other";
 
 export const adminLeaderSet = new Set(["Administrator"]);
 
@@ -254,6 +261,7 @@ export const getStageCategory = (value: string | null | undefined): StageCategor
       "wsyn",
       "w.syn",
       "w.synth",
+      "シンセ",
     ])
   ) {
     return "keyboard";
@@ -325,16 +333,20 @@ export const stageSlots: Record<StageCategory, { x: number; y: number }[]> = {
   ],
 };
 
-export const stagePresets: { label: string; dashed: boolean }[] = [
-  { label: "Marshall", dashed: true },
-  { label: "JC", dashed: true },
-  { label: "Active", dashed: true },
-  { label: "Passive", dashed: true },
+export const stagePresets = [
+  { id: "marshall", label: "Marshall", dashed: true },
+  { id: "jc", label: "JC", dashed: true },
+  { id: "active", label: "Active", dashed: true },
+  { id: "passive", label: "Passive", dashed: true },
+  { id: "line", label: "LINE", dashed: true },
+  { id: "wind", label: "管", dashed: true },
+  { id: "mon", label: "MON", dashed: true },
 ];
 
 export const stagePresetPositions: Record<string, { x: number; y: number }> = {
-  Marshall: { x: 72, y: 40 },
-  JC: { x: 64, y: 40 },
-  Active: { x: 36, y: 40 },
-  Passive: { x: 28, y: 40 },
+  Marshall: { x: 68, y: 34 },
+  JC: { x: 62, y: 34 },
+  Active: { x: 32, y: 34 },
+  Passive: { x: 28, y: 34 },
+  MON: { x: 14, y: 62 },
 };

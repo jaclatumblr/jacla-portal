@@ -57,9 +57,17 @@ const slotLabel = (slot: EventSlotRow, bandNameMap: Map<string, string>) => {
   if (slot.slot_type === "band") {
     return bandNameMap.get(slot.band_id ?? "") ?? "バンド未設定";
   }
-  if (slot.slot_type === "break") return "休憩";
-  if (slot.slot_type === "mc") return "MC";
-  return slot.note?.trim() || "その他";
+  const note = slot.note?.trim() ?? "";
+  if (slot.slot_type === "break" || note.includes("転換")) return "転換";
+  if (slot.slot_type === "mc") return "付帯作業";
+  return note || "付帯作業";
+};
+
+const slotTypeLabel = (slot: EventSlotRow) => {
+  if (slot.slot_type === "band") return "バンド";
+  const note = slot.note?.trim() ?? "";
+  if (slot.slot_type === "break" || note.includes("転換")) return "転換";
+  return "付帯作業";
 };
 
 export default function LightingInstructionsPage() {
@@ -193,7 +201,7 @@ export default function LightingInstructionsPage() {
                                                 {phaseLabel(slot.slot_phase)}
                                               </Badge>
                                               <Badge variant="secondary" className="text-[10px]">
-                                                {slot.slot_type.toUpperCase()}
+                                                {slotTypeLabel(slot)}
                                               </Badge>
                                             </div>
                                             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">

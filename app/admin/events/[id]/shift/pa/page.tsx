@@ -386,14 +386,22 @@ export default function AdminEventShiftPaPage() {
     };
   }, [eventId, canEditRole, eligiblePerformerIds, eventStaff, syncingPerformers]);
 
-  const slotLabel = (slot: EventSlot) => {
+const slotLabel = (slot: EventSlot) => {
     if (slot.slot_type === "band") {
       return bandNameMap.get(slot.band_id ?? "") ?? "バンド未設定";
     }
-    if (slot.slot_type === "break") return "休憩";
-    if (slot.slot_type === "mc") return "MC";
-    return slot.note?.trim() || "その他";
-  };
+    const note = slot.note?.trim() ?? "";
+    if (slot.slot_type === "break" || note.includes("転換")) return "転換";
+    if (slot.slot_type === "mc") return "付帯作業";
+    return note || "付帯作業";
+};
+
+const slotTypeLabel = (slot: EventSlot) => {
+    if (slot.slot_type === "band") return "バンド";
+    const note = slot.note?.trim() ?? "";
+    if (slot.slot_type === "break" || note.includes("転換")) return "転換";
+    return "付帯作業";
+};
 
   const slotDurationLabel = (slot: EventSlot) => {
     const start = parseTimeValue(slot.start_time ?? null);
@@ -427,12 +435,13 @@ export default function AdminEventShiftPaPage() {
     return "outline" as const;
   };
 
-  type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup";
+  type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
 
   const slotPhaseKey = (slot: EventSlot): PhaseKey => {
     const note = slot.note?.trim();
     if (note === "集合～準備") return "prep";
     if (note === "終了～撤収" || note === "終了～解散") return "cleanup";
+    if (note === "休憩") return "rest";
     return slot.slot_phase ?? "show";
   };
 
@@ -440,25 +449,26 @@ export default function AdminEventShiftPaPage() {
     const note = slot.note?.trim();
     if (note === "集合～準備") return "集合～準備";
     if (note === "終了～撤収" || note === "終了～解散") return note;
+    if (note === "休憩") return "休憩";
     return phaseLabel(slot.slot_phase);
   };
 
   const slotPhaseBadgeVariant = (slot: EventSlot) => {
     const key = slotPhaseKey(slot);
-    if (key === "prep" || key === "cleanup") return "outline" as const;
+    if (key === "prep" || key === "cleanup" || key === "rest") return "outline" as const;
     return phaseBadgeVariant(slot.slot_phase);
   };
 
   const phaseBarClass = (phase: PhaseKey) => {
     if (phase === "show") return "bg-fuchsia-400/80";
     if (phase === "rehearsal_normal" || phase === "rehearsal_pre") return "bg-sky-400/80";
-    if (phase === "prep" || phase === "cleanup") return "bg-amber-400/80";
+    if (phase === "prep" || phase === "cleanup" || phase === "rest") return "bg-amber-400/80";
     return "bg-muted";
   };
 
   const slotAccentClass = (slot: EventSlot) => {
     const note = slot.note?.trim() ?? "";
-    if (note === "集合～準備" || note === "終了～撤収" || note === "終了～解散") {
+    if (note === "集合～準備" || note === "終了～撤収" || note === "終了～解散" || note === "休憩") {
       return "border-l-4 border-l-amber-400/80";
     }
     if (slot.slot_type === "break" || note.includes("転換")) {
@@ -948,7 +958,7 @@ export default function AdminEventShiftPaPage() {
                   </span>
                   <span className="inline-flex items-center gap-2">
                     <span className="h-2 w-6 rounded-full bg-amber-400/80" />
-                    転換/休憩/準備/解散
+                    転換/休憩/付帯作業（準備・撤収など）
                   </span>
                 </div>
               </CardContent>
@@ -1095,7 +1105,7 @@ export default function AdminEventShiftPaPage() {
                               </div>
                               <div className="flex flex-wrap items-center gap-2">
                                 <Badge variant={slotPhaseBadgeVariant(slot)}>{slotPhaseLabel(slot)}</Badge>
-                                <Badge variant="outline">{slot.slot_type.toUpperCase()}</Badge>
+                                <Badge variant="outline">{slotTypeLabel(slot)}</Badge>
                               </div>
                             </div>
 

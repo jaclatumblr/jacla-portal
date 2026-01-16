@@ -45,6 +45,11 @@ type UseRepertoireDataResult = {
   clearDraft: () => void;
 };
 
+type RepertoireOptions = {
+  adminMode?: boolean;
+  initialBandId?: string | null;
+};
+
 const normalizeDraftSongs = (draftSongs: SongEntry[]) =>
   draftSongs.map((entry, index) => ({
     ...entry,
@@ -63,7 +68,13 @@ const normalizeDraftSongs = (draftSongs: SongEntry[]) =>
     order_index: entry.order_index ?? index + 1,
   }));
 
-export function useRepertoireData(eventId: string, userId?: string): UseRepertoireDataResult {
+export function useRepertoireData(
+  eventId: string,
+  userId?: string,
+  options?: RepertoireOptions
+): UseRepertoireDataResult {
+  const adminMode = options?.adminMode ?? false;
+  const initialBandId = options?.initialBandId ?? null;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -103,25 +114,41 @@ export function useRepertoireData(eventId: string, userId?: string): UseRepertoi
         .single();
       setMyProfileId(profileData?.id ?? null);
 
+      const bandSelect = `
+        id, name, created_by, repertoire_status, stage_plot_data,
+        representative_name, sound_note, lighting_note, general_note, lighting_total_min,
+        band_members(user_id)
+      `;
+
       const { data: bandsData, error: bandsError } = await supabase
         .from("bands")
-        .select(
-          `
-             id, name, created_by, repertoire_status, stage_plot_data,
-             representative_name, sound_note, lighting_note, general_note, lighting_total_min,
-             band_members!inner(user_id)
-          `
-        )
+        .select(bandSelect)
         .eq("event_id", eventId)
-        .eq("band_members.user_id", userId);
+        .eq("band_type", "event")
+        .order("created_at", { ascending: true });
 
       if (bandsError) throw bandsError;
 
-      const bandList = (bandsData ?? []) as BandRow[];
+      const bandListRaw = (bandsData ?? []) as (BandRow & {
+        band_members?: { user_id: string }[] | null;
+      })[];
+      const bandList = adminMode
+        ? bandListRaw
+        : bandListRaw.filter((entry) => {
+            if (!userId) return false;
+            if (entry.created_by === userId) return true;
+            const members = Array.isArray(entry.band_members) ? entry.band_members : [];
+            return members.some((member) => member.user_id === userId);
+          });
+
       setAvailableBands(bandList);
 
       const hasSelected = selectedBandId ? bandList.some((entry) => entry.id === selectedBandId) : false;
-      const nextBandId = hasSelected ? selectedBandId : bandList[0]?.id ?? null;
+      const hasInitial =
+        !selectedBandId && initialBandId
+          ? bandList.some((entry) => entry.id === initialBandId)
+          : false;
+      const nextBandId = hasInitial ? initialBandId : hasSelected ? selectedBandId : bandList[0]?.id ?? null;
 
       if (nextBandId !== selectedBandId) {
         setSelectedBandId(nextBandId);
@@ -227,7 +254,7 @@ export function useRepertoireData(eventId: string, userId?: string): UseRepertoi
     } finally {
       setLoading(false);
     }
-  }, [eventId, userId, selectedBandId]);
+  }, [adminMode, eventId, initialBandId, userId, selectedBandId]);
 
   useEffect(() => {
     refreshData();

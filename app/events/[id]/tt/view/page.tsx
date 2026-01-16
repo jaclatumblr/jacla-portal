@@ -1,17 +1,18 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { Calendar, ChevronDown, Clock, List } from "lucide-react";
+import { Calendar, Clock, List } from "lucide-react";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { SideNav } from "@/components/SideNav";
 import { PageHeader } from "@/components/PageHeader";
 import { supabase } from "@/lib/supabaseClient";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/lib/toast";
 import { useRoleFlags } from "@/lib/useRoleFlags";
+import { cn } from "@/lib/utils";
+import { RepertoireSection } from "@/app/admin/events/[id]/components/RepertoireSection";
 
 type EventRow = {
   id: string;
@@ -39,6 +40,8 @@ type SlotRow = {
   bands?: { name: string | null } | { name: string | null }[] | null;
 };
 
+const normalizeNote = (note?: string | null) => (note ?? "").replace(/～/g, "〜").trim();
+
 const slotPhaseOptions = [
   { value: "show", label: "本番" },
   { value: "rehearsal_normal", label: "通常リハ" },
@@ -50,33 +53,29 @@ const phaseLabel = (phase?: SlotRow["slot_phase"]) => {
   return slotPhaseOptions.find((opt) => opt.value === normalized)?.label ?? normalized;
 };
 
-const phaseBadgeVariant = (phase?: SlotRow["slot_phase"]) => {
-  const normalized = phase ?? "show";
-  if (normalized === "show") return "default" as const;
-  if (normalized === "rehearsal_pre") return "secondary" as const;
-  return "outline" as const;
-};
-
-type PhaseKey = SlotRow["slot_phase"] | "prep" | "cleanup";
+type PhaseKey = SlotRow["slot_phase"] | "prep" | "cleanup" | "rest";
 
 const slotPhaseKey = (slot: SlotRow): PhaseKey => {
-  const note = slot.note?.trim();
-  if (note === "集合～準備") return "prep";
-  if (note === "終了～撤収" || note === "終了～解散") return "cleanup";
+  const note = normalizeNote(slot.note);
+  if (note === "集合〜準備") return "prep";
+  if (note === "終了〜撤収" || note === "終了〜解散") return "cleanup";
+  if (note === "休憩") return "rest";
   return slot.slot_phase ?? "show";
 };
 
 const slotPhaseLabel = (slot: SlotRow) => {
-  const note = slot.note?.trim();
-  if (note === "集合～準備") return "集合～準備";
-  if (note === "終了～撤収" || note === "終了～解散") return note;
+  const note = normalizeNote(slot.note);
+  if (note === "集合〜準備") return "集合〜準備";
+  if (note === "終了〜撤収" || note === "終了〜解散") return note;
+  if (note === "休憩") return "休憩";
   return phaseLabel(slot.slot_phase);
 };
 
-const slotPhaseBadgeVariant = (slot: SlotRow) => {
-  const key = slotPhaseKey(slot);
-  if (key === "prep" || key === "cleanup") return "outline" as const;
-  return phaseBadgeVariant(slot.slot_phase);
+const slotTypeLabel = (slot: SlotRow) => {
+  if (slot.slot_type === "band") return "バンド";
+  const note = normalizeNote(slot.note);
+  if (slot.slot_type === "break" || note.includes("転換")) return "転換";
+  return "付帯作業";
 };
 
 const slotLabel = (slot: SlotRow) => {
@@ -86,16 +85,41 @@ const slotLabel = (slot: SlotRow) => {
     }
     return slot.bands?.name ?? "バンド未設定";
   }
-  if (slot.slot_type === "break") return "休憩";
-  if (slot.slot_type === "mc") return "MC";
-  return slot.note?.trim() || "その他";
+  const note = normalizeNote(slot.note);
+  if (slot.slot_type === "break" || note.includes("転換")) return "転換";
+  return note || "付帯作業";
 };
 
-const slotBadge = (slot: SlotRow) => {
+const slotPhaseBadgeVariant = (slot: SlotRow) => {
+  const key = slotPhaseKey(slot);
+  if (key === "prep" || key === "cleanup" || key === "rest") return "outline" as const;
+  if (key === "rehearsal_pre") return "secondary" as const;
+  return "default" as const;
+};
+
+const slotTypeBadgeVariant = (slot: SlotRow) => {
   if (slot.slot_type === "band") return "default" as const;
-  if (slot.slot_type === "break") return "secondary" as const;
-  if (slot.slot_type === "mc") return "outline" as const;
+  const note = normalizeNote(slot.note);
+  if (slot.slot_type === "break" || note.includes("転換")) return "secondary" as const;
   return "outline" as const;
+};
+
+const slotToneClass = (slot: SlotRow) => {
+  const note = normalizeNote(slot.note);
+  if (note === "集合〜準備" || note === "終了〜撤収" || note === "終了〜解散" || note === "休憩") {
+    return "before:bg-amber-400/80";
+  }
+  if (slot.slot_type === "break" || note.includes("転換")) {
+    return "before:bg-amber-400/80";
+  }
+  const phase = slot.slot_phase ?? "show";
+  if (phase === "rehearsal_normal" || phase === "rehearsal_pre") {
+    return "before:bg-sky-400/80";
+  }
+  if (phase === "show") {
+    return "before:bg-fuchsia-400/80";
+  }
+  return "before:bg-muted";
 };
 
 const parseTimeValue = (value: string | null) => {
@@ -121,16 +145,15 @@ const timeLabel = (start: string | null, end: string | null) => {
   return start ? `${start}-` : `- ${end}`;
 };
 
-export default function EventTimeTablePage() {
+export default function EventTimeTableViewPage() {
   const params = useParams<{ id: string }>();
   const eventId = params?.id as string | undefined;
-  const { canAccessAdmin, loading: rolesLoading } = useRoleFlags();
+  const { isAdmin, loading: rolesLoading } = useRoleFlags();
 
   const [event, setEvent] = useState<EventRow | null>(null);
   const [slots, setSlots] = useState<SlotRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expandedSlots, setExpandedSlots] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!eventId) return;
@@ -198,9 +221,26 @@ export default function EventTimeTablePage() {
     });
   }, [slots]);
 
-  const toggleSlot = (slotId: string) => {
-    setExpandedSlots((prev) => ({ ...prev, [slotId]: !prev[slotId] }));
+  const firstBandId = useMemo(() => {
+    const bandSlot = orderedSlots.find((slot) => slot.slot_type === "band" && slot.band_id);
+    return bandSlot?.band_id ?? null;
+  }, [orderedSlots]);
+
+  const [selectedBandId, setSelectedBandId] = useState<string | null>(firstBandId);
+
+  useEffect(() => {
+    if (!selectedBandId && firstBandId) {
+      setSelectedBandId(firstBandId);
+    }
+  }, [firstBandId, selectedBandId]);
+
+  const handleSlotClick = (slot: SlotRow) => {
+    if (slot.slot_type === "band" && slot.band_id) {
+      setSelectedBandId(slot.band_id);
+    }
   };
+
+  const canViewTimetable = Boolean(event?.tt_is_published) || isAdmin;
 
   return (
     <AuthGuard>
@@ -208,8 +248,8 @@ export default function EventTimeTablePage() {
         <SideNav />
         <main className="flex-1 md:ml-20">
           <PageHeader
-            kicker="Timetable"
-            title="タイムテーブル"
+            kicker="TT & Repertoire"
+            title="TT・レパ表"
             backHref={`/events/${eventId}`}
             backLabel="イベント詳細へ戻る"
             meta={
@@ -222,7 +262,7 @@ export default function EventTimeTablePage() {
                   {event.open_time && (
                     <span className="flex items-center gap-2">
                       <Clock className="w-4 h-4" />
-                      集合 {event.open_time}
+                      開場 {event.open_time}
                     </span>
                   )}
                   {event.start_time && (
@@ -249,9 +289,9 @@ export default function EventTimeTablePage() {
             <div className="container mx-auto px-4 sm:px-6 space-y-6">
               {loading || rolesLoading ? (
                 <div className="rounded-lg border border-border bg-card/60 px-4 py-3 text-sm text-muted-foreground">
-                  タイムテーブルを読み込み中...
+                  読み込み中...
                 </div>
-              ) : event && !event.tt_is_published && !canAccessAdmin ? (
+              ) : event && !canViewTimetable ? (
                 <div className="rounded-lg border border-border bg-card/60 px-4 py-3 text-sm text-muted-foreground">
                   タイムテーブルは未公開です。公開されるまでお待ちください。
                 </div>
@@ -260,188 +300,60 @@ export default function EventTimeTablePage() {
                   タイムテーブルがまだ作成されていません。
                 </div>
               ) : (
-                <Card className="bg-card/60 border-border">
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <List className="w-4 h-4 text-primary" />
-                      タイムテーブル一覧
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="space-y-2 md:hidden">
-                      {orderedSlots.map((slot, index) => {
-                        const phase = slotPhaseKey(slot);
-                        const prevPhase = orderedSlots[index - 1]
-                          ? slotPhaseKey(orderedSlots[index - 1])
-                          : phase;
-                        const showPhaseHeader = index === 0 || prevPhase !== phase;
-                        const isExpanded = Boolean(expandedSlots[slot.id]);
-                        const detailsId = `slot-details-${slot.id}`;
-                        return (
-                          <Fragment key={slot.id}>
-                            {showPhaseHeader && (
-                              <div className="rounded-md border border-border bg-background/70 px-3 py-1 text-xs font-semibold text-muted-foreground">
-                                {slotPhaseLabel(slot)}
-                              </div>
-                            )}
+                <div className="flex flex-col gap-4 md:flex-row">
+                  <div className="md:w-1/2">
+                    <Card className="bg-card/60 border-border">
+                      <CardHeader>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          <List className="w-4 h-4 text-primary" />
+                          タイムテーブル
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        {orderedSlots.map((slot, index) => {
+                          const isSelected = slot.slot_type === "band" && slot.band_id === selectedBandId;
+                          return (
                             <button
+                              key={slot.id}
                               type="button"
-                              onClick={() => toggleSlot(slot.id)}
-                              aria-expanded={isExpanded}
-                              aria-controls={detailsId}
-                              className={`w-full text-left rounded-md border border-border p-3 transition-colors ${
-                                isExpanded ? "bg-background/70" : "bg-background/50"
-                              }`}
-                            >
-                              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                <span>#{String(index + 1).padStart(2, "0")}</span>
-                                <div className="flex items-center gap-2">
-                                  <Badge variant={slotPhaseBadgeVariant(slot)} className="text-[10px]">
-                                    {slotPhaseLabel(slot)}
-                                  </Badge>
-                                  <Badge variant={slotBadge(slot)} className="text-[10px]">
-                                    {slot.slot_type.toUpperCase()}
-                                  </Badge>
-                                  <ChevronDown
-                                    className={`w-4 h-4 transition-transform ${
-                                      isExpanded ? "rotate-180" : ""
-                                    }`}
-                                  />
-                                </div>
-                              </div>
-                              <div className="mt-1 text-sm font-semibold">{slotLabel(slot)}</div>
-                              <div className="mt-1 text-sm text-muted-foreground">
-                                {timeLabel(slot.start_time, slot.end_time)}
-                              </div>
-                              {isExpanded && (
-                                <div
-                                  id={detailsId}
-                                  className="mt-2 grid gap-2 text-xs text-muted-foreground"
-                                >
-                                  <div className="rounded-md border border-border/60 bg-background/40 px-2 py-1">
-                                    <div className="text-[11px] text-foreground">転換</div>
-                                    <div>
-                                      {slot.changeover_min != null
-                                        ? `${slot.changeover_min}分`
-                                        : "-"}
-                                    </div>
-                                  </div>
-                                  <div className="rounded-md border border-border/60 bg-background/40 px-2 py-1">
-                                    <div className="text-[11px] text-foreground">メモ</div>
-                                    <div className="whitespace-pre-wrap">{slot.note || "-"}</div>
-                                  </div>
-                                </div>
+                              onClick={() => handleSlotClick(slot)}
+                              className={cn(
+                                "relative w-full rounded-lg border bg-card/70 px-3 py-2 pl-5 text-left transition-colors",
+                                "before:absolute before:left-2 before:top-2 before:bottom-2 before:w-1 before:rounded-full before:content-['']",
+                                slotToneClass(slot),
+                                isSelected ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
                               )}
+                            >
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <span>#{String(index + 1).padStart(2, "0")}</span>
+                                <Badge variant={slotPhaseBadgeVariant(slot)} className="text-[10px]">
+                                  {slotPhaseLabel(slot)}
+                                </Badge>
+                                <Badge variant={slotTypeBadgeVariant(slot)} className="text-[10px]">
+                                  {slotTypeLabel(slot)}
+                                </Badge>
+                                <span className="ml-auto text-xs">{timeLabel(slot.start_time, slot.end_time)}</span>
+                              </div>
+                              <div className="mt-1 flex items-center justify-between gap-2">
+                                <div className="min-w-0 text-sm font-semibold truncate">{slotLabel(slot)}</div>
+                              </div>
                             </button>
-                          </Fragment>
-                        );
-                      })}
-                    </div>
+                          );
+                        })}
+                      </CardContent>
+                    </Card>
+                  </div>
 
-                    <div className="hidden md:block overflow-x-auto rounded-md border border-border bg-background/40">
-                      <Table className="min-w-[820px]">
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="w-[52px]">#</TableHead>
-                            <TableHead className="w-[140px]">時間</TableHead>
-                            <TableHead>内容</TableHead>
-                            <TableHead className="w-[120px]">種別</TableHead>
-                            <TableHead className="w-[260px]">メモ</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {orderedSlots.map((slot, index) => {
-                            const phase = slotPhaseKey(slot);
-                            const prevPhase = orderedSlots[index - 1]
-                              ? slotPhaseKey(orderedSlots[index - 1])
-                              : phase;
-                            const showPhaseHeader = index === 0 || prevPhase !== phase;
-                            const isExpanded = Boolean(expandedSlots[slot.id]);
-                            return (
-                              <Fragment key={slot.id}>
-                                {showPhaseHeader && (
-                                  <TableRow className="bg-muted/30">
-                                    <TableCell
-                                      colSpan={5}
-                                      className="text-xs font-semibold text-muted-foreground"
-                                    >
-                                      {slotPhaseLabel(slot)}
-                                    </TableCell>
-                                  </TableRow>
-                                )}
-                                <TableRow
-                                  onClick={() => toggleSlot(slot.id)}
-                                  role="button"
-                                  tabIndex={0}
-                                  aria-expanded={isExpanded}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter" || e.key === " ") {
-                                      e.preventDefault();
-                                      toggleSlot(slot.id);
-                                    }
-                                  }}
-                                  className="cursor-pointer hover:bg-muted/30"
-                                >
-                                  <TableCell className="text-xs text-muted-foreground">
-                                    {String(index + 1).padStart(2, "0")}
-                                  </TableCell>
-                                  <TableCell className="text-sm">
-                                    {timeLabel(slot.start_time, slot.end_time)}
-                                  </TableCell>
-                                  <TableCell className="text-sm font-medium">
-                                    <div className="flex items-center gap-2">
-                                      <ChevronDown
-                                        className={`w-3 h-3 transition-transform ${
-                                          isExpanded ? "rotate-180" : ""
-                                        }`}
-                                      />
-                                      <span>{slotLabel(slot)}</span>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell>
-                                    <div className="flex flex-wrap items-center gap-2">
-                                      <Badge variant={slotPhaseBadgeVariant(slot)} className="text-xs">
-                                        {slotPhaseLabel(slot)}
-                                      </Badge>
-                                      <Badge variant={slotBadge(slot)} className="text-xs">
-                                        {slot.slot_type.toUpperCase()}
-                                      </Badge>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell className="text-xs">
-                                    <span className="line-clamp-1">{slot.note || "-"}</span>
-                                  </TableCell>
-                                </TableRow>
-                                {isExpanded && (
-                                  <TableRow className="bg-muted/20">
-                                    <TableCell colSpan={5} className="text-xs text-muted-foreground">
-                                      <div className="grid gap-2 md:grid-cols-[160px,140px,1fr]">
-                                        <div className="rounded-md border border-border/60 bg-background/50 px-2 py-1">
-                                          <div className="text-[11px] text-foreground">時間</div>
-                                          <div className="text-sm">{timeLabel(slot.start_time, slot.end_time)}</div>
-                                        </div>
-                                        <div className="rounded-md border border-border/60 bg-background/50 px-2 py-1">
-                                          <div className="text-[11px] text-foreground">転換</div>
-                                          <div>
-                                            {slot.changeover_min != null ? `${slot.changeover_min}分` : "-"}
-                                          </div>
-                                        </div>
-                                        <div className="rounded-md border border-border/60 bg-background/50 px-2 py-1">
-                                          <div className="text-[11px] text-foreground">メモ</div>
-                                          <div className="whitespace-pre-wrap">{slot.note || "-"}</div>
-                                        </div>
-                                      </div>
-                                    </TableCell>
-                                  </TableRow>
-                                )}
-                              </Fragment>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </CardContent>
-                </Card>
+                  <div className="md:w-1/2">
+                    <RepertoireSection
+                      eventId={eventId ?? ""}
+                      selectedBandId={selectedBandId}
+                      hideBandList={true}
+                      onBandSelect={setSelectedBandId}
+                      readOnly={true}
+                    />
+                  </div>
+                </div>
               )}
             </div>
           </section>

@@ -7,12 +7,14 @@ export type EventRow = {
     status: string;
     event_type: string;
     venue: string | null;
+    assembly_time: string | null;
     open_time: string | null;
     start_time: string | null;
     note: string | null;
     default_changeover_min: number;
     tt_is_published: boolean;
     tt_is_provisional: boolean;
+    normal_rehearsal_order?: "same" | "reverse" | null;
 };
 
 export type Band = {
@@ -57,6 +59,7 @@ export type EventSlot = {
     event_id: string;
     band_id: string | null;
     slot_type: string;
+    slot_phase?: "show" | "rehearsal_normal" | "rehearsal_pre" | null;
     order_in_event: number | null;
     start_time: string | null;
     end_time: string | null;
@@ -100,9 +103,8 @@ export const eventTypeOptions = [
 
 export const slotTypeOptions = [
     { value: "band", label: "バンド" },
-    { value: "break", label: "休憩" },
-    { value: "mc", label: "MC" },
-    { value: "other", label: "その他" },
+    { value: "break", label: "転換" },
+    { value: "other", label: "付帯作業" },
 ];
 
 // Utilities

@@ -48,6 +48,7 @@ export function EventEditForm({ event, onRefresh }: EventEditFormProps) {
                 status: formData.status,
                 event_type: formData.event_type,
                 venue: formData.venue || null,
+                assembly_time: formData.assembly_time || null,
                 open_time: formData.open_time || null,
                 start_time: formData.start_time || null,
                 note: formData.note || null,
@@ -137,12 +138,20 @@ export function EventEditForm({ event, onRefresh }: EventEditFormProps) {
                         </div>
                     </div>
 
-                    <div className="grid md:grid-cols-3 gap-4">
+                    <div className="grid md:grid-cols-4 gap-4">
                         <div className="space-y-2">
                             <label className="text-sm font-medium">会場</label>
                             <Input
                                 value={formData.venue ?? ""}
                                 onChange={(e) => handleChange("venue", e.target.value)}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">集合時間</label>
+                            <Input
+                                type="time"
+                                value={formData.assembly_time ?? ""}
+                                onChange={(e) => handleChange("assembly_time", e.target.value)}
                             />
                         </div>
                         <div className="space-y-2">

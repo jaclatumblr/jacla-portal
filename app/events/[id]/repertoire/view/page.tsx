@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { ChevronDown, ExternalLink } from "lucide-react";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { SideNav } from "@/components/SideNav";
@@ -48,6 +48,8 @@ const formatDuration = (seconds: number | null) => {
 export default function RepertoireViewPage() {
   const params = useParams<{ id: string }>();
   const eventId = params?.id as string | undefined;
+  const searchParams = useSearchParams();
+  const targetBandId = searchParams?.get("bandId") ?? null;
 
   const [event, setEvent] = useState<EventRow | null>(null);
   const [bands, setBands] = useState<BandRow[]>([]);
@@ -55,7 +57,11 @@ export default function RepertoireViewPage() {
   const [loading, setLoading] = useState(true);
   const [expandedBands, setExpandedBands] = useState<Record<string, boolean>>({});
 
-  const bandIds = useMemo(() => bands.map((band) => band.id), [bands]);
+  const visibleBands = useMemo(
+    () => (targetBandId ? bands.filter((band) => band.id === targetBandId) : bands),
+    [bands, targetBandId]
+  );
+  const bandIds = useMemo(() => visibleBands.map((band) => band.id), [visibleBands]);
 
   useEffect(() => {
     if (!eventId) return;
@@ -98,6 +104,11 @@ export default function RepertoireViewPage() {
       cancelled = true;
     };
   }, [eventId]);
+
+  useEffect(() => {
+    if (!targetBandId) return;
+    setExpandedBands((prev) => ({ ...prev, [targetBandId]: true }));
+  }, [targetBandId]);
 
   useEffect(() => {
     if (bandIds.length === 0) {
@@ -161,13 +172,13 @@ export default function RepertoireViewPage() {
                 <div className="rounded-lg border border-border bg-card/60 px-4 py-3 text-sm text-muted-foreground">
                   読み込み中...
                 </div>
-              ) : bands.length === 0 ? (
+              ) : visibleBands.length === 0 ? (
                 <div className="rounded-lg border border-border bg-card/60 px-4 py-3 text-sm text-muted-foreground">
                   参加バンドがありません。
                 </div>
               ) : (
                 <div className="grid gap-6">
-                  {bands.map((band) => {
+                  {visibleBands.map((band) => {
                     const status = band.repertoire_status === "submitted" ? "提出済み" : "下書き";
                     const entries = songsByBand[band.id] ?? [];
                     const isExpanded = expandedBands[band.id] ?? false;

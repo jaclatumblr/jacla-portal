@@ -45,6 +45,7 @@ type SetlistEditorProps = {
   songs: SongEntry[];
   setSongs: (songs: SongEntry[]) => void;
   onScheduleMetadata: (id: string, url: string, entryType: EntryType) => void;
+  readOnly?: boolean;
 };
 
 type SongCardProps = {
@@ -58,7 +59,9 @@ type SongCardProps = {
   isDragging?: boolean;
   isOverlay?: boolean;
   dragHandleProps?: any;
+  readOnly?: boolean;
 };
+
 
 function SongCard({
   entry,
@@ -71,16 +74,17 @@ function SongCard({
   isDragging,
   isOverlay,
   dragHandleProps,
+  readOnly,
 }: SongCardProps) {
   const isSong = entry.entry_type === "song";
   const isMc = entry.entry_type === "mc";
-  const readOnly = !!isOverlay;
-  const canEditInstructions = !readOnly && (isSong || isMc);
+  const isReadOnly = !!isOverlay || !!readOnly;
+  const canEditInstructions = !isReadOnly && (isSong || isMc);
 
   return (
     <div
       className={cn(
-        "space-y-3 rounded-lg border border-border bg-card/70 px-4 py-3",
+        "space-y-3 rounded-lg border border-border bg-card/70 px-4 py-3 touch-pan-y",
         isDragging && "opacity-50",
         isOverlay && "pointer-events-none z-50 bg-card shadow-xl"
       )}
@@ -90,7 +94,7 @@ function SongCard({
           <button
             type="button"
             className="cursor-grab rounded-md border border-border p-1 text-muted-foreground hover:text-foreground active:cursor-grabbing touch-none"
-            disabled={readOnly}
+            disabled={isReadOnly}
             {...dragHandleProps}
           >
             <GripVertical className="h-4 w-4" />
@@ -106,7 +110,7 @@ function SongCard({
             onChange={(e) => onUpdate(entry.id, "title", e.target.value)}
             placeholder={isMc ? "MCタイトル" : "曲名"}
             className="w-full font-medium"
-            disabled={readOnly}
+            disabled={isReadOnly}
           />
         </div>
         <div className="flex items-center gap-1 sm:ml-auto">
@@ -115,7 +119,7 @@ function SongCard({
             variant="ghost"
             size="icon"
             onClick={() => onMove(index, Math.max(0, index - 1))}
-            disabled={readOnly || index === 0}
+            disabled={isReadOnly || index === 0}
           >
             <ArrowUp className="h-4 w-4" />
           </Button>
@@ -124,7 +128,7 @@ function SongCard({
             variant="ghost"
             size="icon"
             onClick={() => onMove(index, Math.min(totalCount - 1, index + 1))}
-            disabled={readOnly || index === totalCount - 1}
+            disabled={isReadOnly || index === totalCount - 1}
           >
             <ArrowDown className="h-4 w-4" />
           </Button>
@@ -133,7 +137,7 @@ function SongCard({
             variant="ghost"
             size="icon"
             onClick={() => onRemove(entry.id)}
-            disabled={readOnly}
+            disabled={isReadOnly}
           >
             <Trash2 className="h-4 w-4 text-destructive" />
           </Button>
@@ -146,7 +150,7 @@ function SongCard({
           <Input
             value={entry.artist}
             onChange={(e) => onUpdate(entry.id, "artist", e.target.value)}
-            disabled={!isSong || readOnly}
+            disabled={!isSong || isReadOnly}
             placeholder={isSong ? "アーティスト" : "-"}
           />
         </label>
@@ -157,9 +161,9 @@ function SongCard({
               value={entry.url}
               onChange={(e) => {
                 onUpdate(entry.id, "url", e.target.value);
-                if (!readOnly) onScheduleMetadata(entry.id, e.target.value, entry.entry_type);
+                if (!isReadOnly) onScheduleMetadata(entry.id, e.target.value, entry.entry_type);
               }}
-              disabled={!isSong || readOnly}
+              disabled={!isSong || isReadOnly}
               placeholder={isSong ? "URL (予習用動画など)" : "-"}
             />
           </div>
@@ -176,7 +180,7 @@ function SongCard({
               value={entry.durationMin}
               onChange={(e) => onUpdate(entry.id, "durationMin", e.target.value)}
               className="w-20"
-              disabled={readOnly}
+              disabled={isReadOnly}
             />
             <span className="text-muted-foreground">:</span>
             <Input
@@ -186,7 +190,7 @@ function SongCard({
               value={entry.durationSec}
               onChange={(e) => onUpdate(entry.id, "durationSec", e.target.value)}
               className="w-20"
-              disabled={readOnly}
+              disabled={isReadOnly}
             />
           </div>
         </label>
@@ -196,7 +200,7 @@ function SongCard({
             rows={2}
             value={entry.arrangementNote ?? ""}
             onChange={(e) => onUpdate(entry.id, "arrangementNote", e.target.value)}
-            disabled={readOnly}
+            disabled={isReadOnly}
             placeholder="ソロ、アレンジ等あれば"
             className="resize-none"
           />
@@ -290,6 +294,7 @@ function SongCard({
 function SortableSongItem(props: SongCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: props.entry.id,
+    disabled: props.readOnly,
   });
 
   const style = {
@@ -298,16 +303,16 @@ function SortableSongItem(props: SongCardProps) {
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="touch-none">
+    <div ref={setNodeRef} style={style} className="touch-pan-y">
       <SongCard {...props} isDragging={isDragging} dragHandleProps={{ ...attributes, ...listeners }} />
     </div>
   );
 }
 
-export function SetlistEditor({ songs, setSongs, onScheduleMetadata }: SetlistEditorProps) {
+export function SetlistEditor({ songs, setSongs, onScheduleMetadata, readOnly }: SetlistEditorProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
 
-  const sensors = useSensors(
+  const sensors = readOnly ? [] : useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 8 },
     })
@@ -331,6 +336,7 @@ export function SetlistEditor({ songs, setSongs, onScheduleMetadata }: SetlistEd
   };
 
   const addEntry = (type: EntryType) => {
+    if (readOnly) return;
     const newEntry: SongEntry = {
       id: createTempId(),
       band_id: "",
@@ -352,15 +358,18 @@ export function SetlistEditor({ songs, setSongs, onScheduleMetadata }: SetlistEd
   };
 
   const updateEntry = (id: string, key: keyof SongEntry, value: any) => {
+    if (readOnly) return;
     setSongs(songs.map((s) => (s.id === id ? { ...s, [key]: value } : s)));
   };
 
   const removeEntry = (id: string) => {
+    if (readOnly) return;
     if (!window.confirm("この項目を削除しますか？")) return;
     setSongs(songs.filter((s) => s.id !== id));
   };
 
   const moveEntry = (from: number, to: number) => {
+    if (readOnly) return;
     setSongs(arrayMove(songs, from, to));
   };
 
@@ -393,6 +402,7 @@ export function SetlistEditor({ songs, setSongs, onScheduleMetadata }: SetlistEd
                   onMove={moveEntry}
                   onRemove={removeEntry}
                   onScheduleMetadata={onScheduleMetadata}
+                  readOnly={readOnly}
                 />
               ))}
             </div>
@@ -415,11 +425,11 @@ export function SetlistEditor({ songs, setSongs, onScheduleMetadata }: SetlistEd
         </DndContext>
 
         <div className="mt-6 flex gap-4">
-          <Button variant="outline" className="flex-1 border-dashed" onClick={() => addEntry("song")}>
+          <Button variant="outline" className="flex-1 border-dashed" onClick={() => addEntry("song")} disabled={readOnly}>
             <Music className="mr-2 h-4 w-4" />
             曲を追加
           </Button>
-          <Button variant="outline" className="flex-1 border-dashed" onClick={() => addEntry("mc")}>
+          <Button variant="outline" className="flex-1 border-dashed" onClick={() => addEntry("mc")} disabled={readOnly}>
             <Mic className="mr-2 h-4 w-4" />
             MCを追加
           </Button>

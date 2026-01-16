@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Calendar, Clock, MapPin, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowRight, Calendar, ChevronDown, ChevronUp, Clock, MapPin, Music, Plus, RefreshCw, Trash2, Users } from "lucide-react";
 import { SideNav } from "@/components/SideNav";
 import { PageHeader } from "@/components/PageHeader";
 import { AuthGuard } from "@/lib/AuthGuard";
@@ -15,6 +15,22 @@ import { cn } from "@/lib/utils";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import { toast } from "@/lib/toast";
 
+type SongInfo = {
+  id: string;
+  title: string;
+  artist: string | null;
+  duration_sec: number | null;
+  order_index: number;
+};
+
+type BandInfo = {
+  id: string;
+  name: string;
+  member_count: number;
+  repertoire_status: string | null;
+  songs: SongInfo[];
+};
+
 type EventRow = {
   id: string;
   name: string;
@@ -26,6 +42,7 @@ type EventRow = {
   start_time: string | null;
   note: string | null;
   default_changeover_min: number;
+  bands?: BandInfo[];
 };
 
 const statusOptions = [
@@ -75,6 +92,7 @@ export default function AdminEventsPage() {
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
 
   const userId = session?.user.id;
 
@@ -100,19 +118,63 @@ export default function AdminEventsPage() {
     (async () => {
       setLoading(true);
       setError(null);
-      const { data, error } = await supabase
-        .from("events")
-        .select(
-          "id, name, date, status, event_type, venue, open_time, start_time, note, default_changeover_min, created_at"
-        )
-        .order("created_at", { ascending: false });
+      const [eventsRes, bandsRes, songsRes] = await Promise.all([
+        supabase
+          .from("events")
+          .select(
+            "id, name, date, status, event_type, venue, open_time, start_time, note, default_changeover_min, created_at"
+          )
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("bands")
+          .select("id, name, event_id, repertoire_status, band_members(id)")
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("songs")
+          .select("id, band_id, title, artist, duration_sec, order_index")
+          .order("order_index", { ascending: true }),
+      ]);
       if (cancelled) return;
-      if (error) {
-        console.error(error);
+      if (eventsRes.error) {
+        console.error(eventsRes.error);
         setError("イベントの取得に失敗しました。");
         setEvents([]);
       } else {
-        setEvents((data ?? []) as EventRow[]);
+        // Build songs map by band_id
+        const songsMap = new Map<string, SongInfo[]>();
+        (songsRes.data ?? []).forEach((s: any) => {
+          if (!s.band_id) return;
+          const song: SongInfo = {
+            id: s.id,
+            title: s.title ?? "",
+            artist: s.artist,
+            duration_sec: s.duration_sec,
+            order_index: s.order_index ?? 0,
+          };
+          const existing = songsMap.get(s.band_id) ?? [];
+          existing.push(song);
+          songsMap.set(s.band_id, existing);
+        });
+
+        const bandsMap = new Map<string, BandInfo[]>();
+        (bandsRes.data ?? []).forEach((b: any) => {
+          if (!b.event_id) return;
+          const info: BandInfo = {
+            id: b.id,
+            name: b.name,
+            member_count: Array.isArray(b.band_members) ? b.band_members.length : 0,
+            repertoire_status: b.repertoire_status,
+            songs: songsMap.get(b.id) ?? [],
+          };
+          const existing = bandsMap.get(b.event_id) ?? [];
+          existing.push(info);
+          bandsMap.set(b.event_id, existing);
+        });
+        const eventsWithBands = (eventsRes.data ?? []).map((e: any) => ({
+          ...e,
+          bands: bandsMap.get(e.id) ?? [],
+        })) as EventRow[];
+        setEvents(eventsWithBands);
       }
       setLoading(false);
     })();
@@ -418,7 +480,83 @@ export default function AdminEventsPage() {
                                 <MapPin className="w-4 h-4 text-primary" />
                                 {event.venue ?? "未設定"}
                               </span>
+                              {(event.bands?.length ?? 0) > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setExpandedEventId(expandedEventId === event.id ? null : event.id)}
+                                  className="flex items-center gap-1 hover:text-primary transition-colors"
+                                >
+                                  <Music className="w-4 h-4 text-primary" />
+                                  {event.bands?.length}バンド
+                                  {expandedEventId === event.id ? (
+                                    <ChevronUp className="w-3 h-3" />
+                                  ) : (
+                                    <ChevronDown className="w-3 h-3" />
+                                  )}
+                                </button>
+                              )}
                             </div>
+                            {/* Expanded Band List */}
+                            {expandedEventId === event.id && event.bands && event.bands.length > 0 && (
+                              <div className="mt-3 p-3 rounded-lg bg-muted/50 border border-border space-y-2">
+                                <p className="text-xs font-medium text-muted-foreground">登録バンド</p>
+                                <div className="space-y-1.5">
+                                  {event.bands.map((band) => (
+                                    <div
+                                      key={band.id}
+                                      className="text-xs bg-background/60 rounded px-3 py-2 space-y-2"
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <span className="font-semibold">{band.name}</span>
+                                        <div className="flex items-center gap-2">
+                                          <span className="flex items-center gap-1 text-muted-foreground">
+                                            <Users className="w-3 h-3" />
+                                            {band.member_count}名
+                                          </span>
+                                          <Badge
+                                            variant={band.repertoire_status === "submitted" ? "default" : "outline"}
+                                            className="text-[10px] px-1.5 py-0"
+                                          >
+                                            {band.repertoire_status === "submitted" ? "提出済" : "未提出"}
+                                          </Badge>
+                                        </div>
+                                      </div>
+                                      <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                                        <Link
+                                          href={`/admin/events/${event.id}/repertoire?bandId=${band.id}`}
+                                          className="inline-flex items-center gap-1 text-primary hover:text-primary/80"
+                                        >
+                                          レパ表を見る
+                                          <ArrowRight className="h-3 w-3" />
+                                        </Link>
+                                      </div>
+                                      {/* Setlist */}
+                                      {band.songs.length > 0 && (
+                                        <div className="pl-2 border-l-2 border-primary/30 space-y-0.5">
+                                          {band.songs.map((song, idx) => {
+                                            const minutes = song.duration_sec ? Math.floor(song.duration_sec / 60) : 0;
+                                            const seconds = song.duration_sec ? song.duration_sec % 60 : 0;
+                                            const duration = song.duration_sec ? `${minutes}:${String(seconds).padStart(2, "0")}` : "";
+                                            return (
+                                              <div key={song.id} className="flex items-center gap-2 text-[11px]">
+                                                <span className="text-muted-foreground w-4">{idx + 1}.</span>
+                                                <span className="font-medium">{song.title || "（無題）"}</span>
+                                                {song.artist && (
+                                                  <span className="text-muted-foreground">- {song.artist}</span>
+                                                )}
+                                                {duration && (
+                                                  <span className="text-muted-foreground ml-auto">{duration}</span>
+                                                )}
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
                           <div className="flex gap-2 shrink-0">
                             <Link
@@ -505,4 +643,3 @@ export default function AdminEventsPage() {
     </AuthGuard>
   );
 }
-

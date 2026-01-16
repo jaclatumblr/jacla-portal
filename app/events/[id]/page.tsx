@@ -3,22 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import {
-  Calendar,
-  Clock,
-  MapPin,
-  Music,
-  FileText,
-  List,
-  ArrowRight,
-} from "lucide-react";
+import { Calendar, Clock, MapPin, Music, FileText, List, ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { supabase } from "@/lib/supabaseClient";
@@ -49,14 +36,13 @@ type BandSummary = {
 export default function EventDetailPage() {
   const params = useParams<{ id: string }>();
   const eventId = params?.id as string | undefined;
-  const { canAccessAdmin } = useRoleFlags();
+  const { isAdmin } = useRoleFlags();
 
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
-
-  // TODO: Supabase から bands / songs を取得して実データ化する
   const [bands, setBands] = useState<BandSummary[]>([]);
-  const canViewTimetable = Boolean(event?.tt_is_published) || canAccessAdmin;
+
+  const canViewTimetable = Boolean(event?.tt_is_published) || isAdmin;
 
   useEffect(() => {
     if (!eventId) return;
@@ -137,8 +123,7 @@ export default function EventDetailPage() {
       : "時間未設定";
 
   const headerTitle = loading ? "イベント情報を読み込み中..." : event?.name ?? "イベント詳細";
-  const headerDescription =
-    !loading && event?.note ? event.note : "イベントの詳細を確認できます。";
+  const headerDescription = !loading && event?.note ? event.note : "イベントの詳細を確認できます。";
   const headerMeta = event ? (
     <div className="flex items-center gap-3 flex-wrap">
       <Badge variant="default">{event.status}</Badge>
@@ -160,11 +145,7 @@ export default function EventDetailPage() {
 
   const renderBandList = (list: BandSummary[]) => {
     if (list.length === 0) {
-      return (
-        <p className="text-muted-foreground text-center py-8">
-          該当するバンドがありません。
-        </p>
-      );
+      return <p className="text-muted-foreground text-center py-8">該当するバンドがありません。</p>;
     }
     return list.map((band, index) => (
       <div
@@ -252,24 +233,7 @@ export default function EventDetailPage() {
           {event && (
             <section className="py-8 md:py-12">
               <div className="container mx-auto px-4 sm:px-6">
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 max-w-4xl mx-auto">
-                  <Link href={`/events/${event.id}/repertoire/view`} className="group">
-                    <div className="relative h-40 md:h-48 p-4 md:p-6 bg-card/50 border border-border rounded-lg hover:border-primary/50 transition-all">
-                      <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-lg" />
-                      <div className="relative h-full flex flex-col">
-                        <Music className="w-6 md:w-8 h-6 md:h-8 text-primary mb-3 md:mb-4" />
-                        <h3 className="text-base md:text-lg font-bold mb-2">レパ表一覧</h3>
-                        <p className="text-xs md:text-sm text-muted-foreground flex-1">
-                          全バンドのセットリストを確認
-                        </p>
-                        <div className="flex items-center gap-2 text-primary text-sm opacity-0 group-hover:opacity-100 transition-opacity">
-                          <span>詳しく見る</span>
-                          <ArrowRight className="w-4 h-4" />
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-
+                <div className="grid sm:grid-cols-2 gap-4 md:gap-6 max-w-4xl mx-auto">
                   {canManageBands && (
                     <Link href={`/events/${event.id}/repertoire/submit`} className="group">
                       <div className="relative h-40 md:h-48 p-4 md:p-6 bg-card/50 border border-border rounded-lg hover:border-secondary/50 transition-all">
@@ -290,17 +254,14 @@ export default function EventDetailPage() {
                   )}
 
                   {canViewTimetable ? (
-                    <Link
-                      href={`/events/${event.id}/tt/view`}
-                      className="group sm:col-span-2 lg:col-span-1"
-                    >
+                    <Link href={`/events/${event.id}/tt/view`} className="group">
                       <div className="relative h-40 md:h-48 p-4 md:p-6 bg-card/50 border border-border rounded-lg hover:border-accent/50 transition-all">
                         <div className="absolute inset-0 bg-gradient-to-br from-accent/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-lg" />
                         <div className="relative h-full flex flex-col">
                           <List className="w-6 md:w-8 h-6 md:h-8 text-accent mb-3 md:mb-4" />
-                          <h3 className="text-base md:text-lg font-bold mb-2">タイムテーブル</h3>
+                          <h3 className="text-base md:text-lg font-bold mb-2">TT・レパ表</h3>
                           <p className="text-xs md:text-sm text-muted-foreground flex-1">
-                            演奏順と時間割を確認
+                            タイムテーブルとレパ表をまとめて確認
                           </p>
                           <div className="flex items-center gap-2 text-accent text-sm opacity-0 group-hover:opacity-100 transition-opacity">
                             <span>詳しく見る</span>
@@ -310,12 +271,12 @@ export default function EventDetailPage() {
                       </div>
                     </Link>
                   ) : (
-                    <div className="sm:col-span-2 lg:col-span-1">
+                    <div>
                       <div className="relative h-40 md:h-48 p-4 md:p-6 bg-card/30 border border-border/60 rounded-lg">
                         <div className="relative h-full flex flex-col">
                           <List className="w-6 md:w-8 h-6 md:h-8 text-muted-foreground mb-3 md:mb-4" />
                           <h3 className="text-base md:text-lg font-bold mb-2 text-muted-foreground">
-                            タイムテーブル
+                            TT・レパ表
                           </h3>
                           <p className="text-xs md:text-sm text-muted-foreground flex-1">
                             まだ公開されていません

@@ -250,9 +250,17 @@ const slotLabel = (slot: EventSlotRow, bandNameMap: Map<string, string>) => {
   if (slot.slot_type === "band") {
     return bandNameMap.get(slot.band_id ?? "") ?? "バンド未設定";
   }
-  if (slot.slot_type === "break") return "休憩";
-  if (slot.slot_type === "mc") return "MC";
-  return slot.note?.trim() || "その他";
+  const note = slot.note?.trim() ?? "";
+  if (slot.slot_type === "break" || note.includes("転換")) return "転換";
+  if (slot.slot_type === "mc") return "付帯作業";
+  return note || "付帯作業";
+};
+
+const slotTypeLabel = (slot: EventSlotRow) => {
+  if (slot.slot_type === "band") return "バンド";
+  const note = slot.note?.trim() ?? "";
+  if (slot.slot_type === "break" || note.includes("転換")) return "転換";
+  return "付帯作業";
 };
 
 export default function PAInstructionsPage() {
@@ -395,7 +403,7 @@ export default function PAInstructionsPage() {
                                                 {phaseLabel(slot.slot_phase)}
                                               </Badge>
                                               <Badge variant="secondary" className="text-[10px]">
-                                                {slot.slot_type.toUpperCase()}
+                                                {slotTypeLabel(slot)}
                                               </Badge>
                                             </div>
                                             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -489,7 +497,7 @@ export default function PAInstructionsPage() {
 
                                 <div className="rounded-md border border-border/60 bg-card/60 p-3 space-y-2">
                                   <div className="text-xs font-semibold text-primary">
-                                    メンバー / 返しの希望
+                                    メンバー / 返し要望
                                   </div>
                                   <InstructionMemberTable members={memberDetails} role="pa" />
                                 </div>

@@ -111,7 +111,7 @@ export function StagePlotPreview({
         <div
           key={item.id}
           className={cn(
-            "absolute -translate-x-1/2 -translate-y-1/2 rounded-md border px-2 py-1 text-[12px] font-semibold bg-blue-900/80 border-blue-700 text-white shadow-sm z-10",
+            "absolute -translate-x-1/2 -translate-y-1/2 flex h-12 w-12 flex-col items-center justify-center rounded-full border border-muted-foreground text-[10px] font-semibold leading-none bg-background text-muted-foreground shadow-sm z-10",
             item.dashed ? "border-dashed" : "border-solid"
           )}
           style={{
@@ -119,23 +119,27 @@ export function StagePlotPreview({
             top: `${clampPercent(item.y)}%`,
           }}
         >
-          {item.label}
+          <span className="max-w-[44px] overflow-hidden text-ellipsis px-1 leading-none">
+            {item.label}
+          </span>
         </div>
       ))}
 
       {members.map((member) => (
         <div
           key={member.id}
-          className="absolute -translate-x-1/2 -translate-y-1/2 rounded-md border border-emerald-600 bg-emerald-900/80 px-2 py-1 text-[12px] font-semibold text-white shadow-sm z-20"
+          className="absolute -translate-x-1/2 -translate-y-1/2 flex h-12 w-12 flex-col items-center justify-center rounded-full border border-primary bg-background text-foreground text-[10px] font-bold leading-none shadow-sm z-20"
           style={{
             left: `${clampPercent(member.x)}%`,
             top: `${clampPercent(member.y)}%`,
           }}
         >
-          <div className="text-[10px] opacity-80 leading-tight">
+          <span className="max-w-[44px] overflow-hidden text-ellipsis px-1 leading-none">
             {member.instrument ?? "Part"}
-          </div>
-          <div>{member.name}</div>
+          </span>
+          <span className="max-w-[44px] overflow-hidden text-ellipsis text-[8px] leading-none text-muted-foreground">
+            {member.name}
+          </span>
         </div>
       ))}
     </div>

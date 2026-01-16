@@ -45,11 +45,11 @@ export function InstructionMemberTable({
                             <span className="text-muted-foreground text-xs">{member.name}</span>
                         </div>
 
-                        {/* PAの場合のみモニター情報を詳細表示 */}
+                        {/* PAの場合のみ返し要望を詳細表示 */}
                         {role === "pa" && (
                             <div className="grid gap-2 text-xs border-t border-border/50 pt-2 mt-1">
                                 <div className="grid grid-cols-[60px,1fr] gap-2">
-                                    <span className="text-muted-foreground">返し</span>
+                                    <span className="text-muted-foreground">返し要望</span>
                                     <span className="text-foreground font-medium whitespace-pre-wrap">
                                         {member.monitorRequest?.trim() || "-"}
                                     </span>
@@ -76,7 +76,7 @@ export function InstructionMemberTable({
                             <TableHead className="w-[60px] text-center">MC</TableHead>
                             {role === "pa" && (
                                 <>
-                                    <TableHead className="w-[200px] text-blue-400">返しの希望</TableHead>
+                                    <TableHead className="w-[200px] text-blue-400">返し要望</TableHead>
                                     <TableHead className="w-[200px] text-blue-400">備考</TableHead>
                                 </>
                             )}

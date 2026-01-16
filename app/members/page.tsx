@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, Users } from "lucide-react";
 import { SkeletonMemberCard } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { SideNav } from "@/components/SideNav";
@@ -102,12 +102,19 @@ export default function MembersPage() {
             size="lg"
             meta={
               <div className="space-y-3 max-w-2xl">
-                <MemberFilters
-                  searchText={searchText}
-                  onSearchChange={setSearchText}
-                  sortKey={sortKey}
-                  onSortChange={setSortKey}
-                />
+                <div className="flex flex-wrap items-center gap-4">
+                  <MemberFilters
+                    searchText={searchText}
+                    onSearchChange={setSearchText}
+                    sortKey={sortKey}
+                    onSortChange={setSortKey}
+                  />
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-sm">
+                    <Users className="w-4 h-4 text-primary" />
+                    <span className="font-semibold text-primary">{members.filter(m => !m.leaderRoles.includes("Administrator")).length}</span>
+                    <span className="text-muted-foreground">名</span>
+                  </div>
+                </div>
                 <ExportButtons
                   members={members}
                   canExport={canExport}

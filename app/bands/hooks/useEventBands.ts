@@ -47,16 +47,19 @@ export function useEventBands(): UseEventBandsResult {
             } else {
                 const list = (data ?? []) as EventRow[];
                 setEvents(list);
-                if (list.length > 0 && !selectedEventId) {
-                    setSelectedEventId(list[0].id);
-                }
+                setSelectedEventId((prev) => {
+                    if (prev && list.some((e) => e.id === prev)) {
+                        return prev;
+                    }
+                    return list.length > 0 ? list[0].id : "";
+                });
             }
         })();
 
         return () => {
             cancelled = true;
         };
-    }, [userId, selectedEventId]);
+    }, [userId]);
 
     // イベントバンド取得
     const refreshEventBands = useCallback(async () => {

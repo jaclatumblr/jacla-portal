@@ -7,7 +7,7 @@ import { BandRow } from "../types";
 
 type BandInfoFormProps = {
   band: BandRow;
-  onChange: (key: keyof BandRow, value: any) => void;
+  onChange: (key: keyof BandRow, value: string | number | null) => void;
   readOnly?: boolean;
 };
 

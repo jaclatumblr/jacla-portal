@@ -148,7 +148,8 @@ export default function LightingEventDetailPage() {
         return;
       }
       setEvent(eventRes.data as EventRow);
-      const slotList = (slotsRes.data ?? []).map((s: any) => ({
+      type SlotResponse = Omit<SlotRow, "bands"> & { bands: { id: string; name: string } | { id: string; name: string }[] | null };
+      const slotList = (slotsRes.data ?? []).map((s: SlotResponse) => ({
         ...s,
         bands: Array.isArray(s.bands) ? s.bands[0] : s.bands
       })) as SlotRow[];
@@ -175,7 +176,8 @@ export default function LightingEventDetailPage() {
             .order("order_index", { ascending: true }),
         ]);
         if (!cancelled) {
-          setBandMembers((membersRes.data ?? []).map((m: any) => ({
+          type MemberResponse = Omit<BandMemberRow, "profiles"> & { profiles: BandMemberRow["profiles"] | BandMemberRow["profiles"][] | null };
+          setBandMembers((membersRes.data ?? []).map((m: MemberResponse) => ({
             ...m,
             profiles: Array.isArray(m.profiles) ? m.profiles[0] : m.profiles
           })) as BandMemberRow[]);

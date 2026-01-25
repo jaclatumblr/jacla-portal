@@ -17,7 +17,7 @@ import { MemberManager } from "./components/MemberManager";
 import { SetlistEditor } from "./components/SetlistEditor";
 import { StagePlotEditor } from "./components/StagePlotEditor";
 import { StagePlotPreview } from "@/components/StagePlotPreview";
-import { EntryType, SongEntry, toDurationInputs } from "./types";
+import { EntryType, SongEntry, toDurationInputs, BandRow } from "./types";
 
 export default function RepertoireSubmitPage() {
   const params = useParams();
@@ -100,7 +100,7 @@ export default function RepertoireSubmitPage() {
     });
   };
 
-  const handleBandChange = (key: any, value: any) => {
+  const handleBandChange = (key: keyof BandRow, value: string | number | null) => {
     setBand((prev) => (prev ? { ...prev, [key]: value } : null));
   };
 

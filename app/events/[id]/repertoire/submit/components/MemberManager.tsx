@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Plus, Trash2, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -88,14 +88,17 @@ export function MemberManager({ members, profiles, myProfileId, setMembers, read
     setMembers(members.map((member) => (member.id === id ? { ...member, [key]: value } : member)));
   };
 
-  const filteredProfiles = profiles.filter((profile) => {
+  const filteredProfiles = useMemo(() => {
     const search = searchTerm.trim().toLowerCase();
-    const targetId = profile.id;
-    if (members.some((member) => member.userId === targetId)) return false;
-    if (!search) return true;
-    const combined = `${profile.display_name ?? ""} ${profile.real_name ?? ""} ${profile.part ?? ""}`.toLowerCase();
-    return combined.includes(search);
-  });
+    const memberIds = new Set(members.map((m) => m.userId));
+    
+    return profiles.filter((profile) => {
+      if (memberIds.has(profile.id)) return false;
+      if (!search) return true;
+      const combined = `${profile.display_name ?? ""} ${profile.real_name ?? ""} ${profile.part ?? ""}`.toLowerCase();
+      return combined.includes(search);
+    });
+  }, [profiles, members, searchTerm]);
 
   return (
     <Card className="bg-card/60">

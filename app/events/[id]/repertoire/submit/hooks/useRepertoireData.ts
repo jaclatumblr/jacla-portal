@@ -135,11 +135,11 @@ export function useRepertoireData(
       const bandList = adminMode
         ? bandListRaw
         : bandListRaw.filter((entry) => {
-            if (!userId) return false;
-            if (entry.created_by === userId) return true;
-            const members = Array.isArray(entry.band_members) ? entry.band_members : [];
-            return members.some((member) => member.user_id === userId);
-          });
+          if (!userId) return false;
+          if (entry.created_by === userId) return true;
+          const members = Array.isArray(entry.band_members) ? entry.band_members : [];
+          return members.some((member) => member.user_id === userId);
+        });
 
       setAvailableBands(bandList);
 
@@ -167,7 +167,7 @@ export function useRepertoireData(
       }
 
       setBand(foundBand);
-      setRepertoireStatus((foundBand.repertoire_status as any) ?? "draft");
+      setRepertoireStatus((foundBand.repertoire_status as "draft" | "submitted") ?? "draft");
 
       const [songsRes, membersRes, allProfilesRes] = await Promise.all([
         supabase
@@ -194,7 +194,8 @@ export function useRepertoireData(
 
       setSongs(orderEntries(normalizeSongs(songsRes.data || [])));
 
-      const pOptions = (allProfilesRes.data ?? []).map((p: any) => ({
+      type ProfileResponse = { id: string; display_name: string | null; real_name: string | null; part: string | null; leader: string | null };
+      const pOptions = (allProfilesRes.data ?? []).map((p: ProfileResponse) => ({
         id: p.id,
         user_id: p.id, // profiles.id is the user_id
         display_name: p.display_name,
@@ -205,7 +206,19 @@ export function useRepertoireData(
       setProfiles(pOptions);
 
       const categoryCounts: Record<string, number> = {};
-      const bMembers = (membersRes.data ?? []).map((m: any) => {
+      type MemberResponse = {
+        id: string;
+        user_id: string;
+        instrument: string | null;
+        position_x: number | null;
+        position_y: number | null;
+        order_index: number | null;
+        monitor_request: string | null;
+        monitor_note: string | null;
+        is_mc: boolean | null;
+        profiles: { display_name: string | null; real_name: string | null; part: string | null } | { display_name: string | null; real_name: string | null; part: string | null }[] | null;
+      };
+      const bMembers = (membersRes.data ?? []).map((m: MemberResponse) => {
         const p = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
         const instrumentValue = m.instrument ?? "";
         const partValue = p?.part ?? null;
@@ -237,7 +250,8 @@ export function useRepertoireData(
 
       setStageMembers(bMembers);
 
-      const plotData = foundBand.stage_plot_data as any;
+      type StagePlotData = { items?: StageItem[]; updatedAt?: string } | null;
+      const plotData = foundBand.stage_plot_data as StagePlotData;
       if (plotData?.items && Array.isArray(plotData.items)) {
         setStageItems(plotData.items);
       } else {
@@ -247,9 +261,10 @@ export function useRepertoireData(
       if (plotData?.updatedAt) {
         setLastSavedAt(new Date(plotData.updatedAt).toLocaleString());
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "データ読み込みエラー";
       console.error(err);
-      setError(err.message || "データ読み込みエラー");
+      setError(errorMessage);
       toast.error("データの読み込みに失敗しました。");
     } finally {
       setLoading(false);

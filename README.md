@@ -436,28 +436,12 @@ npm run build
 
 詳細なディレクトリ構造は [アーキテクチャ概要.md](仕様書/アーキテクチャ概要.md) を参照してください。
 
-## その他のツール
-
-### Jacla Repertoire AI
-
-レパートリー管理のためのAIツール（最終課題用）。Portal本体とは独立して動作します。
-
-**場所**: `tools/repertoire_ai/`
-
-**機能**:
-- 曲情報からジャンルタグをAI推定（分類）
-- 類似曲検索（TF-IDF類似度）
-- 学習済みモデルの評価（混同行列・精度指標）
-
-**詳細**: [tools/repertoire_ai/README.md](tools/repertoire_ai/README.md) を参照
-
 ## 参考資料
 
 ### ドキュメント
 
 - [Jacla Portal 仕様書](仕様書/jacla%20Portal%20仕様書%20.md)
 - [アーキテクチャ概要](仕様書/アーキテクチャ概要.md)
-- [Jacla Repertoire AI 仕様書](仕様書/Jacla%20Repertory%20AI.md)
 
 ### 外部リンク
 

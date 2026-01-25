@@ -131,7 +131,7 @@ export function useProfileData() {
             const subs = parts.filter((row) => !row.is_primary).map((row) => row.part).filter((val) => val && val !== primaryPart);
 
             // Leaders check
-            const leaderValues = (leadersRes.data ?? []).map((row: any) => row.leader).filter((r: string) => r && r !== "none");
+            const leaderValues = (leadersRes.data ?? []).map((row: { leader: string }) => row.leader).filter((r: string) => r && r !== "none");
             const fallbackLeaders = profile.leader !== "none" && profile.leader ? [profile.leader] : [];
             const effectiveLeaders = leaderValues.length > 0 ? leaderValues : fallbackLeaders;
             const isAdmin = effectiveLeaders.includes("Administrator");

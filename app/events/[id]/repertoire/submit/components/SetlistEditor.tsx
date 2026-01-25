@@ -5,6 +5,7 @@ import {
   DndContext,
   DragEndEvent,
   DragOverlay,
+  DragStartEvent,
   PointerSensor,
   closestCenter,
   useSensor,
@@ -52,13 +53,13 @@ type SongCardProps = {
   entry: SongEntry;
   index: number;
   totalCount: number;
-  onUpdate: (id: string, key: keyof SongEntry, value: any) => void;
+  onUpdate: (id: string, key: keyof SongEntry, value: SongEntry[keyof SongEntry]) => void;
   onMove: (fromIndex: number, toIndex: number) => void;
   onRemove: (id: string) => void;
   onScheduleMetadata: (id: string, url: string, entryType: EntryType) => void;
   isDragging?: boolean;
   isOverlay?: boolean;
-  dragHandleProps?: any;
+  dragHandleProps?: React.HTMLAttributes<HTMLButtonElement>;
   readOnly?: boolean;
 };
 
@@ -318,8 +319,8 @@ export function SetlistEditor({ songs, setSongs, onScheduleMetadata, readOnly }:
     })
   );
 
-  const handleDragStart = (event: any) => {
-    setActiveId(event.active.id);
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(String(event.active.id));
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -357,7 +358,7 @@ export function SetlistEditor({ songs, setSongs, onScheduleMetadata, readOnly }:
     setSongs([...songs, newEntry]);
   };
 
-  const updateEntry = (id: string, key: keyof SongEntry, value: any) => {
+  const updateEntry = (id: string, key: keyof SongEntry, value: SongEntry[keyof SongEntry]) => {
     if (readOnly) return;
     setSongs(songs.map((s) => (s.id === id ? { ...s, [key]: value } : s)));
   };
@@ -414,10 +415,10 @@ export function SetlistEditor({ songs, setSongs, onScheduleMetadata, readOnly }:
                 entry={activeEntry}
                 index={songs.findIndex((s) => s.id === activeId)}
                 totalCount={songs.length}
-                onUpdate={() => {}}
-                onMove={() => {}}
-                onRemove={() => {}}
-                onScheduleMetadata={() => {}}
+                onUpdate={() => { }}
+                onMove={() => { }}
+                onRemove={() => { }}
+                onScheduleMetadata={() => { }}
                 isOverlay
               />
             ) : null}

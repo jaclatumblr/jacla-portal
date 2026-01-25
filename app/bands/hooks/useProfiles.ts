@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/lib/toast";
@@ -72,21 +72,24 @@ export function useProfiles(): UseProfilesResult {
         };
     }, [userId]);
 
-    const getFilteredProfiles = (existingUserIds: string[], searchQuery: string): ProfileRow[] => {
-        const query = searchQuery.trim().toLowerCase();
-        const existingIds = new Set(existingUserIds);
+    const getFilteredProfiles = useCallback(
+        (existingUserIds: string[], searchQuery: string): ProfileRow[] => {
+            const query = searchQuery.trim().toLowerCase();
+            const existingIds = new Set(existingUserIds);
 
-        return profiles
-            .filter((profile) => !isAdminLeader(profile.leader))
-            .filter((profile) => !existingIds.has(profile.id))
-            .filter((profile) => {
-                if (!query) return true;
-                const subParts = subPartsByProfileId[profile.id] ?? [];
-                const combined = `${profile.display_name ?? ""} ${profile.real_name ?? ""} ${profile.part ?? ""
-                    } ${subParts.join(" ")}`.toLowerCase();
-                return combined.includes(query);
-            });
-    };
+            return profiles
+                .filter((profile) => !isAdminLeader(profile.leader))
+                .filter((profile) => !existingIds.has(profile.id))
+                .filter((profile) => {
+                    if (!query) return true;
+                    const subParts = subPartsByProfileId[profile.id] ?? [];
+                    const combined = `${profile.display_name ?? ""} ${profile.real_name ?? ""} ${profile.part ?? ""
+                        } ${subParts.join(" ")}`.toLowerCase();
+                    return combined.includes(query);
+                });
+        },
+        [profiles, subPartsByProfileId]
+    );
 
     return {
         profiles,

@@ -92,7 +92,7 @@ export function ProfileForm({ isEdit, nextUrl }: ProfileFormProps) {
         }
 
         // B. Update Profile Table
-        const updates: any = {
+        const updates: Record<string, string | null> = {
             display_name: profileHook.displayName.trim(),
             real_name: profileHook.realName.trim(),
             discord_username: discordHook.discordUsername || null, // UI doesn't allow editing username manually basically

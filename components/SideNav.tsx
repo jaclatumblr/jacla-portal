@@ -60,7 +60,7 @@ export function SideNav() {
   const topbarRef = useRef<HTMLDivElement | null>(null);
   const pathname = usePathname();
   const router = useRouter();
-  const { canAccessAdmin, isAdministrator } = useRoleFlags();
+  const { canAccessAdmin, isAdministrator, loading: roleLoading } = useRoleFlags();
   const { session } = useAuth();
   const userId = session?.user.id;
 
@@ -73,6 +73,7 @@ export function SideNav() {
 
   useEffect(() => {
     if (!userId) return;
+    if (roleLoading) return;
     if (isAdministrator) return;
     if (typeof window === "undefined") return;
     const storageKey = `crewNoticeShown:${userId}`;
@@ -102,7 +103,7 @@ export function SideNav() {
     return () => {
       cancelled = true;
     };
-  }, [isAdministrator, userId]);
+  }, [isAdministrator, roleLoading, userId]);
 
   const avatarUrl =
     session?.user.user_metadata?.avatar_url ||

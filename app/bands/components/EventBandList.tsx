@@ -220,6 +220,8 @@ export function EventBandList({
                     const isOwner = band.created_by === userId;
                     const canDelete = isOwner || isAdmin;
                     const canManage = isOwner || isAdmin;
+                    const memberPreview = band.memberNames.slice(0, 4);
+                    const extraMembers = band.memberNames.length - memberPreview.length;
 
                     return (
                         <div
@@ -236,9 +238,22 @@ export function EventBandList({
                                             </span>
                                         )}
                                     </div>
-                                    <p className="text-xs text-muted-foreground mt-0.5">
-                                        メンバー {band.members}人
-                                    </p>
+                                    <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                        <span>メンバー {band.members}人</span>
+                                        {memberPreview.map((name, index) => (
+                                            <span
+                                                key={`${band.id}-member-${index}`}
+                                                className="rounded-full bg-muted/40 px-2 py-0.5 text-[11px] text-foreground/80"
+                                            >
+                                                {name}
+                                            </span>
+                                        ))}
+                                        {extraMembers > 0 && (
+                                            <span className="text-[11px] text-muted-foreground">
+                                                +{extraMembers}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
 
                                 <div className="flex flex-wrap items-center gap-2">

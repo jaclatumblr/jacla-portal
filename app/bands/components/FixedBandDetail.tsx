@@ -163,8 +163,9 @@ export function FixedBandDetail({
                 </div>
             </CardHeader>
             <CardContent className="space-y-6">
-                {/* メンバー一覧 */}
-                <div>
+                <div className="grid gap-6 lg:grid-cols-2">
+                    {/* メンバー一覧 */}
+                    <div className="space-y-3">
                     <h3 className="text-sm font-semibold mb-3">メンバー</h3>
                     {membersLoading ? (
                         <div className="text-sm text-muted-foreground flex items-center gap-2">
@@ -214,12 +215,12 @@ export function FixedBandDetail({
                             </Table>
                         </div>
                     )}
-                </div>
+                    </div>
 
-                {/* メンバー追加 */}
-                <div className="border-t border-border pt-6 space-y-4">
+                    {/* メンバー追加 */}
+                    <div className="space-y-4 border-t border-border pt-6 lg:border-t-0 lg:border-l lg:pl-6 lg:pt-0">
                     <div className="flex flex-col gap-1">
-                        <h3 className="text-sm font-semibold">メンバーを追加</h3>
+                        <h3 className="text-sm font-semibold">メンバー一覧</h3>
                         <p className="text-xs text-muted-foreground">
                             検索結果: {filteredProfiles.length}件
                         </p>
@@ -304,6 +305,7 @@ export function FixedBandDetail({
                             <Plus className="mr-1 h-4 w-4" />
                             追加
                         </Button>
+                    </div>
                     </div>
                 </div>
             </CardContent>

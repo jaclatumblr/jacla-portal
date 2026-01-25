@@ -61,14 +61,14 @@ export function MemberManager({ members, profiles, myProfileId, setMembers, read
 
   const handleAddMember = (profile: ProfileOption) => {
     if (readOnly) return;
-    if (profile.user_id && members.some((member) => member.userId === profile.user_id)) {
+    if (members.some((member) => member.userId === profile.id)) {
       return;
     }
 
     const defaultPos = getDefaultPosition(profile.part ?? "", profile.part ?? null);
     const newMember: StageMember = {
       id: createTempId(),
-      userId: profile.user_id ?? `temp-user-${profile.id}`,
+      userId: profile.id,
       name: profile.display_name ?? "Unknown",
       realName: profile.real_name,
       part: profile.part,
@@ -90,7 +90,7 @@ export function MemberManager({ members, profiles, myProfileId, setMembers, read
 
   const filteredProfiles = profiles.filter((profile) => {
     const search = searchTerm.trim().toLowerCase();
-    const targetId = profile.user_id ?? profile.id;
+    const targetId = profile.id;
     if (members.some((member) => member.userId === targetId)) return false;
     if (!search) return true;
     const combined = `${profile.display_name ?? ""} ${profile.real_name ?? ""} ${profile.part ?? ""}`.toLowerCase();
@@ -153,7 +153,73 @@ export function MemberManager({ members, profiles, myProfileId, setMembers, read
         </div>
       </CardHeader>
       <CardContent>
-        <div className="rounded-md border">
+        <div className="space-y-3 md:hidden">
+          {members.map((member) => {
+            const primaryName = member.realName ?? member.name;
+            const secondaryName = member.realName ? member.name : null;
+            return (
+              <div key={member.id} className="rounded-md border border-border bg-card/40 p-3 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{primaryName}</p>
+                    {secondaryName && (
+                      <span className="block text-xs text-muted-foreground truncate">{secondaryName}</span>
+                    )}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    disabled={readOnly}
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    onClick={() => handleRemove(member.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <div className="grid gap-1.5">
+                  <label className="text-xs text-muted-foreground">パート/楽器</label>
+                  <Input
+                    disabled={readOnly}
+                    value={member.instrument}
+                    onChange={(e) => handleUpdate(member.id, "instrument", e.target.value)}
+                    placeholder="例: Gt.1 / 管1 / LINE2"
+                    className="h-9"
+                  />
+                </div>
+
+                <div className="grid gap-1.5">
+                  <label className="text-xs text-muted-foreground">返し要望</label>
+                  <Input
+                    disabled={readOnly}
+                    value={member.monitorRequest}
+                    onChange={(e) => handleUpdate(member.id, "monitorRequest", e.target.value)}
+                    placeholder="ボーカル大きめ"
+                    className="h-9"
+                  />
+                </div>
+
+                <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    disabled={readOnly}
+                    checked={member.isMc}
+                    onChange={(e) => handleUpdate(member.id, "isMc", e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  MC
+                </label>
+              </div>
+            );
+          })}
+          {members.length === 0 && (
+            <div className="rounded-md border border-border bg-card/40 p-4 text-center text-sm text-muted-foreground">
+              メンバーがいません
+            </div>
+          )}
+        </div>
+
+        <div className="hidden md:block rounded-md border">
           <Table>
             <TableHeader>
               <TableRow>
@@ -177,7 +243,8 @@ export function MemberManager({ members, profiles, myProfileId, setMembers, read
                       )}
                     </TableCell>
                     <TableCell>
-                      <Input disabled={readOnly}
+                      <Input
+                        disabled={readOnly}
                         value={member.instrument}
                         onChange={(e) => handleUpdate(member.id, "instrument", e.target.value)}
                         placeholder="例: Gt.1 / 管1 / LINE2"
@@ -185,7 +252,8 @@ export function MemberManager({ members, profiles, myProfileId, setMembers, read
                       />
                     </TableCell>
                     <TableCell>
-                      <Input disabled={readOnly}
+                      <Input
+                        disabled={readOnly}
                         value={member.monitorRequest}
                         onChange={(e) => handleUpdate(member.id, "monitorRequest", e.target.value)}
                         placeholder="ボーカル大きめ"
@@ -194,7 +262,8 @@ export function MemberManager({ members, profiles, myProfileId, setMembers, read
                     </TableCell>
                     <TableCell className="text-center">
                       <input
-                        type="checkbox" disabled={readOnly}
+                        type="checkbox"
+                        disabled={readOnly}
                         checked={member.isMc}
                         onChange={(e) => handleUpdate(member.id, "isMc", e.target.checked)}
                         className="rounded border-gray-300"
@@ -203,7 +272,8 @@ export function MemberManager({ members, profiles, myProfileId, setMembers, read
                     <TableCell>
                       <Button
                         variant="ghost"
-                        size="icon" disabled={readOnly}
+                        size="icon"
+                        disabled={readOnly}
                         className="h-8 w-8 text-muted-foreground hover:text-destructive"
                         onClick={() => handleRemove(member.id)}
                       >

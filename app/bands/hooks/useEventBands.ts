@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/lib/toast";
-import type { EventRow, EventBandSummary } from "../types";
+import type { EventRow, EventBandSummary, BandMemberRow } from "../types";
 
 type UseEventBandsResult = {
     events: EventRow[];
@@ -87,7 +87,7 @@ export function useEventBands(): UseEventBandsResult {
 
         const { data: membersData, error: membersError } = await supabase
             .from("band_members")
-            .select("band_id, user_id")
+            .select("band_id, user_id, profiles(display_name, real_name)")
             .in("band_id", bandIds);
 
         if (membersError) {
@@ -95,11 +95,25 @@ export function useEventBands(): UseEventBandsResult {
         }
 
         const memberCounts = new Map<string, Set<string>>();
+        const memberNames = new Map<string, Map<string, string>>();
         (membersData ?? []).forEach((row) => {
-            const entry = row as { band_id: string; user_id: string };
+            const entry = row as BandMemberRow;
             const set = memberCounts.get(entry.band_id) ?? new Set<string>();
             set.add(entry.user_id);
             memberCounts.set(entry.band_id, set);
+
+            const profile = Array.isArray(entry.profiles)
+                ? entry.profiles[0]
+                : entry.profiles;
+            const name =
+                profile?.display_name?.trim() ||
+                profile?.real_name?.trim() ||
+                "未設定";
+            const bandMap = memberNames.get(entry.band_id) ?? new Map<string, string>();
+            if (!bandMap.has(entry.user_id)) {
+                bandMap.set(entry.user_id, name);
+            }
+            memberNames.set(entry.band_id, bandMap);
         });
 
         const list = (bandsData ?? []).map((band) => ({
@@ -107,6 +121,7 @@ export function useEventBands(): UseEventBandsResult {
             name: band.name,
             created_by: band.created_by ?? null,
             members: memberCounts.get(band.id)?.size ?? 0,
+            memberNames: Array.from(memberNames.get(band.id)?.values() ?? []),
             isMember: memberCounts.get(band.id)?.has(userId) ?? false,
         }));
 

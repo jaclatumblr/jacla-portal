@@ -63,6 +63,7 @@ export type EventBandSummary = {
     name: string;
     created_by: string | null;
     members: number;
+    memberNames: string[];
     isMember: boolean;
 };
 

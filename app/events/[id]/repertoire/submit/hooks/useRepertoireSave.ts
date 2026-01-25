@@ -76,12 +76,15 @@ export function useRepertoireSave({
       warnings.push(`演奏時間が未入力の曲が${missingDuration}件あります。`);
     }
 
-    const missingPa = songs.filter((entry) => !(entry.memo ?? "").trim()).length;
+    const missingPa = songs.filter(
+      (entry) => entry.entry_type !== "mc" && !(entry.memo ?? "").trim()
+    ).length;
     if (missingPa > 0) {
       warnings.push(`PA指示が未入力の曲が${missingPa}件あります。`);
     }
 
     const missingLighting = songs.filter((entry) => {
+      if (entry.entry_type === "mc") return false;
       const hasChoice =
         entry.lightingSpot ||
         entry.lightingStrobe ||

@@ -8,7 +8,6 @@ import { SideNav } from "@/components/SideNav";
 import { Select } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
-import { useIsAdmin } from "@/lib/useIsAdmin";
 import { useRepertoireData } from "./hooks/useRepertoireData";
 import { useRepertoireSave } from "./hooks/useRepertoireSave";
 import { useMetadata } from "./hooks/useMetadata";
@@ -26,7 +25,6 @@ export default function RepertoireSubmitPage() {
   const searchParams = useSearchParams();
   const { session } = useAuth();
   const userId = session?.user.id;
-  const { isAdmin } = useIsAdmin();
   const initialBandId = searchParams?.get("bandId");
 
   const {
@@ -51,7 +49,7 @@ export default function RepertoireSubmitPage() {
     refreshData,
     restoreFromDraft,
     clearDraft,
-  } = useRepertoireData(eventId, userId, { adminMode: isAdmin, initialBandId });
+  } = useRepertoireData(eventId, userId, { initialBandId });
 
   const { saving, saveRepertoire } = useRepertoireSave({
     eventId,

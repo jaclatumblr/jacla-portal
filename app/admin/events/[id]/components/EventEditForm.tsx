@@ -22,6 +22,23 @@ type EventEditFormProps = {
     onRefresh: () => Promise<void>;
 };
 
+const toDateTimeLocal = (value: string | null | undefined) => {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    const pad = (part: number) => String(part).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
+        date.getHours()
+    )}:${pad(date.getMinutes())}`;
+};
+
+const fromDateTimeLocal = (value: string | null | undefined) => {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toISOString();
+};
+
 export function EventEditForm({ event, onRefresh }: EventEditFormProps) {
     const router = useRouter();
     const [formData, setFormData] = useState<EventRow>(event);
@@ -38,6 +55,16 @@ export function EventEditForm({ event, onRefresh }: EventEditFormProps) {
         setFormData((prev) => ({ ...prev, [key]: value }));
     };
 
+    const handleRepertoireCloseToggle = (checked: boolean) => {
+        const current = Boolean(formData.repertoire_is_closed);
+        if (checked === current) return;
+        const message = checked
+            ? "レパ表提出を手動で締め切ります。よろしいですか？"
+            : "レパ表提出の締切を解除します。よろしいですか？";
+        if (!window.confirm(message)) return;
+        handleChange("repertoire_is_closed", checked);
+    };
+
     const handleSave = async () => {
         setSaving(true);
         const { error } = await supabase
@@ -47,6 +74,8 @@ export function EventEditForm({ event, onRefresh }: EventEditFormProps) {
                 date: formData.date,
                 status: formData.status,
                 event_type: formData.event_type,
+                repertoire_deadline: formData.repertoire_deadline ?? null,
+                repertoire_is_closed: formData.repertoire_is_closed ?? false,
                 venue: formData.venue || null,
                 assembly_time: formData.assembly_time || null,
                 open_time: formData.open_time || null,
@@ -103,6 +132,19 @@ export function EventEditForm({ event, onRefresh }: EventEditFormProps) {
                                 type="date"
                                 value={formData.date}
                                 onChange={(e) => handleChange("date", e.target.value)}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-4">
+                        <div className="space-y-2 md:col-span-2">
+                            <label className="text-sm font-medium">レパ表締切日時</label>
+                            <Input
+                                type="datetime-local"
+                                value={toDateTimeLocal(formData.repertoire_deadline)}
+                                onChange={(e) =>
+                                    handleChange("repertoire_deadline", fromDateTimeLocal(e.target.value))
+                                }
                             />
                         </div>
                     </div>
@@ -217,6 +259,25 @@ export function EventEditForm({ event, onRefresh }: EventEditFormProps) {
                             </label>
                         </div>
                     </div>
+
+                    <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4">
+                        <div className="flex flex-col gap-2">
+                            <div className="text-sm font-medium text-destructive">レパ表提出の手動締切</div>
+                            <p className="text-xs text-muted-foreground">
+                                有効にすると締切扱いになり、提出できなくなります。
+                            </p>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={formData.repertoire_is_closed ?? false}
+                                    onChange={(e) => handleRepertoireCloseToggle(e.target.checked)}
+                                    className="rounded border-gray-300 text-primary focus:ring-primary"
+                                />
+                                <span className="text-sm">手動で締め切る</span>
+                            </label>
+                        </div>
+                    </div>
+
 
                     <div className="flex items-center justify-between pt-4">
                         {!showDeleteConfirm ? (

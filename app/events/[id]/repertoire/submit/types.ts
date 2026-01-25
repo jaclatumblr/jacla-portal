@@ -3,6 +3,8 @@ export type EventRow = {
   name: string;
   date: string;
   event_type: string;
+  repertoire_deadline?: string | null;
+  repertoire_is_closed?: boolean | null;
 };
 
 export type BandRow = {

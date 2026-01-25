@@ -61,7 +61,7 @@ export function useAdminEventData(
                 supabase
                     .from("events")
                     .select(
-                        "id, name, date, status, event_type, venue, assembly_time, open_time, start_time, note, default_changeover_min, tt_is_published, tt_is_provisional, normal_rehearsal_order"
+                        "id, name, date, status, event_type, repertoire_deadline, repertoire_is_closed, venue, assembly_time, open_time, start_time, note, default_changeover_min, tt_is_published, tt_is_provisional, normal_rehearsal_order"
                     )
                     .eq("id", eventId)
                     .maybeSingle(),

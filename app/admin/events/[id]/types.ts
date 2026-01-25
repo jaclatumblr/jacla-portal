@@ -6,6 +6,8 @@ export type EventRow = {
     date: string;
     status: string;
     event_type: string;
+    repertoire_deadline?: string | null;
+    repertoire_is_closed?: boolean | null;
     venue: string | null;
     assembly_time: string | null;
     open_time: string | null;

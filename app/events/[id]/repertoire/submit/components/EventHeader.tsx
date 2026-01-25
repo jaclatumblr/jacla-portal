@@ -14,6 +14,8 @@ type EventHeaderProps = {
   onSave: (status: "draft" | "submitted") => Promise<void>;
   onReset: () => void;
   showReset: boolean;
+  submitDisabled?: boolean;
+  submitDisabledReason?: string | null;
 };
 
 export function EventHeader({
@@ -25,8 +27,11 @@ export function EventHeader({
   onSave,
   onReset,
   showReset,
+  submitDisabled,
+  submitDisabledReason,
 }: EventHeaderProps) {
   const isSubmitted = status === "submitted";
+  const submitBlocked = Boolean(submitDisabled) && !isSubmitted;
 
   return (
     <PageHeader
@@ -60,12 +65,15 @@ export function EventHeader({
                   {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
                   一時保存
                 </Button>
-                <Button onClick={() => onSave("submitted")} disabled={saving}>
+                <Button onClick={() => onSave("submitted")} disabled={saving || submitBlocked}>
                   提出する
                 </Button>
               </>
             )}
           </div>
+          {submitBlocked && submitDisabledReason && (
+            <p className="text-xs text-destructive text-right">{submitDisabledReason}</p>
+          )}
           {lastSavedAt && (
             <p className="text-xs text-muted-foreground text-right">最終保存: {lastSavedAt}</p>
           )}

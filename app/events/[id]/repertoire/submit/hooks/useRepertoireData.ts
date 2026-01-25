@@ -98,7 +98,7 @@ export function useRepertoireData(
     try {
       const { data: eventData, error: eventError } = await supabase
         .from("events")
-        .select("id, name, date, event_type")
+        .select("id, name, date, event_type, repertoire_deadline, repertoire_is_closed")
         .eq("id", eventId)
         .single();
 

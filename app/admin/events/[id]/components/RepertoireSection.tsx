@@ -63,6 +63,7 @@ export function RepertoireSection({
   const {
     loading,
     error,
+    event,
     band,
     availableBands,
     selectedBandId,
@@ -92,6 +93,10 @@ export function RepertoireSection({
     stageItems,
     setBand,
     refreshData,
+    submitDeadline: event?.repertoire_deadline ?? null,
+    canBypassDeadline: true,
+    submitClosed: Boolean(event?.repertoire_is_closed),
+    canBypassClose: true,
   });
 
   const { fetchMetadata } = useMetadata();

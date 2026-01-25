@@ -21,6 +21,10 @@ type UseRepertoireSaveProps = {
   stageItems: StageItem[];
   setBand: (band: BandRow) => void;
   refreshData: () => Promise<void>;
+  submitDeadline?: string | null;
+  canBypassDeadline?: boolean;
+  submitClosed?: boolean;
+  canBypassClose?: boolean;
 };
 
 const normalizeText = (value: string | null | undefined) => {
@@ -42,8 +46,19 @@ export function useRepertoireSave({
   stageItems,
   setBand,
   refreshData,
+  submitDeadline,
+  canBypassDeadline = false,
+  submitClosed,
+  canBypassClose = false,
 }: UseRepertoireSaveProps) {
   const [saving, setSaving] = useState(false);
+
+  const isDeadlinePassed = (value: string | null | undefined) => {
+    if (!value) return false;
+    const deadline = new Date(value);
+    if (Number.isNaN(deadline.getTime())) return false;
+    return Date.now() > deadline.getTime();
+  };
 
   const buildSubmitWarnings = () => {
     const warnings: string[] = [];
@@ -106,6 +121,14 @@ export function useRepertoireSave({
     }
 
     if (status === "submitted") {
+      if (!canBypassClose && submitClosed) {
+        toast.error("?????????????");
+        return;
+      }
+      if (!canBypassDeadline && isDeadlinePassed(submitDeadline)) {
+        toast.error("????????????");
+        return;
+      }
       const warnings = buildSubmitWarnings();
       if (warnings.length > 0) {
         const message = `未記入・不足があります。\n${warnings.join("\n")}\nこのまま提出しますか？`;

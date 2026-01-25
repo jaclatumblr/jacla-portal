@@ -46,6 +46,8 @@ create table if not exists public.events (
   venue text,
   open_time time,
   start_time time,
+  repertoire_deadline timestamptz,
+  repertoire_is_closed boolean not null default false,
   note text,
 
   default_changeover_min    int4 not null default 15,
@@ -61,6 +63,12 @@ alter table public.events
 
 alter table public.events
   add column if not exists event_type text not null default 'live';
+
+alter table public.events
+  add column if not exists repertoire_deadline timestamptz;
+
+alter table public.events
+  add column if not exists repertoire_is_closed boolean not null default false;
 
 alter table public.events
   add column if not exists tt_is_published boolean not null default false;

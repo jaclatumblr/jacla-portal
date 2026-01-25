@@ -59,10 +59,25 @@ export default function RepertoireSubmitPage() {
     stageItems,
     setBand,
     refreshData,
+    submitDeadline: event?.repertoire_deadline ?? null,
+    submitClosed: Boolean(event?.repertoire_is_closed),
   });
 
   const { fetchingMeta, fetchMetadata } = useMetadata();
   const isSubmitted = repertoireStatus === "submitted";
+  const isManualClosed = Boolean(event?.repertoire_is_closed);
+  const deadlineDate = event?.repertoire_deadline ? new Date(event.repertoire_deadline) : null;
+  const validDeadline = deadlineDate && !Number.isNaN(deadlineDate.getTime()) ? deadlineDate : null;
+  const deadlineLabel = validDeadline
+    ? validDeadline.toLocaleString("ja-JP", { dateStyle: "medium", timeStyle: "short" })
+    : null;
+  const isDeadlinePassed = validDeadline ? Date.now() > validDeadline.getTime() : false;
+  const submitDisabledReason = isManualClosed
+    ? "????????????????"
+    : isDeadlinePassed
+      ? "????????????????????"
+      : null;
+  const showDeadlineInfo = Boolean(deadlineLabel) || isManualClosed;
 
   const handleMetadataSchedule = (id: string, url: string, type: EntryType) => {
     fetchMetadata(id, url, (targetId, updates) => {
@@ -126,10 +141,28 @@ export default function RepertoireSubmitPage() {
             onSave={saveRepertoire}
             onReset={() => refreshData()}
             showReset={true}
+            submitDisabled={isManualClosed || isDeadlinePassed}
+            submitDisabledReason={submitDisabledReason}
           />
 
           <section className="pb-12 md:pb-16">
             <div className="container mx-auto px-4 sm:px-6 space-y-6">
+              {showDeadlineInfo && (
+                <div className="rounded-2xl border border-border/60 bg-card/60 p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-medium text-foreground">????</span>
+                    <span className="text-sm text-muted-foreground">{deadlineLabel ?? "???"}</span>
+                  </div>
+                  {isManualClosed && (
+                    <p className="mt-2 text-xs text-destructive">????????????????</p>
+                  )}
+                  {isDeadlinePassed && (
+                    <p className="mt-1 text-xs text-destructive">
+                      ????????????????????
+                    </p>
+                  )}
+                </div>
+              )}
               {availableBands.length > 1 && (
                 <div className="rounded-2xl border border-border/60 bg-card/60 p-4">
                   <div className="text-sm font-medium text-foreground">提出するバンド</div>

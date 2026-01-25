@@ -30,6 +30,6 @@ export function downloadExcelFile(
   document.body.appendChild(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(url);
+  // Delay revoke so Safari/Firefox can finish the download.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-

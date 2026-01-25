@@ -15,7 +15,6 @@ import {
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { useRoleFlags } from "@/lib/useRoleFlags";
-import { useIsAdministrator } from "@/lib/useIsAdministrator";
 import { useAuth } from "@/contexts/AuthContext";
 import { safeSignOut, supabase } from "@/lib/supabaseClient";
 import { Input } from "@/components/ui/input";
@@ -104,7 +103,6 @@ export default function AdminRolesPage() {
     canAccessAdmin,
     loading: roleLoading,
   } = useRoleFlags();
-  const { isAdministrator: viewerIsAdministrator } = useIsAdministrator();
   const { session } = useAuth();
   const userId = session?.user.id;
   const router = useRouter();
@@ -115,6 +113,11 @@ export default function AdminRolesPage() {
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [form, setForm] = useState({ crew: "User", muted: false });
+  const [profileForm, setProfileForm] = useState({
+    displayName: "",
+    realName: "",
+    email: "",
+  });
   const [leaderRoles, setLeaderRoles] = useState<string[]>([]);
   const [leadersLoading, setLeadersLoading] = useState(false);
   const [positions, setPositions] = useState<string[]>([]);
@@ -129,7 +132,9 @@ export default function AdminRolesPage() {
   const [primaryPart, setPrimaryPart] = useState("");
   const [subParts, setSubParts] = useState<string[]>([]);
   const [partsLoading, setPartsLoading] = useState(false);
-  const [studentId, setStudentId] = useState<string | null>(null);
+  const [studentId, setStudentId] = useState("");
+  const [enrollmentYear, setEnrollmentYear] = useState("");
+  const [birthDate, setBirthDate] = useState("");
   const [studentIdLoading, setStudentIdLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -158,7 +163,7 @@ export default function AdminRolesPage() {
     };
     const candidates = q
       ? profiles.filter((p) => {
-          const emailText = viewerIsAdministrator ? p.email ?? "" : "";
+          const emailText = canEditFullRoles ? p.email ?? "" : "";
           const text = `${p.display_name ?? ""} ${p.real_name ?? ""} ${emailText}`.toLowerCase();
           return text.includes(q);
         })
@@ -170,7 +175,7 @@ export default function AdminRolesPage() {
       const nameB = b.display_name ?? b.real_name ?? "";
       return nameA.localeCompare(nameB, "ja");
     });
-  }, [profiles, search, viewerIsAdministrator, positionHolders.Official]);
+  }, [profiles, search, canEditFullRoles, positionHolders.Official]);
 
   const selectedProfile = useMemo(
     () => profiles.find((p) => p.id === selectedId) ?? null,
@@ -223,19 +228,27 @@ export default function AdminRolesPage() {
   useEffect(() => {
     if (!selectedProfile) {
       setForm({ crew: "User", muted: false });
+      setProfileForm({ displayName: "", realName: "", email: "" });
       setLeaderRoles([]);
       setLeadersLoading(false);
       setPositions([]);
       setPositionsLoading(false);
       setPrimaryPart("");
       setSubParts([]);
-      setStudentId(null);
+      setStudentId("");
+      setEnrollmentYear("");
+      setBirthDate("");
       setStudentIdLoading(false);
       return;
     }
     setForm({
       crew: selectedProfile.crew,
       muted: Boolean(selectedProfile.muted),
+    });
+    setProfileForm({
+      displayName: selectedProfile.display_name ?? "",
+      realName: selectedProfile.real_name ?? "",
+      email: selectedProfile.email ?? "",
     });
     setPrimaryPart(selectedProfile.part && selectedProfile.part !== "none" ? selectedProfile.part : "");
   }, [selectedProfile]);
@@ -261,15 +274,22 @@ export default function AdminRolesPage() {
       setStudentIdLoading(true);
       const { data, error } = await supabase
         .from("profile_private")
-        .select("student_id")
+        .select("student_id, enrollment_year, birth_date")
         .eq("profile_id", selectedId)
         .maybeSingle();
       if (cancelled) return;
       if (error) {
         console.error(error);
-        setStudentId(null);
+        setStudentId("");
+        setEnrollmentYear("");
+        setBirthDate("");
       } else {
-        setStudentId((data as { student_id?: string } | null)?.student_id ?? null);
+        const row = data as
+          | { student_id?: string | null; enrollment_year?: number | null; birth_date?: string | null }
+          | null;
+        setStudentId(row?.student_id ?? "");
+        setEnrollmentYear(row?.enrollment_year != null ? String(row.enrollment_year) : "");
+        setBirthDate(row?.birth_date ?? "");
       }
       setStudentIdLoading(false);
     })();
@@ -542,6 +562,14 @@ export default function AdminRolesPage() {
 
     setSaving(true);
 
+    const enrollmentValue = enrollmentYear.trim();
+    const enrollmentNumber = enrollmentValue ? Number.parseInt(enrollmentValue, 10) : null;
+    if (enrollmentValue && Number.isNaN(enrollmentNumber)) {
+      toast.error("入学年度は数字で入力してください。");
+      setSaving(false);
+      return;
+    }
+
     const partValue = primaryPart || "none";
     const profileRes = await supabase
       .from("profiles")
@@ -549,6 +577,9 @@ export default function AdminRolesPage() {
         crew: form.crew,
         part: partValue,
         muted: form.muted,
+        display_name: profileForm.displayName.trim() || null,
+        real_name: profileForm.realName.trim() || null,
+        email: profileForm.email.trim() || null,
       })
       .eq("id", selectedId)
       .select()
@@ -557,6 +588,25 @@ export default function AdminRolesPage() {
     if (profileRes.error) {
       console.error(profileRes.error);
       toast.error("保存に失敗しました。");
+      setSaving(false);
+      return;
+    }
+
+    const privateRes = await supabase
+      .from("profile_private")
+      .upsert(
+        {
+          profile_id: selectedId,
+          student_id: studentId.trim(),
+          enrollment_year: enrollmentNumber,
+          birth_date: birthDate || null,
+        },
+        { onConflict: "profile_id" }
+      );
+
+    if (privateRes.error) {
+      console.error(privateRes.error);
+      toast.error("学籍情報の保存に失敗しました。");
       setSaving(false);
       return;
     }
@@ -929,7 +979,7 @@ export default function AdminRolesPage() {
                                 <p className="text-xs text-muted-foreground truncate">
                                   本名: {p.real_name ?? "未設定"}
                                 </p>
-                                {viewerIsAdministrator && (
+                                {canEditFullRoles && (
                                   <p className="text-xs text-muted-foreground truncate">
                                     {p.email ?? "メール未登録"}
                                   </p>
@@ -991,18 +1041,91 @@ export default function AdminRolesPage() {
                             <p className="text-xs text-muted-foreground truncate">
                               本名: {selectedProfile.real_name ?? "未設定"}
                             </p>
-                            {viewerIsAdministrator && (
+                            {canEditFullRoles && (
                               <p className="text-xs text-muted-foreground truncate">
                                 {selectedProfile.email ?? "メール未登録"}
                               </p>
                             )}
                             <p className="text-xs text-muted-foreground truncate">
                               学籍番号:{" "}
-                              {studentIdLoading ? "読み込み中..." : studentId ?? "未登録"}
+                              {studentIdLoading ? "読み込み中..." : studentId || "未登録"}
                             </p>
                             {selectedProfile.id === userId && (
                               <p className="text-xs text-primary">※自分自身の権限を編集中</p>
                             )}
+                          </div>
+                        </div>
+
+                        <div className="rounded-lg border border-border/60 bg-card/60 p-3 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-foreground">基本情報</span>
+                            {!canEditFullRoles && (
+                              <span className="text-xs text-muted-foreground">
+                                編集はAdministrator / Supervisorのみ
+                              </span>
+                            )}
+                          </div>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <label className="space-y-1 text-sm">
+                              <span className="text-foreground">表示名</span>
+                              <Input
+                                value={profileForm.displayName}
+                                onChange={(e) =>
+                                  setProfileForm((prev) => ({ ...prev, displayName: e.target.value }))
+                                }
+                                disabled={!canEditFullRoles}
+                              />
+                            </label>
+                            <label className="space-y-1 text-sm">
+                              <span className="text-foreground">本名</span>
+                              <Input
+                                value={profileForm.realName}
+                                onChange={(e) =>
+                                  setProfileForm((prev) => ({ ...prev, realName: e.target.value }))
+                                }
+                                disabled={!canEditFullRoles}
+                              />
+                            </label>
+                          </div>
+                          {canEditFullRoles && (
+                            <label className="space-y-1 text-sm">
+                              <span className="text-foreground">メール</span>
+                              <Input
+                                value={profileForm.email}
+                                onChange={(e) =>
+                                  setProfileForm((prev) => ({ ...prev, email: e.target.value }))
+                                }
+                              />
+                            </label>
+                          )}
+                          <div className="grid gap-3 sm:grid-cols-3">
+                            <label className="space-y-1 text-sm">
+                              <span className="text-foreground">学籍番号</span>
+                              <Input
+                                value={studentId}
+                                onChange={(e) => setStudentId(e.target.value)}
+                                disabled={!canEditFullRoles || studentIdLoading}
+                              />
+                            </label>
+                            <label className="space-y-1 text-sm">
+                              <span className="text-foreground">入学年度</span>
+                              <Input
+                                value={enrollmentYear}
+                                onChange={(e) => setEnrollmentYear(e.target.value)}
+                                maxLength={4}
+                                inputMode="numeric"
+                                disabled={!canEditFullRoles || studentIdLoading}
+                              />
+                            </label>
+                            <label className="space-y-1 text-sm">
+                              <span className="text-foreground">生年月日</span>
+                              <Input
+                                type="date"
+                                value={birthDate}
+                                onChange={(e) => setBirthDate(e.target.value)}
+                                disabled={!canEditFullRoles || studentIdLoading}
+                              />
+                            </label>
                           </div>
                         </div>
 

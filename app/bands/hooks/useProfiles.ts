@@ -5,7 +5,6 @@ import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/lib/toast";
 import type { ProfileRow, ProfilePartRow } from "../types";
-import { isAdminLeader } from "../types";
 
 type UseProfilesResult = {
     profiles: ProfileRow[];
@@ -77,12 +76,12 @@ export function useProfiles(): UseProfilesResult {
             const query = searchQuery.trim().toLowerCase();
             const existingIds = new Set(existingUserIds);
 
-            return profiles
-                .filter((profile) => !isAdminLeader(profile.leader))
-                .filter((profile) => !existingIds.has(profile.id))
-                .filter((profile) => {
-                    if (!query) return true;
-                    const subParts = subPartsByProfileId[profile.id] ?? [];
+        return profiles
+            .filter((profile) => profile.leader !== "Administrator")
+            .filter((profile) => !existingIds.has(profile.id))
+            .filter((profile) => {
+                if (!query) return true;
+                const subParts = subPartsByProfileId[profile.id] ?? [];
                     const combined = `${profile.display_name ?? ""} ${profile.real_name ?? ""} ${profile.part ?? ""
                         } ${subParts.join(" ")}`.toLowerCase();
                     return combined.includes(query);

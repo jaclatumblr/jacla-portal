@@ -20,6 +20,7 @@ export function useProfiles(): UseProfilesResult {
 
     const [profiles, setProfiles] = useState<ProfileRow[]>([]);
     const [subPartsByProfileId, setSubPartsByProfileId] = useState<Record<string, string[]>>({});
+    const [leaderRolesByProfileId, setLeaderRolesByProfileId] = useState<Record<string, string[]>>({});
     const [selfPart, setSelfPart] = useState("");
     const [loading, setLoading] = useState(true);
 
@@ -29,9 +30,10 @@ export function useProfiles(): UseProfilesResult {
 
         (async () => {
             setLoading(true);
-            const [profilesRes, partsRes] = await Promise.all([
+            const [profilesRes, partsRes, leadersRes] = await Promise.all([
                 supabase.from("profiles").select("id, display_name, real_name, part, leader"),
                 supabase.from("profile_parts").select("profile_id, part, is_primary"),
+                supabase.from("profile_leaders").select("profile_id, leader"),
             ]);
 
             if (cancelled) return;
@@ -63,6 +65,21 @@ export function useProfiles(): UseProfilesResult {
                 });
                 setSubPartsByProfileId(nextMap);
             }
+
+            if (leadersRes.error) {
+                console.error(leadersRes.error);
+                setLeaderRolesByProfileId({});
+            } else {
+                const nextMap: Record<string, string[]> = {};
+                (leadersRes.data ?? []).forEach((row) => {
+                    const entry = row as { profile_id?: string | null; leader?: string | null };
+                    if (!entry.profile_id || !entry.leader || entry.leader === "none") return;
+                    const bucket = nextMap[entry.profile_id] ?? [];
+                    if (!bucket.includes(entry.leader)) bucket.push(entry.leader);
+                    nextMap[entry.profile_id] = bucket;
+                });
+                setLeaderRolesByProfileId(nextMap);
+            }
             setLoading(false);
         })();
 
@@ -76,18 +93,22 @@ export function useProfiles(): UseProfilesResult {
             const query = searchQuery.trim().toLowerCase();
             const existingIds = new Set(existingUserIds);
 
-        return profiles
-            .filter((profile) => profile.leader !== "Administrator")
-            .filter((profile) => !existingIds.has(profile.id))
-            .filter((profile) => {
-                if (!query) return true;
-                const subParts = subPartsByProfileId[profile.id] ?? [];
+            return profiles
+                .filter((profile) => {
+                    if (profile.leader === "Administrator") return false;
+                    const roles = leaderRolesByProfileId[profile.id] ?? [];
+                    return !roles.includes("Administrator");
+                })
+                .filter((profile) => !existingIds.has(profile.id))
+                .filter((profile) => {
+                    if (!query) return true;
+                    const subParts = subPartsByProfileId[profile.id] ?? [];
                     const combined = `${profile.display_name ?? ""} ${profile.real_name ?? ""} ${profile.part ?? ""
                         } ${subParts.join(" ")}`.toLowerCase();
                     return combined.includes(query);
                 });
         },
-        [profiles, subPartsByProfileId]
+        [profiles, subPartsByProfileId, leaderRolesByProfileId]
     );
 
     return {

@@ -58,6 +58,7 @@ export default function RepertoireSubmitPage() {
     stageMembers,
     stageItems,
     setBand,
+    setSongs,
     refreshData,
     submitDeadline: event?.repertoire_deadline ?? null,
     submitClosed: Boolean(event?.repertoire_is_closed),

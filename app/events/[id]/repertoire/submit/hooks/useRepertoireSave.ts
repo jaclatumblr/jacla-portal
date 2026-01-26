@@ -20,6 +20,7 @@ type UseRepertoireSaveProps = {
   stageMembers: StageMember[];
   stageItems: StageItem[];
   setBand: (band: BandRow) => void;
+  setSongs?: (songs: SongEntry[]) => void;
   refreshData: () => Promise<void>;
   submitDeadline?: string | null;
   canBypassDeadline?: boolean;
@@ -45,6 +46,7 @@ export function useRepertoireSave({
   stageMembers,
   stageItems,
   setBand,
+  setSongs,
   refreshData,
   submitDeadline,
   canBypassDeadline = false,
@@ -60,23 +62,27 @@ export function useRepertoireSave({
     return Date.now() > deadline.getTime();
   };
 
-  const buildSubmitWarnings = () => {
+  const buildSubmitWarnings = (entries: SongEntry[]) => {
     const warnings: string[] = [];
 
-    const hasGuitar = stageMembers.some(
+    const guitarCount = stageMembers.filter(
       (member) => getStageCategory(member.instrument || member.part) === "guitar"
-    );
-    if (hasGuitar) {
+    ).length;
+    if (guitarCount > 0) {
       const labels = stageItems.map((item) => item.label.toLowerCase());
       const hasMarshall = labels.includes("marshall");
       const hasJc = labels.includes("jc");
-      if (!hasMarshall || !hasJc) {
-        warnings.push("Gt.がいるのに Marshall / JC が配置されていません。");
+      if (guitarCount === 1) {
+        if (!hasMarshall && !hasJc) {
+          warnings.push("Gt.がいるのに Marshall / JC が配置されていません。");
+        }
+      } else if (!hasMarshall || !hasJc) {
+        warnings.push("Gt.が複数人いるのに Marshall / JC が不足しています。");
       }
     }
 
     const hasMcMember = stageMembers.some((member) => member.isMc);
-    const hasMcEntry = songs.some((entry) => entry.entry_type === "mc");
+    const hasMcEntry = entries.some((entry) => entry.entry_type === "mc");
     if (!hasMcMember) {
       warnings.push("MC担当のメンバーが設定されていません。");
     }
@@ -84,21 +90,21 @@ export function useRepertoireSave({
       warnings.push("MC担当がいるのにセトリにMCがありません。");
     }
 
-    const missingDuration = songs.filter(
+    const missingDuration = entries.filter(
       (entry) => toDurationSec(entry.durationMin, entry.durationSec) == null
     ).length;
     if (missingDuration > 0) {
       warnings.push(`演奏時間が未入力の曲が${missingDuration}件あります。`);
     }
 
-    const missingPa = songs.filter(
+    const missingPa = entries.filter(
       (entry) => entry.entry_type !== "mc" && !(entry.memo ?? "").trim()
     ).length;
     if (missingPa > 0) {
       warnings.push(`PA指示が未入力の曲が${missingPa}件あります。`);
     }
 
-    const missingLighting = songs.filter((entry) => {
+    const missingLighting = entries.filter((entry) => {
       if (entry.entry_type === "mc") return false;
       const hasChoice =
         entry.lightingSpot ||
@@ -114,10 +120,26 @@ export function useRepertoireSave({
     return warnings;
   };
 
+  const normalizeSongsForSave = (entries: SongEntry[]) => {
+    let changed = false;
+    const normalized = entries.map((entry) => {
+      const nextTitle = normalizeTitle(entry);
+      if (nextTitle === entry.title) return entry;
+      changed = true;
+      return { ...entry, title: nextTitle };
+    });
+    return { normalized, changed };
+  };
+
   const saveRepertoire = async (status: RepertoireStatus) => {
     if (!band?.id) {
       toast.error("バンド情報が取得できません。");
       return;
+    }
+
+    const { normalized: normalizedSongs, changed: titlesChanged } = normalizeSongsForSave(songs);
+    if (titlesChanged && setSongs) {
+      setSongs(normalizedSongs);
     }
 
     if (status === "submitted") {
@@ -129,7 +151,7 @@ export function useRepertoireSave({
         toast.error("????????????");
         return;
       }
-      const warnings = buildSubmitWarnings();
+      const warnings = buildSubmitWarnings(normalizedSongs);
       if (warnings.length > 0) {
         const message = `未記入・不足があります。\n${warnings.join("\n")}\nこのまま提出しますか？`;
         if (!window.confirm(message)) {
@@ -206,14 +228,16 @@ export function useRepertoireSave({
       .eq("band_id", band.id);
 
     const dbSongIds = new Set(currentDbSongs?.map((s) => s.id) ?? []);
-    const localSongIds = new Set(songs.map((s) => s.id).filter((id) => !id.startsWith("temp-")));
+    const localSongIds = new Set(
+      normalizedSongs.map((s) => s.id).filter((id) => !id.startsWith("temp-"))
+    );
     const deleteSongIds = Array.from(dbSongIds).filter((id) => !localSongIds.has(id));
 
     if (deleteSongIds.length > 0) {
       await supabase.from("songs").delete().in("id", deleteSongIds);
     }
 
-    const songPayloads = songs.map((s, index) => {
+    const songPayloads = normalizedSongs.map((s, index) => {
       const isTemp = s.id.startsWith("temp-");
       const minValue = Number.parseInt(s.durationMin, 10);
       const secValue = Number.parseInt(s.durationSec, 10);
@@ -227,7 +251,7 @@ export function useRepertoireSave({
       return {
         ...(isTemp ? {} : { id: s.id }),
         band_id: band.id,
-        title: normalizeTitle(s),
+        title: s.title,
         artist: normalizeText(s.artist),
         entry_type: s.entry_type ?? "song",
         url: normalizeText(s.url),

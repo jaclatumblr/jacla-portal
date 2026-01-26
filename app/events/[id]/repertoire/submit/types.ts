@@ -340,9 +340,6 @@ export const stagePresets = [
   { id: "jc", label: "JC", dashed: true },
   { id: "active", label: "Active", dashed: true },
   { id: "passive", label: "Passive", dashed: true },
-  { id: "line", label: "LINE", dashed: true },
-  { id: "wind", label: "管", dashed: true },
-  { id: "mon", label: "MON", dashed: true },
 ];
 
 export const stagePresetPositions: Record<string, { x: number; y: number }> = {
@@ -350,5 +347,4 @@ export const stagePresetPositions: Record<string, { x: number; y: number }> = {
   JC: { x: 62, y: 34 },
   Active: { x: 32, y: 34 },
   Passive: { x: 28, y: 34 },
-  MON: { x: 14, y: 62 },
 };

@@ -5,8 +5,8 @@ export default function PrivacyPage() {
         <div className="space-y-2">
           <h1 className="text-2xl font-bold">プライバシーポリシー</h1>
           <div className="text-xs text-muted-foreground">
-            <p>施行日: 2025-12-30</p>
-            <p>最終改定日: 2025-12-30</p>
+            <p>施行日: 2026-01-26</p>
+            <p>最終改定日: 2026-01-26</p>
           </div>
           <p className="text-sm text-muted-foreground">
             本ポリシーは、東京工科大学 総合音楽部 Jacla（以下「運営」）
@@ -43,8 +43,26 @@ export default function PrivacyPage() {
           <section className="space-y-2">
             <h2 className="text-lg font-semibold">3. 外部サービスの利用</h2>
             <p>
-              本サービスでは、認証・データ保管・ホスティング等のため、外部サービスを利用する場合があります。
+              本サービスでは、認証・データ保管・ホスティング等のため、外部サービスを利用します。
               これらのサービスは各社のプライバシーポリシーに従って情報を取り扱います。
+            </p>
+            <ul className="list-disc space-y-1 pl-6">
+              <li>Supabase（認証、データベース、ファイル保管）</li>
+              <li>Vercel（ホスティング、サーバーレス実行環境）</li>
+              <li>Discord（アカウント連携）</li>
+              <li>GitHub（ソースコード管理、更新情報の取得）</li>
+              <li>YouTube / Spotify / Apple Music（URL入力時の曲情報取得）</li>
+            </ul>
+            <p className="text-sm text-muted-foreground">
+              GitHubリポジトリ:{" "}
+              <a
+                href="https://github.com/jaclatumblr/jacla-portal"
+                target="_blank"
+                rel="noreferrer"
+                className="text-primary hover:underline"
+              >
+                https://github.com/jaclatumblr/jacla-portal
+              </a>
             </p>
           </section>
 

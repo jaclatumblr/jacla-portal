@@ -5,8 +5,8 @@ export default function TermsPage() {
         <div className="space-y-2">
           <h1 className="text-2xl font-bold">利用規約</h1>
           <div className="text-xs text-muted-foreground">
-            <p>施行日: 2025-12-30</p>
-            <p>最終改定日: 2025-12-30</p>
+            <p>施行日: 2026-01-26</p>
+            <p>最終改定日: 2026-01-26</p>
           </div>
           <p className="text-sm text-muted-foreground">
             本利用規約（以下「本規約」）は、東京工科大学 総合音楽部Jacla（以下「運営」）
@@ -62,7 +62,7 @@ export default function TermsPage() {
           <section className="space-y-2">
             <h2 className="text-lg font-semibold">6. 免責</h2>
             <p>
-              本サービスはβテスト段階であり、内容の正確性・完全性・有用性について保証しません。
+              本サービスは現状有姿で提供されます。内容の正確性・完全性・有用性について保証しません。
               利用により生じた損害について、運営、および製作者は責任を負いません。
             </p>
           </section>
@@ -82,14 +82,36 @@ export default function TermsPage() {
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-lg font-semibold">9. 準拠法</h2>
+            <h2 className="text-lg font-semibold">9. 外部サービス</h2>
+            <p>
+              本サービスは運用のために外部サービスを利用しています。詳細はプライバシーポリシーをご確認ください。
+            </p>
+          </section>
+
+          <section className="space-y-2">
+            <h2 className="text-lg font-semibold">10. GitHubリポジトリ</h2>
+            <p>
+              本サービスのソースコードは、運営が管理するGitHubリポジトリで管理されています。<br />
+              <a
+                href="https://github.com/jaclatumblr/jacla-portal"
+                target="_blank"
+                rel="noreferrer"
+                className="text-primary hover:underline"
+              >
+                https://github.com/jaclatumblr/jacla-portal
+              </a>
+            </p>
+          </section>
+
+          <section className="space-y-2">
+            <h2 className="text-lg font-semibold">11. 準拠法</h2>
             <p>
               本規約は日本法に準拠します。
             </p>
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-lg font-semibold">10. お問い合わせ</h2>
+            <h2 className="text-lg font-semibold">12. お問い合わせ</h2>
             <p>
               本サービスに関するお問い合わせは、サービス内のフィードバック機能からご連絡ください。
             </p>

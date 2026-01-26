@@ -346,14 +346,6 @@ export function StagePlotEditor({
                                     variant="outline"
                                     size="sm"
                                     className="text-xs h-8"
-                                    onClick={() => addItem("DI", false)}
-                                >
-                                    DI
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="text-xs h-8"
                                     onClick={() => addItem("Mic", false)}
                                 >
                                     Mic

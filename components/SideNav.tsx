@@ -57,11 +57,12 @@ export function SideNav() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [roleReady, setRoleReady] = useState(false);
+  const roleLoadStartedRef = useRef(false);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const topbarRef = useRef<HTMLDivElement | null>(null);
   const pathname = usePathname();
   const router = useRouter();
-  const { canAccessAdmin, isAdministrator, loading: roleLoading } = useRoleFlags();
+  const { canAccessAdmin, isAdmin, loading: roleLoading } = useRoleFlags();
   const { session } = useAuth();
   const userId = session?.user.id;
 
@@ -74,17 +75,23 @@ export function SideNav() {
 
   useEffect(() => {
     if (!userId) {
+      roleLoadStartedRef.current = false;
       setRoleReady(false);
       return;
     }
-    if (roleLoading) return;
+    if (roleLoading) {
+      roleLoadStartedRef.current = true;
+      setRoleReady(false);
+      return;
+    }
+    if (!roleLoadStartedRef.current) return;
     setRoleReady(true);
   }, [roleLoading, userId]);
 
   useEffect(() => {
     if (!userId) return;
     if (!roleReady) return;
-    if (isAdministrator) return;
+    if (isAdmin) return;
     if (typeof window === "undefined") return;
     const storageKey = `crewNoticeShown:${userId}`;
     if (window.sessionStorage.getItem(storageKey)) return;
@@ -113,7 +120,7 @@ export function SideNav() {
     return () => {
       cancelled = true;
     };
-  }, [isAdministrator, roleReady, userId]);
+  }, [isAdmin, roleReady, userId]);
 
   const avatarUrl =
     session?.user.user_metadata?.avatar_url ||

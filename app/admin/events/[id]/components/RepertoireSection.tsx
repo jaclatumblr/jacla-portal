@@ -92,6 +92,7 @@ export function RepertoireSection({
     stageMembers,
     stageItems,
     setBand,
+    setSongs,
     refreshData,
     submitDeadline: event?.repertoire_deadline ?? null,
     canBypassDeadline: true,
@@ -224,18 +225,18 @@ export function RepertoireSection({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        <div className="min-w-0 rounded-lg border border-border bg-card/60 p-2">
-          <div className="mb-1 text-[10px] font-medium">メンバー ({memberDetails.length})</div>
-          <div className="max-h-28 overflow-y-auto overflow-x-hidden">
-            <table className="w-full text-[10px]">
-              <thead className="sticky top-0 bg-card/60 text-[9px] text-muted-foreground">
+      <div className="grid gap-3 lg:grid-cols-2">
+        <div className="min-w-0 rounded-lg border border-border bg-card/60 p-3">
+          <div className="mb-2 text-xs font-semibold">メンバー ({memberDetails.length})</div>
+          <div className="max-h-44 overflow-y-auto overflow-x-hidden">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-card/60 text-[11px] text-muted-foreground">
                 <tr className="border-b border-border">
-                  <th className="py-0.5 text-left">パート</th>
-                  <th className="py-0.5 text-left">名前</th>
-                  <th className="w-6 py-0.5 text-left">MC</th>
-                  <th className="py-0.5 text-left">返し要望</th>
-                  <th className="py-0.5 text-left">備考</th>
+                  <th className="py-1 text-left">パート</th>
+                  <th className="py-1 text-left">名前</th>
+                  <th className="w-6 py-1 text-left">MC</th>
+                  <th className="py-1 text-left">返し要望</th>
+                  <th className="py-1 text-left">備考</th>
                 </tr>
               </thead>
               <tbody>
@@ -248,15 +249,15 @@ export function RepertoireSection({
                 ) : (
                   memberDetails.map((member) => (
                     <tr key={member.id} className="border-b border-border/50">
-                      <td className="max-w-12 truncate py-0.5 text-muted-foreground">
+                      <td className="max-w-20 truncate py-1 text-muted-foreground">
                         {member.instrument}
                       </td>
-                      <td className="max-w-16 truncate py-0.5">{member.name}</td>
-                      <td className="py-0.5">{member.isMc ? "○" : ""}</td>
-                      <td className="max-w-16 truncate py-0.5 text-muted-foreground">
+                      <td className="max-w-24 truncate py-1">{member.name}</td>
+                      <td className="py-1">{member.isMc ? "○" : ""}</td>
+                      <td className="max-w-24 truncate py-1 text-muted-foreground">
                         {member.monitorRequest}
                       </td>
-                      <td className="max-w-16 truncate py-0.5 text-muted-foreground">
+                      <td className="max-w-24 truncate py-1 text-muted-foreground">
                         {member.monitorNote}
                       </td>
                     </tr>
@@ -267,15 +268,15 @@ export function RepertoireSection({
           </div>
         </div>
 
-        <div className="min-w-0 rounded-lg border border-border bg-card/60 p-2">
-          <div className="mb-1 text-[10px] font-medium">セットリスト ({orderedSongs.length})</div>
-          <div className="max-h-28 overflow-y-auto overflow-x-hidden">
-            <table className="w-full text-[10px]">
-              <thead className="sticky top-0 bg-card/60 text-[9px] text-muted-foreground">
+        <div className="min-w-0 rounded-lg border border-border bg-card/60 p-3">
+          <div className="mb-2 text-xs font-semibold">セットリスト ({orderedSongs.length})</div>
+          <div className="max-h-44 overflow-y-auto overflow-x-hidden">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-card/60 text-[11px] text-muted-foreground">
                 <tr className="border-b border-border">
-                  <th className="w-4 py-0.5 text-left">#</th>
-                  <th className="py-0.5 text-left">曲名</th>
-                  <th className="w-10 py-0.5 text-left">時間</th>
+                  <th className="w-5 py-1 text-left">#</th>
+                  <th className="py-1 text-left">曲名 / MC</th>
+                  <th className="w-12 py-1 text-left">時間</th>
                 </tr>
               </thead>
               <tbody>
@@ -288,11 +289,14 @@ export function RepertoireSection({
                 ) : (
                   orderedSongs.map((song, index) => (
                     <tr key={song.id} className="border-b border-border/50">
-                      <td className="py-0.5 text-muted-foreground">{index + 1}</td>
-                      <td className="py-0.5">
+                      <td className="py-1 text-muted-foreground">{index + 1}</td>
+                      <td className="py-1">
                         <div className="truncate">
                           {song.entry_type === "mc" ? (
-                            <span className="text-muted-foreground">MC</span>
+                            <>
+                              <span className="text-muted-foreground">MC:</span>{" "}
+                              {song.title || "未入力"}
+                            </>
                           ) : (
                             <>
                               {song.title || "未入力"}
@@ -309,14 +313,14 @@ export function RepertoireSection({
                             </>
                           )}
                         </div>
-                        <div className="line-clamp-1 text-[9px] text-muted-foreground">
+                        <div className="line-clamp-1 text-[11px] text-muted-foreground">
                           PA: {song.memo || "-"}
                         </div>
-                        <div className="line-clamp-1 text-[9px] text-muted-foreground">
+                        <div className="line-clamp-1 text-[11px] text-muted-foreground">
                           照明: {formatLightingSummary(song)}
                         </div>
                       </td>
-                      <td className="py-0.5 text-muted-foreground">{getDurationText(song)}</td>
+                      <td className="py-1 text-muted-foreground">{getDurationText(song)}</td>
                     </tr>
                   ))
                 )}

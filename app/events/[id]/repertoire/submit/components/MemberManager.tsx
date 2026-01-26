@@ -26,7 +26,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ProfileOption, StageMember, createTempId, getStageCategory, stageSlots } from "../types";
+import {
+  ProfileOption,
+  StageMember,
+  adminLeaderSet,
+  createTempId,
+  getStageCategory,
+  stageSlots,
+} from "../types";
 
 type MemberManagerProps = {
   members: StageMember[];
@@ -94,6 +101,7 @@ export function MemberManager({ members, profiles, myProfileId, setMembers, read
     
     return profiles.filter((profile) => {
       if (memberIds.has(profile.id)) return false;
+      if (adminLeaderSet.has(profile.leader ?? "")) return false;
       if (!search) return true;
       const combined = `${profile.display_name ?? ""} ${profile.real_name ?? ""} ${profile.part ?? ""}`.toLowerCase();
       return combined.includes(search);

@@ -78,7 +78,7 @@ export type FixedMember = {
 
 // ユーティリティ関数
 export const isAdminLeader = (leader?: string | null) =>
-    leader === "Administrator" || leader === "Supervisor";
+    leader === "Administrator";
 
 export const formatDate = (value?: string | null) => {
     if (!value) return "";

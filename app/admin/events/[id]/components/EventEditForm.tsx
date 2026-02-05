@@ -67,25 +67,48 @@ export function EventEditForm({ event, onRefresh }: EventEditFormProps) {
 
     const handleSave = async () => {
         setSaving(true);
-        const { error } = await supabase
-            .from("events")
-            .update({
-                name: formData.name,
-                date: formData.date,
-                status: formData.status,
-                event_type: formData.event_type,
-                repertoire_deadline: formData.repertoire_deadline ?? null,
-                repertoire_is_closed: formData.repertoire_is_closed ?? false,
-                venue: formData.venue || null,
-                assembly_time: formData.assembly_time || null,
-                open_time: formData.open_time || null,
-                start_time: formData.start_time || null,
-                note: formData.note || null,
-                default_changeover_min: formData.default_changeover_min,
-                tt_is_published: formData.tt_is_published,
-                tt_is_provisional: formData.tt_is_provisional,
-            })
-            .eq("id", event.id);
+        const payload = {
+            name: formData.name,
+            date: formData.date,
+            status: formData.status,
+            event_type: formData.event_type,
+            repertoire_deadline: formData.repertoire_deadline ?? null,
+            repertoire_is_closed: formData.repertoire_is_closed ?? false,
+            venue: formData.venue || null,
+            assembly_time: formData.assembly_time || null,
+            open_time: formData.open_time || null,
+            start_time: formData.start_time || null,
+            end_time: formData.end_time || null,
+            rehearsal_start_time: formData.rehearsal_start_time || null,
+            note: formData.note || null,
+            default_changeover_min: formData.default_changeover_min,
+            tt_is_published: formData.tt_is_published,
+            tt_is_provisional: formData.tt_is_provisional,
+        };
+        let { error } = await supabase.from("events").update(payload).eq("id", event.id);
+        if (error?.code == "42703") {
+            const candidates = [
+                (() => {
+                    const { end_time, ...next } = payload;
+                    return next;
+                })(),
+                (() => {
+                    const { rehearsal_start_time, ...next } = payload;
+                    return next;
+                })(),
+                (() => {
+                    const { rehearsal_start_time, end_time, ...next } = payload;
+                    return next;
+                })(),
+            ];
+            for (const candidate of candidates) {
+                const retry = await supabase.from("events").update(candidate).eq("id", event.id);
+                error = retry.error;
+                if (!error || error.code !== "42703") {
+                    break;
+                }
+            }
+        }
 
         if (error) {
             console.error(error);
@@ -134,7 +157,7 @@ export function EventEditForm({ event, onRefresh }: EventEditFormProps) {
                                 onChange={(e) => handleChange("date", e.target.value)}
                             />
                         </div>
-                    </div>
+                                        </div>
 
                     <div className="grid md:grid-cols-2 gap-4">
                         <div className="space-y-2 md:col-span-2">
@@ -180,7 +203,7 @@ export function EventEditForm({ event, onRefresh }: EventEditFormProps) {
                         </div>
                     </div>
 
-                    <div className="grid md:grid-cols-4 gap-4">
+                    <div className="grid md:grid-cols-6 gap-4">
                         <div className="space-y-2">
                             <label className="text-sm font-medium">会場</label>
                             <Input
@@ -210,6 +233,22 @@ export function EventEditForm({ event, onRefresh }: EventEditFormProps) {
                                 type="time"
                                 value={formData.start_time ?? ""}
                                 onChange={(e) => handleChange("start_time", e.target.value)}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">{"\u9589\u6f14\u6642\u9593"}</label>
+                            <Input
+                                type="time"
+                                value={formData.end_time ?? ""}
+                                onChange={(e) => handleChange("end_time", e.target.value)}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">{"\u30ea\u30cf\u958b\u59cb"}</label>
+                            <Input
+                                type="time"
+                                value={formData.rehearsal_start_time ?? ""}
+                                onChange={(e) => handleChange("rehearsal_start_time", e.target.value)}
                             />
                         </div>
                     </div>

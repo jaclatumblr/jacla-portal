@@ -126,19 +126,155 @@ export function SlotManager({
         { value: "rehearsal_pre", label: "直前リハ" },
     ];
 
-    type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
+    const DEFAULT_OTHER_DURATION_MIN = 60;
+    const DEFAULT_BAND_DURATION_MIN = 10;
+    const ROUND_STEP_MIN = 5;
+    const REHEARSAL_EXTRA_MIN = 5;
+    const MIN_REHEARSAL_MIN = 10;
+    const PREP_NOTE = "\u96C6\u5408\uFF5E\u6E96\u5099";
+    const CLEANUP_NOTE = "\u7D42\u4E86\uFF5E\u64A4\u53CE";
+    const CLEANUP_NOTE_ALT = "\u7D42\u4E86\uFF5E\u89E3\u6563";
+    const REST_NOTE = "\u4F11\u61A9";
+
+    const roundUpToStep = (value: number, step: number) =>
+        Math.ceil(value / step) * step;
+
+
+    const durationMaps = useMemo(() => {
+        const showTotals = new Map<string, number>();
+        const rehearsalTotals = new Map<string, number>();
+        songs.forEach((song) => {
+            if (!song.band_id || !song.duration_sec) return;
+            const current = showTotals.get(song.band_id) ?? 0;
+            showTotals.set(song.band_id, current + song.duration_sec);
+            if (song.entry_type !== "mc") {
+                const rehearsalCurrent = rehearsalTotals.get(song.band_id) ?? 0;
+                rehearsalTotals.set(song.band_id, rehearsalCurrent + song.duration_sec);
+            }
+        });
+
+        const show = new Map<string, number>();
+        showTotals.forEach((seconds, bandId) => {
+            if (seconds <= 0) return;
+            const minutes = Math.ceil(seconds / 60);
+            const rounded = roundUpToStep(minutes, ROUND_STEP_MIN);
+            show.set(bandId, rounded);
+        });
+
+        const rehearsal = new Map<string, number>();
+        rehearsalTotals.forEach((seconds, bandId) => {
+            if (seconds <= 0) return;
+            const minutes = Math.ceil(seconds / 60);
+            const rounded = roundUpToStep(minutes, ROUND_STEP_MIN);
+            const withExtra = rounded + REHEARSAL_EXTRA_MIN;
+            rehearsal.set(bandId, Math.max(MIN_REHEARSAL_MIN, withExtra));
+        });
+
+        return { show, rehearsal };
+    }, [songs]);
+
+    const getSlotDurationMin = (slot: EventSlot) => {
+        const start = parseTime(slot.start_time ?? null);
+        const end = parseTime(slot.end_time ?? null);
+        if (start == null || end == null) return null;
+        let duration = end - start;
+        if (duration < 0) duration += 24 * 60;
+        if (duration <= 0) return null;
+        return duration;
+    };
+
+    const bandDurationLabel = (slot: EventSlot) => {
+        const bandId = slot.band_id ?? null;
+        if (bandId) {
+            const phase = slot.slot_phase ?? "show";
+            const minutes =
+                phase === "rehearsal_normal" || phase === "rehearsal_pre"
+                    ? durationMaps.rehearsal.get(bandId) ?? durationMaps.show.get(bandId)
+                    : durationMaps.show.get(bandId);
+            if (minutes) return `${minutes}\u5206`;
+        }
+        const slotMinutes = getSlotDurationMin(slot);
+        return slotMinutes ? `${slotMinutes}\u5206` : "-";
+    };
+
+    const isWithinWindow = (value: string | null, start: string | null, end: string | null) => {
+        if (!value || !start || !end) return false;
+        const v = parseTime(value);
+        const s = parseTime(start);
+        const e = parseTime(end);
+        if (v == null || s == null || e == null) return false;
+        if (e >= s) return v >= s && v <= e;
+        return v >= s || v <= e;
+    };
+
+    const timeChecks = useMemo(() => {
+        const prepSlot = orderedSlots.find((slot) => slot.note?.trim() === PREP_NOTE);
+        const restSlot = orderedSlots.find((slot) => slot.note?.trim() === REST_NOTE);
+        const rehearsalSlot = orderedSlots.find(
+            (slot) =>
+                slot.slot_type === "band" &&
+                (slot.slot_phase === "rehearsal_normal" || slot.slot_phase === "rehearsal_pre")
+        );
+        const showStartSlot = orderedSlots.find(
+            (slot) => slot.slot_type === "band" && slot.slot_phase === "show"
+        );
+        const showEndSlot = [...orderedSlots]
+            .reverse()
+            .find((slot) => slot.slot_phase === "show" && slot.end_time);
+
+        const derivedAssembly = prepSlot?.start_time ?? null;
+        const derivedRehearsal = prepSlot?.end_time ?? rehearsalSlot?.start_time ?? null;
+        const derivedOpen = showStartSlot?.start_time ?? null;
+        const derivedClose = showEndSlot?.end_time ?? null;
+        const restWindowStart = restSlot?.start_time ?? null;
+        const restWindowEnd = restSlot?.end_time ?? null;
+
+        return [
+            { key: "assembly", label: "集合", setting: event.assembly_time ?? null, actual: derivedAssembly },
+            { key: "rehearsal", label: "リハ開始", setting: event.rehearsal_start_time ?? null, actual: derivedRehearsal },
+            {
+                key: "open",
+                label: "開場",
+                setting: event.open_time ?? null,
+                actual: restWindowStart && restWindowEnd ? `${restWindowStart}-${restWindowEnd}` : derivedOpen,
+                windowStart: restWindowStart,
+                windowEnd: restWindowEnd,
+            },
+            { key: "close", label: "閉演", setting: event.end_time ?? null, actual: derivedClose },
+        ];
+    }, [orderedSlots, event.assembly_time, event.rehearsal_start_time, event.open_time, event.end_time]);
+
+    const timeCheckStatus = (
+        setting: string | null,
+        actual: string | null,
+        windowStart?: string | null,
+        windowEnd?: string | null
+    ) => {
+        if (!setting && !actual) return { label: "未設定", tone: "text-muted-foreground" };
+        if (!setting) return { label: "未設定", tone: "text-amber-400" };
+        if (windowStart && windowEnd && isWithinWindow(setting, windowStart, windowEnd)) {
+            return { label: "OK", tone: "text-emerald-400" };
+        }
+        if (!actual) return { label: "未算出", tone: "text-amber-400" };
+        return setting === actual
+            ? { label: "OK", tone: "text-emerald-400" }
+            : { label: "NG", tone: "text-rose-400" };
+    };
+
+
+type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
 
     const slotPhaseKey = (slot: EventSlot): PhaseKey => {
         const note = slot.note?.trim();
-        if (note === "集合～準備") return "prep";
-        if (note === "終了～撤収" || note === "終了～解散") return "cleanup";
-        if (note === "休憩") return "rest";
+        if (note === PREP_NOTE) return "prep";
+        if (note === CLEANUP_NOTE || note === CLEANUP_NOTE_ALT) return "cleanup";
+        if (note === REST_NOTE) return "rest";
         return slot.slot_phase ?? "show";
     };
 
     const slotToneClass = (slot: EventSlot) => {
         const note = slot.note?.trim() ?? "";
-        if (note === "集合～準備" || note === "終了～撤収" || note === "終了～解散" || note === "休憩") {
+        if (note === PREP_NOTE || note === CLEANUP_NOTE || note === CLEANUP_NOTE_ALT || note === REST_NOTE) {
             return "before:bg-amber-400/80";
         }
         if (slot.slot_type === "break" || note.includes("転換")) {
@@ -209,6 +345,9 @@ export function SlotManager({
         if (note === "転換") {
             handleSlotChange(slot.id, "note", "");
         }
+        if (slot.changeover_min == null) {
+            handleSlotChange(slot.id, "changeover_min", DEFAULT_OTHER_DURATION_MIN);
+        }
     };
 
     const handleAddSlot = () => {
@@ -255,6 +394,30 @@ export function SlotManager({
     const handleAddSpecialSlot = (note: string, phase: EventSlot["slot_phase"]) => {
         const nextOrder =
             slots.reduce((max, slot) => Math.max(max, slot.order_in_event ?? 0), 0) + 1;
+        const isPrep = note === PREP_NOTE;
+        const isCleanup = note === CLEANUP_NOTE;
+        let duration = isPrep || isCleanup ? DEFAULT_OTHER_DURATION_MIN : null;
+        let startTime: string | null = null;
+        let endTime: string | null = null;
+        if (isPrep) {
+            const assemblyStart = parseTime(event.assembly_time ?? null);
+            const rehearsalStart = parseTime(event.rehearsal_start_time ?? null);
+            if (assemblyStart != null) {
+                startTime = formatTime(assemblyStart);
+                if (rehearsalStart != null && rehearsalStart >= assemblyStart) {
+                    endTime = formatTime(rehearsalStart);
+                    duration = rehearsalStart - assemblyStart;
+                } else {
+                    endTime = formatTime(assemblyStart + DEFAULT_OTHER_DURATION_MIN);
+                }
+            } else if (rehearsalStart != null) {
+                const prepStartValue = rehearsalStart - DEFAULT_OTHER_DURATION_MIN;
+                if (prepStartValue >= 0) {
+                    startTime = formatTime(prepStartValue);
+                }
+                endTime = formatTime(rehearsalStart);
+            }
+        }
         const newSlot: EventSlot = {
             id: crypto.randomUUID(),
             event_id: event.id,
@@ -262,9 +425,9 @@ export function SlotManager({
             slot_type: "other",
             slot_phase: phase ?? "show",
             order_in_event: nextOrder,
-            start_time: null,
-            end_time: null,
-            changeover_min: null,
+            start_time: startTime,
+            end_time: endTime,
+            changeover_min: duration,
             note,
         };
         setSlots((prev) => [...prev, newSlot]);
@@ -365,7 +528,24 @@ export function SlotManager({
 
     const handleSave = async () => {
         setSaving(true);
-        const payloads = slots.map((slot, index) => {
+        const ensureRehearsalMin = (slot: EventSlot) => {
+            if (slot.slot_type !== "band") return slot;
+            if (slot.slot_phase !== "rehearsal_normal" && slot.slot_phase !== "rehearsal_pre") {
+                return slot;
+            }
+            const start = parseTime(slot.start_time ?? null);
+            const end = parseTime(slot.end_time ?? null);
+            if (start == null || end == null) return slot;
+            let duration = end - start;
+            if (duration < 0) duration += 24 * 60;
+            if (duration >= MIN_REHEARSAL_MIN) return slot;
+            const nextEnd = start + MIN_REHEARSAL_MIN;
+            const adjustedEnd = nextEnd >= 24 * 60 ? nextEnd - 24 * 60 : nextEnd;
+            return { ...slot, end_time: formatTime(adjustedEnd) };
+        };
+
+        const normalizedSlots = slots.map(ensureRehearsalMin);
+        const payloads = normalizedSlots.map((slot, index) => {
             const note = slot.note?.trim() ?? "";
             let slotType = slot.slot_type;
             let nextNote = slot.note || null;
@@ -412,38 +592,78 @@ export function SlotManager({
 
     const handleGenerate = async () => {
         if (bands.length === 0) {
-            toast.error("バンドがありません。");
+            toast.error("No bands found.");
             return;
         }
         if (slots.length > 0) {
-            if (!window.confirm("既存のスロットをすべて削除して再生成しますか？")) return;
+            if (!window.confirm("Regenerate and delete existing slots?")) return;
         }
 
         setGenerating(true);
 
-        // 既存削除
+        // delete existing slots
         const { error: delError } = await supabase.from("event_slots").delete().eq("event_id", event.id);
         if (delError) {
             console.error(delError);
-            toast.error("既存スロットの削除に失敗しました。");
+            toast.error("Failed to delete existing slots.");
             setGenerating(false);
             return;
         }
 
-        // 生成ロジック
-        const durationMap = new Map<string, number>();
+        // delete existing slots??
+        const showDurationMap = new Map<string, number>();
+        const rehearsalDurationMap = new Map<string, number>();
         songs.forEach((song) => {
             if (!song.band_id || !song.duration_sec) return;
-            const current = durationMap.get(song.band_id) ?? 0;
-            durationMap.set(song.band_id, current + song.duration_sec);
+            const current = showDurationMap.get(song.band_id) ?? 0;
+            showDurationMap.set(song.band_id, current + song.duration_sec);
+            if (song.entry_type === "mc") return;
+            const rehearsalCurrent = rehearsalDurationMap.get(song.band_id) ?? 0;
+            rehearsalDurationMap.set(song.band_id, rehearsalCurrent + song.duration_sec);
         });
 
-        const baseStart = parseTime(event.start_time ?? null);
-        let cursor = baseStart;
+        const toRoundedMinutes = (seconds: number, extra: number) => {
+            if (seconds <= 0) return null;
+            const minutes = Math.ceil(seconds / 60);
+            const rounded = roundUpToStep(minutes, ROUND_STEP_MIN);
+            return rounded + extra;
+        };
+
+        const showStart = parseTime(event.start_time ?? null);
+        let showCursor = showStart;
         const changeover = event.default_changeover_min ?? 15;
+
+        const rehearsalStart = parseTime(event.rehearsal_start_time ?? null);
+        let rehearsalCursor = rehearsalStart;
 
         const payloads: any[] = [];
         let orderIndex = 1;
+
+        let prepStart: string | null = null;
+        let prepEnd: string | null = null;
+        let prepDuration = DEFAULT_OTHER_DURATION_MIN;
+        const assemblyValue = parseTime(event.assembly_time ?? null);
+        if (assemblyValue != null) {
+            prepStart = formatTime(assemblyValue);
+            if (rehearsalStart != null && rehearsalStart >= assemblyValue) {
+                prepEnd = formatTime(rehearsalStart);
+                prepDuration = rehearsalStart - assemblyValue;
+            } else {
+                prepEnd = formatTime(assemblyValue + DEFAULT_OTHER_DURATION_MIN);
+            }
+        } else if (rehearsalStart != null) {
+            const prepStartValue = rehearsalStart - DEFAULT_OTHER_DURATION_MIN;
+            if (prepStartValue >= 0) {
+                prepStart = formatTime(prepStartValue);
+            }
+            prepEnd = formatTime(rehearsalStart);
+        } else {
+            const fallbackStart = parseTime(event.open_time ?? null);
+            if (fallbackStart != null) {
+                prepStart = formatTime(fallbackStart);
+                prepEnd = formatTime(fallbackStart + DEFAULT_OTHER_DURATION_MIN);
+            }
+        }
 
         payloads.push({
             event_id: event.id,
@@ -451,36 +671,47 @@ export function SlotManager({
             slot_type: "other",
             slot_phase: "rehearsal_normal",
             order_in_event: orderIndex++,
-            start_time: event.assembly_time ?? event.open_time ?? null,
-            end_time: event.start_time ?? null,
-            changeover_min: null,
-            note: "集合～準備",
+            start_time: prepStart,
+            end_time: prepEnd,
+            changeover_min: prepDuration,
+            note: PREP_NOTE,
         });
 
         const rehearsalList = rehearsalOrder === "reverse" ? [...bands].reverse() : [...bands];
-        rehearsalList.forEach((band, index) => {
+        rehearsalList.forEach((band) => {
+            const computedRehearsalMin =
+                toRoundedMinutes(rehearsalDurationMap.get(band.id) ?? 0, REHEARSAL_EXTRA_MIN) ??
+                DEFAULT_BAND_DURATION_MIN + REHEARSAL_EXTRA_MIN;
+            const durationMin = Math.max(MIN_REHEARSAL_MIN, computedRehearsalMin);
+            let startTime: string | null = null;
+            let endTime: string | null = null;
+            if (rehearsalCursor != null) {
+                startTime = formatTime(rehearsalCursor);
+                endTime = formatTime(rehearsalCursor + durationMin);
+                rehearsalCursor += durationMin;
+            }
             payloads.push({
                 event_id: event.id,
                 band_id: band.id,
                 slot_type: "band",
                 slot_phase: rehearsalPhase,
                 order_in_event: orderIndex++,
-                start_time: null,
-                end_time: null,
+                start_time: startTime,
+                end_time: endTime,
                 changeover_min: event.default_changeover_min ?? 15,
                 note: null,
             });
         });
 
         if (rehearsalPhase === "rehearsal_normal") {
-            const restMinutes = 60;
+            const restMinutes = DEFAULT_OTHER_DURATION_MIN;
             let restStart: string | null = null;
             let restEnd: string | null = null;
-            if (baseStart != null) {
-                const restStartValue = baseStart - restMinutes;
+            if (showStart != null) {
+                const restStartValue = showStart - restMinutes;
                 if (restStartValue >= 0) {
                     restStart = formatTime(restStartValue);
-                    restEnd = formatTime(baseStart);
+                    restEnd = formatTime(showStart);
                 }
             }
             payloads.push({
@@ -492,20 +723,18 @@ export function SlotManager({
                 start_time: restStart,
                 end_time: restEnd,
                 changeover_min: restMinutes,
-                note: "休憩",
+                note: REST_NOTE,
             });
         }
 
         bands.forEach((band, index) => {
-            const durationSec = durationMap.get(band.id) ?? 0;
-            const durationMin = durationSec > 0 ? Math.ceil(durationSec / 60) : null;
+            const durationMin =
+                toRoundedMinutes(showDurationMap.get(band.id) ?? 0, 0) ?? DEFAULT_BAND_DURATION_MIN;
             let startTime: string | null = null;
             let endTime: string | null = null;
-            if (cursor != null) {
-                startTime = formatTime(cursor);
-                if (durationMin != null) {
-                    endTime = formatTime(cursor + durationMin);
-                }
+            if (showCursor != null) {
+                startTime = formatTime(showCursor);
+                endTime = formatTime(showCursor + durationMin);
             }
 
             payloads.push({
@@ -520,16 +749,16 @@ export function SlotManager({
                 note: null,
             });
 
-            if (cursor != null && durationMin != null) {
-                cursor += durationMin;
+            if (showCursor != null) {
+                showCursor += durationMin;
             }
 
             if (index < bands.length - 1 && changeover > 0) {
                 let changeoverStart: string | null = null;
                 let changeoverEnd: string | null = null;
-                if (cursor != null) {
-                    changeoverStart = formatTime(cursor);
-                    changeoverEnd = formatTime(cursor + changeover);
+                if (showCursor != null) {
+                    changeoverStart = formatTime(showCursor);
+                    changeoverEnd = formatTime(showCursor + changeover);
                 }
                 payloads.push({
                     event_id: event.id,
@@ -540,14 +769,17 @@ export function SlotManager({
                     start_time: changeoverStart,
                     end_time: changeoverEnd,
                     changeover_min: changeover,
-                    note: "転換",
+                    note: "\u8EE2\u63DB",
                 });
 
-                if (cursor != null) {
-                    cursor += changeover;
+                if (showCursor != null) {
+                    showCursor += changeover;
                 }
             }
         });
+
+        const cleanupStart = showCursor != null ? formatTime(showCursor) : null;
+        const cleanupEnd = showCursor != null ? formatTime(showCursor + DEFAULT_OTHER_DURATION_MIN) : null;
 
         payloads.push({
             event_id: event.id,
@@ -555,10 +787,10 @@ export function SlotManager({
             slot_type: "other",
             slot_phase: "show",
             order_in_event: orderIndex++,
-            start_time: null,
-            end_time: null,
-            changeover_min: null,
-            note: "終了～撤収",
+            start_time: cleanupStart,
+            end_time: cleanupEnd,
+            changeover_min: DEFAULT_OTHER_DURATION_MIN,
+            note: CLEANUP_NOTE,
         });
 
         const { data, error } = await supabase
@@ -568,10 +800,10 @@ export function SlotManager({
 
         if (error || !data) {
             console.error(error);
-            toast.error("自動生成に失敗しました。");
+            toast.error("Failed to auto-generate slots.");
         } else {
             setSlots(data as EventSlot[]);
-            toast.success("スロットを自動生成しました。");
+            toast.success("Slots generated.");
         }
         setGenerating(false);
     };
@@ -653,7 +885,7 @@ export function SlotManager({
                                 variant="outline"
                                 size="sm"
                                 className="w-24"
-                                onClick={() => handleAddSpecialSlot("集合～準備", "rehearsal_normal")}
+                                onClick={() => handleAddSpecialSlot(PREP_NOTE, "rehearsal_normal")}
                             >
                                 準備追加
                             </Button>
@@ -661,7 +893,7 @@ export function SlotManager({
                                 variant="outline"
                                 size="sm"
                                 className="w-24"
-                                onClick={() => handleAddSpecialSlot("終了～撤収", "show")}
+                                onClick={() => handleAddSpecialSlot(CLEANUP_NOTE, "show")}
                             >
                                 撤収追加
                             </Button>
@@ -678,6 +910,28 @@ export function SlotManager({
                 </div>
             </CardHeader>
             <CardContent>
+                <div className="mb-3 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-[11px]">
+                    <div className="flex flex-wrap gap-x-4 gap-y-2">
+                        {timeChecks.map((item) => {
+                            const status = timeCheckStatus(
+                                item.setting,
+                                item.actual,
+                                item.windowStart ?? null,
+                                item.windowEnd ?? null
+                            );
+                            return (
+                                <div key={item.key} className="flex items-center gap-2">
+                                    <span className="font-medium text-foreground">{item.label}</span>
+                                    <span className="text-muted-foreground">
+                                        {"\u8a2d\u5b9a"} {item.setting ?? "-"}
+                                    </span>
+                                    <span className="text-muted-foreground">/ TT {item.actual ?? "-"}</span>
+                                    <span className={status.tone}>{status.label}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
                 <DndContext
                     sensors={sensors}
                     collisionDetection={closestCenter}
@@ -767,6 +1021,12 @@ export function SlotManager({
                                                                 </option>
                                                             ))}
                                                         </select>
+                                                    )}
+
+                                                    {slot.slot_type === "band" && (
+                                                        <span className="text-[10px] text-muted-foreground shrink-0">
+                                                            {"\u6301\u3061"} {bandDurationLabel(slot)}
+                                                        </span>
                                                     )}
 
                                                     {slot.slot_type !== "band" && (

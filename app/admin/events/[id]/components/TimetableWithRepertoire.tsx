@@ -78,6 +78,7 @@ export function TimetableWithRepertoire({
             selectedBandId={effectiveBandId}
             hideBandList={true}
             onBandSelect={setSelectedBandId}
+            onBandDeleted={onRefresh}
           />
         </div>
       </div>

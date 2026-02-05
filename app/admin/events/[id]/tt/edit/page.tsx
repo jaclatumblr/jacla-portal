@@ -94,6 +94,7 @@ const TEMPLATE_PREP_MINUTES = 60;
 const TEMPLATE_BREAK_MINUTES = 10;
 const TEMPLATE_CLEANUP_MINUTES = 60;
 const DEFAULT_BAND_DURATION_MIN = 10;
+const MIN_REHEARSAL_MIN = 10;
 
 const parseTimeValue = (value: string | null) => {
   if (!value) return null;
@@ -828,13 +829,18 @@ export default function AdminEventTimetableEditPage() {
     const buildBandSeeds = (list: BandRow[], phase: EventSlot["slot_phase"]) => {
       const seeds: SlotSeed[] = [];
       list.forEach((band, index) => {
+        const baseDuration = getBandDurationMin(band.id);
+        const duration =
+          phase === "rehearsal_normal" || phase === "rehearsal_pre"
+            ? Math.max(MIN_REHEARSAL_MIN, baseDuration)
+            : baseDuration;
         seeds.push({
           slot_type: "band",
           slot_phase: phase,
           band_id: band.id,
           changeover_min: null,
           note: null,
-          duration_min: getBandDurationMin(band.id),
+          duration_min: duration,
         });
         if (index < list.length - 1) {
           seeds.push({

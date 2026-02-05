@@ -44,8 +44,11 @@ create table if not exists public.events (
   status text not null default 'draft',  -- draft / recruiting / fixed / closed
   event_type text not null default 'live',
   venue text,
+  assembly_time time,
   open_time time,
   start_time time,
+  end_time time,
+  rehearsal_start_time time,
   repertoire_deadline timestamptz,
   repertoire_is_closed boolean not null default false,
   note text,
@@ -69,6 +72,15 @@ alter table public.events
 
 alter table public.events
   add column if not exists repertoire_is_closed boolean not null default false;
+
+alter table public.events
+  add column if not exists assembly_time time;
+
+alter table public.events
+  add column if not exists end_time time;
+
+alter table public.events
+  add column if not exists rehearsal_start_time time;
 
 alter table public.events
   add column if not exists tt_is_published boolean not null default false;

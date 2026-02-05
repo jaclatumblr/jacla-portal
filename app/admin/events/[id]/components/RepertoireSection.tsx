@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ExternalLink, Loader2 } from "lucide-react";
+import { ExternalLink, Loader2, Trash2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabaseClient";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -31,6 +32,7 @@ type Props = {
   selectedBandId?: string | null;
   hideBandList?: boolean;
   onBandSelect?: (bandId: string) => void;
+  onBandDeleted?: () => void;
   readOnly?: boolean;
 };
 
@@ -54,6 +56,7 @@ export function RepertoireSection({
   selectedBandId: externalBandId,
   hideBandList = false,
   onBandSelect,
+  onBandDeleted,
   readOnly = false,
 }: Props) {
   const { session } = useAuth();
@@ -163,6 +166,28 @@ export function RepertoireSection({
   const handleSelectBand = (bandId: string) => {
     setSelectedBandId(bandId);
     onBandSelect?.(bandId);
+  };
+
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteBand = async () => {
+    if (!band) return;
+    const confirmed = window.confirm(
+      `「${band.name}」を削除しますか？\n\nこの操作は取り消せません。メンバー、セットリスト、ステージ配置もすべて削除されます。`
+    );
+    if (!confirmed) return;
+
+    setDeleting(true);
+    try {
+      const { error } = await supabase.from("bands").delete().eq("id", band.id);
+      if (error) throw error;
+      onBandDeleted?.();
+    } catch (err) {
+      console.error(err);
+      alert("削除に失敗しました。");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   if (!userId) {
@@ -340,11 +365,10 @@ export function RepertoireSection({
             <button
               key={entry.id}
               onClick={() => handleSelectBand(entry.id)}
-              className={`shrink-0 rounded-lg px-3 py-2 text-xs transition-colors ${
-                entry.id === selectedBandId
-                  ? "bg-accent text-accent-foreground"
-                  : "border border-border bg-card/60 hover:bg-accent/50"
-              }`}
+              className={`shrink-0 rounded-lg px-3 py-2 text-xs transition-colors ${entry.id === selectedBandId
+                ? "bg-accent text-accent-foreground"
+                : "border border-border bg-card/60 hover:bg-accent/50"
+                }`}
             >
               <div className="font-medium">{entry.name}</div>
             </button>
@@ -426,6 +450,15 @@ export function RepertoireSection({
                 </Button>
                 <Button size="sm" onClick={() => saveRepertoire("submitted")} disabled={saving}>
                   提出
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleDeleteBand}
+                  disabled={deleting || saving}
+                >
+                  <Trash2 className="mr-1 h-3 w-3" />
+                  削除
                 </Button>
               </div>
             </div>

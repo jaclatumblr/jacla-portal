@@ -57,14 +57,12 @@ export function useAdminEventData(
         setError(null);
 
         try {
+            const eventColumns =
+                "id, name, date, status, event_type, repertoire_deadline, repertoire_is_closed, venue, assembly_time, open_time, start_time, rehearsal_start_time, end_time, note, default_changeover_min, tt_is_published, tt_is_provisional, normal_rehearsal_order";
+            const fallbackColumns =
+                "id, name, date, status, event_type, repertoire_deadline, repertoire_is_closed, venue, assembly_time, open_time, start_time, note, default_changeover_min, tt_is_published, tt_is_provisional, normal_rehearsal_order";
             const [eventRes, bandsRes, profilesRes, slotsRes, staffRes] = await Promise.all([
-                supabase
-                    .from("events")
-                    .select(
-                        "id, name, date, status, event_type, repertoire_deadline, repertoire_is_closed, venue, assembly_time, open_time, start_time, note, default_changeover_min, tt_is_published, tt_is_provisional, normal_rehearsal_order"
-                    )
-                    .eq("id", eventId)
-                    .maybeSingle(),
+                supabase.from("events").select(eventColumns).eq("id", eventId).maybeSingle(),
                 supabase
                     .from("bands")
                     .select("id, event_id, name, note_pa, note_lighting, stage_plot_data, created_by")
@@ -86,12 +84,30 @@ export function useAdminEventData(
                     .eq("event_id", eventId)
                     .order("created_at", { ascending: true }),
             ]);
-
-            if (eventRes.error || !eventRes.data) {
-                throw new Error(eventRes.error?.message || "イベントが見つかりません");
+            let resolvedEvent = eventRes;
+            if (resolvedEvent.error?.code === "42703") {
+                const variants = [
+                    eventColumns.replace(", end_time", ""),
+                    eventColumns.replace(", rehearsal_start_time", ""),
+                    fallbackColumns,
+                ];
+                for (const columns of variants) {
+                    resolvedEvent = await supabase
+                        .from("events")
+                        .select(columns)
+                        .eq("id", eventId)
+                        .maybeSingle();
+                    if (!resolvedEvent.error || resolvedEvent.error?.code !== "42703") {
+                        break;
+                    }
+                }
             }
 
-            setEvent(eventRes.data as EventRow);
+            if (resolvedEvent.error || !resolvedEvent.data) {
+                throw new Error(resolvedEvent.error?.message || "event fetch failed");
+            }
+
+            setEvent(resolvedEvent.data as EventRow);
             const bandList = (bandsRes.data ?? []) as Band[];
             setBands(bandList);
 

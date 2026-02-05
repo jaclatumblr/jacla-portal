@@ -12,6 +12,8 @@ export type EventRow = {
     assembly_time: string | null;
     open_time: string | null;
     start_time: string | null;
+    end_time?: string | null;
+    rehearsal_start_time?: string | null;
     note: string | null;
     default_changeover_min: number;
     tt_is_published: boolean;

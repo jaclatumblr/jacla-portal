@@ -308,9 +308,9 @@ export default function EventTimeTableViewPage() {
         <main className="flex-1 md:ml-20">
           <PageHeader
             kicker="TT & Repertoire"
-            title="TT\u30FB\u30EC\u30D1\u8868"
+            title="TT・レパ表"
             backHref={`/events/${eventId}`}
-            backLabel="\u30A4\u30D9\u30F3\u30C8\u8A73\u7D30\u3078\u623B\u308B"
+            backLabel="イベント詳細へ戻る"
             meta={
               event && (
                 <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">

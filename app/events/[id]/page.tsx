@@ -12,6 +12,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/lib/toast";
 import { PageHeader } from "@/components/PageHeader";
 import { useRoleFlags } from "@/lib/useRoleFlags";
+import { formatTimeText } from "@/lib/time";
 
 type Event = {
   id: string;
@@ -117,10 +118,10 @@ export default function EventDetailPage() {
     })();
   }, [eventId]);
 
+  const openText = formatTimeText(event?.open_time) ?? event?.open_time;
+  const startText = formatTimeText(event?.start_time) ?? event?.start_time;
   const timeRange =
-    event?.open_time && event?.start_time
-      ? `${event.open_time} - ${event.start_time}`
-      : "時間未設定";
+    openText && startText ? `${openText} - ${startText}` : "\u6642\u9593\u672a\u5b9a";
 
   const headerTitle = loading ? "イベント情報を読み込み中..." : event?.name ?? "イベント詳細";
   const headerDescription = !loading && event?.note ? event.note : "イベントの詳細を確認できます。";

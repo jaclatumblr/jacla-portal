@@ -12,6 +12,7 @@ import { StagePlotPreview } from "@/components/StagePlotPreview";
 import { toast } from "@/lib/toast";
 import { PageHeader } from "@/components/PageHeader";
 import { cn } from "@/lib/utils";
+import { formatTimeText } from "@/lib/time";
 
 // Types
 type EventRow = {
@@ -229,9 +230,9 @@ export default function PAEventDetailPage() {
               <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                 <span className="flex items-center gap-1"><Calendar className="w-4 h-4" />{dateLabel(event.date)}</span>
                 {event.venue && <span>{event.venue}</span>}
-                {event.assembly_time && <span>集合 {event.assembly_time}</span>}
-                {event.open_time && <span>開場 {event.open_time}</span>}
-                {event.start_time && <span>開演 {event.start_time}</span>}
+                {event.assembly_time && <span>\u96C6\u5408 {formatTimeText(event.assembly_time) ?? event.assembly_time}</span>}
+                {event.open_time && <span>\u958b\u5834 {formatTimeText(event.open_time) ?? event.open_time}</span>}
+                {event.start_time && <span>\u958b\u6f14 {formatTimeText(event.start_time) ?? event.start_time}</span>}
               </div>
             ) : null}
           />
@@ -269,7 +270,7 @@ export default function PAEventDetailPage() {
                             isSelected ? "border-primary bg-primary/5" : "border-border"
                           )}
                         >
-                          <span className="shrink-0 w-20 text-muted-foreground">{slot.start_time ?? "--:--"} - {slot.end_time ?? "--:--"}</span>
+                          <span className="shrink-0 w-20 text-muted-foreground">{formatTimeText(slot.start_time) ?? "--:--"} - {formatTimeText(slot.end_time) ?? "--:--"}</span>
                           <span className={cn("truncate", isBand ? "font-medium" : "text-muted-foreground")}>{slotLabel}</span>
                           {isBand && <Badge variant="secondary" className="text-[9px] shrink-0 ml-auto">バンド</Badge>}
                         </div>

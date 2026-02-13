@@ -18,11 +18,11 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 
 const normalizeRepo = (repo?: string | null) => repo?.replace(/^https?:\/\/github\.com\//, "").trim() ?? "";
 
-const bumpPattern = /(\\[bump\\]|\\brelease\\b|\\bver\\b|\\bversion\\b)/i;
+const bumpPattern = /(\[bump\]|\brelease\b|\bver\b|\bversion\b)/i;
 
 const parseCommitMessage = (message: string) => {
-  const [subject, ...rest] = message.split(/\\r?\\n/);
-  const body = rest.join("\\n").trim();
+  const [subject, ...rest] = message.split(/\r?\n/);
+  const body = rest.join("\n").trim();
   return {
     subject: subject?.trim() ?? "",
     body: body.length > 0 ? body : null,

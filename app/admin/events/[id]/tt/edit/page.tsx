@@ -95,6 +95,7 @@ const TEMPLATE_BREAK_MINUTES = 10;
 const TEMPLATE_CLEANUP_MINUTES = 60;
 const DEFAULT_BAND_DURATION_MIN = 10;
 const MIN_REHEARSAL_MIN = 10;
+const DAY_MINUTES = 24 * 60;
 
 const parseTimeValue = (value: string | null) => {
   if (!value) return null;
@@ -108,6 +109,72 @@ const formatTimeValue = (minutes: number) => {
   const m = minutes % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 };
+const formatTimeText = (value: string | null) => {
+  if (!value) return null;
+  const parts = value.split(":");
+  if (parts.length >= 2) {
+    return `${parts[0].padStart(2, "0")}:${parts[1].padStart(2, "0")}`;
+  }
+  return value;
+};
+
+const normalizeDayMinutes = (minutes: number) => {
+  const value = minutes % DAY_MINUTES;
+  return value < 0 ? value + DAY_MINUTES : value;
+};
+
+const compactConsecutiveTimedSlots = <
+  T extends { start_time: string | null; end_time: string | null }
+>(
+  source: T[]
+) => {
+  let cursor: number | null = null;
+  return source.map((slot) => {
+    const start = parseTimeValue(slot.start_time ?? null);
+    const end = parseTimeValue(slot.end_time ?? null);
+    if (start == null || end == null) {
+      cursor = null;
+      return slot;
+    }
+    let duration = end - start;
+    if (duration < 0) duration += DAY_MINUTES;
+    if (duration <= 0) {
+      cursor = null;
+      return slot;
+    }
+    const nextStart = cursor ?? start;
+    const nextEnd = nextStart + duration;
+    cursor = nextEnd;
+    return {
+      ...slot,
+      start_time: formatTimeValue(normalizeDayMinutes(nextStart)),
+      end_time: formatTimeValue(normalizeDayMinutes(nextEnd)),
+    };
+  });
+};
+
+const applyDurationToSlot = <
+  T extends { start_time: string | null; end_time: string | null }
+>(
+  slot: T,
+  durationMin: number
+) => {
+  if (!Number.isFinite(durationMin) || durationMin <= 0) return slot;
+  const start = parseTimeValue(slot.start_time ?? null);
+  const end = parseTimeValue(slot.end_time ?? null);
+  if (start == null && end == null) return slot;
+  if (start != null) {
+    return {
+      ...slot,
+      end_time: formatTimeValue(normalizeDayMinutes(start + durationMin)),
+    };
+  }
+  return {
+    ...slot,
+    start_time: formatTimeValue(normalizeDayMinutes((end ?? 0) - durationMin)),
+  };
+};
+
 
 const phaseLabel = (phase: EventSlot["slot_phase"]) =>
   slotPhaseOptions.find((opt) => opt.value === phase)?.label ?? phase;
@@ -298,26 +365,32 @@ export default function AdminEventTimetableEditPage() {
     }
   };
 
-  const slotDurationLabel = (slot: EventSlot) => {
+  const slotDurationMin = (slot: EventSlot) => {
     const start = parseTimeValue(slot.start_time ?? null);
     const end = parseTimeValue(slot.end_time ?? null);
-    if (start == null || end == null) return "";
+    if (start == null || end == null) return null;
     let duration = end - start;
-    if (duration < 0) duration += 24 * 60;
-    if (duration <= 0) return "";
+    if (duration < 0) duration += DAY_MINUTES;
+    if (duration <= 0) return null;
+    return duration;
+  };
+
+  const slotDurationLabel = (slot: EventSlot) => {
+    const duration = slotDurationMin(slot);
+    if (duration == null) return "";
     return `(${duration})`;
   };
 
   const slotTimeRangeLabel = (slot: EventSlot) => {
     if (!slot.start_time && !slot.end_time) return "時間未設定";
-    if (slot.start_time && slot.end_time) return `${slot.start_time}-${slot.end_time}`;
+    if (slot.start_time && slot.end_time) return `${formatTimeText(slot.start_time)}-${formatTimeText(slot.end_time)}`;
     return slot.start_time ?? slot.end_time ?? "時間未設定";
   };
 
   const slotTimeLabel = (slot: EventSlot) => {
     if (!slot.start_time && !slot.end_time) return "時間未設定";
     if (slot.start_time && slot.end_time) {
-      return `${slot.start_time}-${slot.end_time}${slotDurationLabel(slot)}`;
+      return `${formatTimeText(slot.start_time)}-${formatTimeText(slot.end_time)}${slotDurationLabel(slot)}`;
     }
     return slot.start_time ?? slot.end_time ?? "時間未設定";
   };
@@ -612,12 +685,39 @@ export default function AdminEventTimetableEditPage() {
     );
   };
 
+  const handleSlotDurationChange = (id: string, raw: string) => {
+    const duration = Number.parseInt(raw, 10);
+    if (!Number.isFinite(duration) || duration <= 0) return;
+    setSlots((prev) =>
+      prev.map((slot) => (slot.id === id ? applyDurationToSlot(slot, duration) : slot))
+    );
+  };
+
+  const handleCompactSlotTimes = () => {
+    if (orderedSlots.length === 0) return;
+    const compacted = compactConsecutiveTimedSlots(orderedSlots);
+    const changed = compacted.reduce((count, slot, index) => {
+      const prev = orderedSlots[index];
+      if (!prev) return count;
+      return slot.start_time !== prev.start_time || slot.end_time !== prev.end_time
+        ? count + 1
+        : count;
+    }, 0);
+    if (changed === 0) {
+      toast.info("時間のズレは見つかりませんでした。");
+      return;
+    }
+    setSlots(compacted);
+    toast.success(`時間を補正しました（${changed}件）。`);
+  };
+
   const handleSaveSlots = async () => {
     if (!eventId || saving) return;
     setSaving(true);
     setError(null);
 
-    const payloads = orderedSlots.map((slot, index) => {
+    const compactedSlots = compactConsecutiveTimedSlots(orderedSlots);
+    const payloads = compactedSlots.map((slot, index) => {
       const note = slot.note?.trim() ?? "";
       let slotType = slot.slot_type;
       let nextNote = slot.note || null;
@@ -1081,13 +1181,13 @@ export default function AdminEventTimetableEditPage() {
                   {event.open_time && (
                     <span className="flex items-center gap-2">
                       <Clock className="w-4 h-4" />
-                      集合 {event.open_time}
+                      集合 {formatTimeText(event.open_time) ?? event.open_time}
                     </span>
                   )}
                   {event.start_time && (
                     <span className="flex items-center gap-2">
                       <Clock className="w-4 h-4" />
-                      開演 {event.start_time}
+                      開演 {formatTimeText(event.start_time) ?? event.start_time}
                     </span>
                   )}
                   <Badge variant={event.tt_is_published ? "default" : "outline"}>
@@ -1202,6 +1302,14 @@ export default function AdminEventTimetableEditPage() {
                     <Button type="button" variant="outline" onClick={handleAddSlot}>
                       <Plus className="w-4 h-4" />
                       本番追加
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleCompactSlotTimes}
+                      disabled={orderedSlots.length === 0}
+                    >
+                      時間補正
                     </Button>
                     <Button type="button" onClick={handleSaveSlots} disabled={saving || orderedSlots.length === 0}>
                       {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -1504,6 +1612,18 @@ export default function AdminEventTimetableEditPage() {
                                   />
                                 </label>
                               </div>
+                              <label className="space-y-1 text-xs block">
+                                <span className="text-muted-foreground">持ち時間(分)</span>
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  value={slotDurationMin(selectedSlot) ?? ""}
+                                  onChange={(e) =>
+                                    handleSlotDurationChange(selectedSlot.id, e.target.value)
+                                  }
+                                  disabled={!selectedSlot.start_time && !selectedSlot.end_time}
+                                />
+                              </label>
                               <label className="space-y-1 text-xs block">
                                 <span className="text-muted-foreground">転換(分)</span>
                                 <Input

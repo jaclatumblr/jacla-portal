@@ -27,6 +27,7 @@ export default function AdminEventDetailPage() {
     error,
     event,
     bands,
+    members,
     profiles,
     slots,
     eventStaff,
@@ -83,7 +84,10 @@ export default function AdminEventDetailPage() {
             backHref="/admin"
             backLabel="管理画面に戻る"
             actions={
-              <Badge variant={statusBadge(event.status) as any} className="px-3 py-1 text-sm">
+              <Badge
+                variant={statusBadge(event.status) as "default" | "secondary" | "outline"}
+                className="px-3 py-1 text-sm"
+              >
                 {statusLabel(event.status)}
               </Badge>
             }
@@ -107,6 +111,7 @@ export default function AdminEventDetailPage() {
                     event={event}
                     eventId={eventId}
                     bands={bands}
+                    members={members}
                     songs={songs}
                     slots={slots}
                     setSlots={setSlots}

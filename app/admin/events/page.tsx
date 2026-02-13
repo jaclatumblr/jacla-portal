@@ -14,6 +14,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import { toast } from "@/lib/toast";
+import { formatTimeText } from "@/lib/time";
 
 type SongInfo = {
   id: string;
@@ -447,10 +448,12 @@ export default function AdminEventsPage() {
                     <div className="text-sm text-muted-foreground">イベントがありません。</div>
                   ) : (
                     events.map((event) => {
+                      const openText = formatTimeText(event.open_time) ?? event.open_time;
+                      const startText = formatTimeText(event.start_time) ?? event.start_time;
                       const timeRange =
-                        event.open_time && event.start_time
-                          ? `${event.open_time} - ${event.start_time}`
-                          : "時間未定";
+                        openText && startText
+                          ? `${openText} - ${startText}`
+                          : "\u6642\u9593\u672a\u5b9a";
                       const isDeleteTarget = deleteTargetId === event.id;
                       const confirmMatches =
                         isDeleteTarget && deleteConfirmText.trim() === event.name.trim();

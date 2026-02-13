@@ -10,6 +10,7 @@ import { AuthGuard } from "@/lib/AuthGuard";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/lib/toast";
+import { formatTimeText } from "@/lib/time";
 
 type AssignmentEventSlot = {
   id: string;
@@ -93,9 +94,11 @@ const slotLabel = (slotInput: AssignmentRow["event_slots"]) => {
 };
 
 const timeLabel = (start: string | null, end: string | null) => {
-  if (!start && !end) return "時間未設定";
-  if (start && end) return `${start} - ${end}`;
-  return start ?? end ?? "時間未設定";
+  const startText = formatTimeText(start);
+  const endText = formatTimeText(end);
+  if (!startText && !endText) return "?????";
+  if (startText && endText) return `${startText} - ${endText}`;
+  return startText ?? endText ?? "?????";
 };
 
 export default function MyTasksPage() {

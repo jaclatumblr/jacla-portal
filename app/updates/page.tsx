@@ -18,6 +18,14 @@ type UpdateLogRow = {
   created_at: string;
 };
 
+const normalizeMultilineText = (value: string | null | undefined) => {
+  if (!value) return "";
+  return value
+    .replace(/\r\n/g, "\n")
+    .replace(/\\r\\n/g, "\n")
+    .replace(/\\n/g, "\n");
+};
+
 export default function UpdatesPage() {
   const [logs, setLogs] = useState<UpdateLogRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,12 +81,15 @@ export default function UpdatesPage() {
                 <div className="text-sm text-muted-foreground">更新履歴はまだありません。</div>
               ) : (
                 logs.map((log) => {
+                  const titleText = normalizeMultilineText(log.title);
+                  const summaryText = normalizeMultilineText(log.summary);
+                  const detailsText = normalizeMultilineText(log.details);
                   const versionLabel = formatVersionLabel(versionMap.get(log.id));
                   return (
                     <Card key={log.id} className="bg-card/60 border-border">
                       <CardHeader className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
-                          <CardTitle className="text-lg">{log.title}</CardTitle>
+                          <CardTitle className="text-lg whitespace-pre-line break-words">{titleText}</CardTitle>
                           <span className="text-[10px] px-2 py-0.5 rounded-full border border-border text-muted-foreground">
                             {versionLabel}
                           </span>
@@ -88,12 +99,12 @@ export default function UpdatesPage() {
                         </p>
                       </CardHeader>
                       <CardContent className="space-y-3 text-sm">
-                        {log.summary && log.summary !== log.title && (
-                          <p className="text-foreground">{log.summary}</p>
+                        {summaryText && summaryText !== titleText && (
+                          <p className="text-foreground whitespace-pre-line break-words">{summaryText}</p>
                         )}
-                        {log.details && (
-                          <div className="text-muted-foreground whitespace-pre-line">
-                            {log.details}
+                        {detailsText && (
+                          <div className="text-muted-foreground whitespace-pre-line break-words">
+                            {detailsText}
                           </div>
                         )}
                       </CardContent>

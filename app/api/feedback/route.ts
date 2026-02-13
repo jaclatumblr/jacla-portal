@@ -6,8 +6,7 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const feedbackGasUrl =
   process.env.FEEDBACK_GAS_URL ??
-  "https://script.google.com/macros/s/AKfycbyMR7b2sczmDJjGc3sAg9mXk8vG-xThDaSC2nqwJH-cGyCwbl7bu-pwbCQ0u27hHvONBQ/exec";
-
+  "https://script.google.com/macros/s/AKfycbxiAhLBinSTK2MCYANB_c0RJdPXYGJAhWO1Hx6PJRyv_T0COXGpB9vktgvE6MCWQlFx/exec";
 const categoryLabels: Record<string, string> = {
   ui: "UI/UX",
   bug: "バグ報告",

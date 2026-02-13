@@ -1,24 +1,18 @@
 import * as XLSX from "xlsx";
 
 type ExcelRow = Array<string | number | null | undefined>;
+type ExcelColWidth = number;
 
-export function downloadExcelFile(
-  filename: string,
-  headers: ExcelRow,
-  rows: ExcelRow[]
-) {
-  // Create worksheet data with headers
-  const wsData = [headers, ...rows];
+export type ExcelSheet = {
+  name: string;
+  headers: ExcelRow;
+  rows: ExcelRow[];
+  colWidths?: ExcelColWidth[];
+  merges?: Array<string | XLSX.Range>;
+};
 
-  // Create worksheet
-  const ws = XLSX.utils.aoa_to_sheet(wsData);
-
-  // Create workbook
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
-
-  // Generate Excel file and download
-  const excelBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+function triggerExcelDownload(filename: string, workbook: XLSX.WorkBook) {
+  const excelBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
   const blob = new Blob([excelBuffer], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
@@ -32,4 +26,37 @@ export function downloadExcelFile(
   link.remove();
   // Delay revoke so Safari/Firefox can finish the download.
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export function downloadExcelWorkbook(filename: string, sheets: ExcelSheet[]) {
+  const wb = XLSX.utils.book_new();
+  sheets.forEach((sheet, index) => {
+    const wsData = [sheet.headers, ...sheet.rows];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    if (sheet.colWidths && sheet.colWidths.length > 0) {
+      ws["!cols"] = sheet.colWidths.map((width) => ({ wch: width }));
+    }
+    if (sheet.merges && sheet.merges.length > 0) {
+      ws["!merges"] = sheet.merges.map((merge) =>
+        typeof merge === "string" ? XLSX.utils.decode_range(merge) : merge
+      );
+    }
+    const safeName = (sheet.name || `Sheet${index + 1}`).slice(0, 31);
+    XLSX.utils.book_append_sheet(wb, ws, safeName);
+  });
+  triggerExcelDownload(filename, wb);
+}
+
+export function downloadExcelFile(
+  filename: string,
+  headers: ExcelRow,
+  rows: ExcelRow[]
+) {
+  downloadExcelWorkbook(filename, [
+    {
+      name: "Sheet1",
+      headers,
+      rows,
+    },
+  ]);
 }

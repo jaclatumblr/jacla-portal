@@ -12,6 +12,7 @@ import { InstructionMemberTable } from "@/components/instructions/InstructionMem
 import { EventSlotRow } from "@/app/types/instructions";
 import { Info, Lightbulb } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatTimeText } from "@/lib/time";
 
 const LIGHTING_SHIFT_ROLES = [
   { value: "light_op1", label: "卓操作①" },
@@ -40,11 +41,13 @@ const slotDurationLabel = (slot: EventSlotRow) => {
 };
 
 const slotTimeLabel = (slot: EventSlotRow) => {
-  if (!slot.start_time && !slot.end_time) return "時間未設定";
-  if (slot.start_time && slot.end_time) {
-    return `${slot.start_time}-${slot.end_time}${slotDurationLabel(slot)}`;
+  const startText = formatTimeText(slot.start_time);
+  const endText = formatTimeText(slot.end_time);
+  if (!startText && !endText) return "?????";
+  if (startText && endText) {
+    return `${startText}-${endText}${slotDurationLabel(slot)}`;
   }
-  return slot.start_time ?? slot.end_time ?? "時間未設定";
+  return startText ?? endText ?? "?????";
 };
 
 const phaseLabel = (phase: EventSlotRow["slot_phase"]) => {

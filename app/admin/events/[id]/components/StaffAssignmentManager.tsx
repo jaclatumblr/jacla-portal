@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
+import { formatTimeText } from "@/lib/time";
 import type {
     EventSlot,
     EventStaffMember,
@@ -197,9 +198,11 @@ export function StaffAssignmentManager({
     };
 
     const getSlotTime = (slot: EventSlot) => {
-        if (slot.start_time && slot.end_time) return `${slot.start_time} - ${slot.end_time}`;
-        return slot.start_time || slot.end_time || "時間未設定";
-    };
+  const startText = formatTimeText(slot.start_time);
+  const endText = formatTimeText(slot.end_time);
+  if (startText && endText) return `${startText} - ${endText}`;
+  return startText ?? endText ?? "?????";
+};
 
     return (
         <Card className="bg-card/60">

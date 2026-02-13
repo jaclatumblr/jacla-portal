@@ -4,12 +4,13 @@ import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SlotManager } from "./SlotManager";
 import { RepertoireSection } from "./RepertoireSection";
-import type { Band, EventRow, EventSlot, Song } from "../types";
+import type { Band, BandMember, EventRow, EventSlot, Song } from "../types";
 
 type TimetableWithRepertoireProps = {
   event: EventRow;
   eventId: string;
   bands: Band[];
+  members: BandMember[];
   songs: Song[];
   slots: EventSlot[];
   setSlots: (slots: EventSlot[] | ((prev: EventSlot[]) => EventSlot[])) => void;
@@ -20,6 +21,7 @@ export function TimetableWithRepertoire({
   event,
   eventId,
   bands,
+  members,
   songs,
   slots,
   setSlots,
@@ -63,6 +65,7 @@ export function TimetableWithRepertoire({
           <SlotManager
             event={event}
             bands={bands}
+            members={members}
             songs={songs}
             slots={slots}
             setSlots={setSlots}

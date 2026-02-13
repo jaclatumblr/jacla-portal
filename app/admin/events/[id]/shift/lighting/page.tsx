@@ -10,6 +10,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { supabase } from "@/lib/supabaseClient";
 import { useRoleFlags } from "@/lib/useRoleFlags";
 import { toast } from "@/lib/toast";
+import { formatTimeText } from "@/lib/time";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -416,12 +417,14 @@ const slotTypeLabel = (slot: EventSlot) => {
   };
 
   const slotTimeLabel = (slot: EventSlot) => {
-    if (!slot.start_time && !slot.end_time) return "時間未設定";
-    if (slot.start_time && slot.end_time) {
-      return `${slot.start_time}-${slot.end_time}${slotDurationLabel(slot)}`;
-    }
-    return slot.start_time ?? slot.end_time ?? "時間未設定";
-  };
+  const startText = formatTimeText(slot.start_time);
+  const endText = formatTimeText(slot.end_time);
+  if (!startText && !endText) return "?????";
+  if (startText && endText) {
+    return `${startText}-${endText}${slotDurationLabel(slot)}`;
+  }
+  return startText ?? endText ?? "?????";
+};
 
   const phaseLabel = (phase?: EventSlot["slot_phase"]) => {
     const normalized = phase ?? "show";
@@ -928,9 +931,9 @@ const slotTypeLabel = (slot: EventSlot) => {
                       {event?.name ?? "イベント"} {event?.date ? `(${event.date})` : ""}
                       {(event?.open_time || event?.start_time) && (
                         <span className="ml-2 text-xs text-muted-foreground">
-                          {event.open_time ? `集合 ${event.open_time}` : ""}
+                          {event.open_time ? `\u96C6\u5408 ${formatTimeText(event.open_time) ?? event.open_time}` : ""}
                           {event.open_time && event.start_time ? " / " : ""}
-                          {event.start_time ? `開演 ${event.start_time}` : ""}
+                          {event.start_time ? `\u958b\u6f14 ${formatTimeText(event.start_time) ?? event.start_time}` : ""}
                         </span>
                       )}
                     </CardDescription>

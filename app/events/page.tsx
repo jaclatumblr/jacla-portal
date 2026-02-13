@@ -11,6 +11,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/lib/toast";
+import { formatTimeText } from "@/lib/time";
 
 type EventRow = {
   id: string;
@@ -96,10 +97,10 @@ export default function EventsPage() {
                   <div className="text-sm text-muted-foreground">イベントがありません。</div>
                 ) : (
                   events.map((event, index) => {
+                    const openText = formatTimeText(event.open_time) ?? event.open_time;
+                    const startText = formatTimeText(event.start_time) ?? event.start_time;
                     const timeRange =
-                      event.open_time && event.start_time
-                        ? `${event.open_time} - ${event.start_time}`
-                        : "時間未定";
+                      openText && startText ? `${openText} - ${startText}` : "\u6642\u9593\u672a\u5b9a";
                     return (
                       <Link key={event.id} href={`/events/${event.id}`} className="group block">
                         <div className="relative p-4 sm:p-6 bg-card/50 border border-border rounded-lg hover:border-primary/50 transition-all duration-300">

@@ -65,6 +65,7 @@ export function SideNav() {
   const { canAccessAdmin, isAdmin, loading: roleLoading } = useRoleFlags();
   const { session } = useAuth();
   const userId = session?.user.id;
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
     document.body.dataset.hasSidenav = "1";
@@ -87,6 +88,41 @@ export function SideNav() {
     if (!roleLoadStartedRef.current) return;
     setRoleReady(true);
   }, [roleLoading, userId]);
+
+  useEffect(() => {
+    if (!userId) return;
+
+    let cancelled = false;
+
+    const loadProfileAvatar = async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("avatar_url")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (cancelled) return;
+      if (error) {
+        console.error(error);
+        return;
+      }
+
+      const nextAvatarUrl = (data as { avatar_url?: string | null } | null)?.avatar_url ?? null;
+      setProfileAvatarUrl(nextAvatarUrl);
+    };
+
+    void loadProfileAvatar();
+
+    const handleProfileUpdated = () => {
+      void loadProfileAvatar();
+    };
+    window.addEventListener("profile:updated", handleProfileUpdated);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("profile:updated", handleProfileUpdated);
+    };
+  }, [userId]);
 
   useEffect(() => {
     if (!userId) return;
@@ -123,6 +159,7 @@ export function SideNav() {
   }, [isAdmin, roleReady, userId]);
 
   const avatarUrl =
+    profileAvatarUrl ||
     session?.user.user_metadata?.avatar_url ||
     session?.user.user_metadata?.picture ||
     null;

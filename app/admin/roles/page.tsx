@@ -97,6 +97,27 @@ const partOptions = [
   "etc",
 ];
 
+const normalizeNameWhitespace = (value: string) =>
+  value.replace(/\u3000/g, " ").replace(/\s+/g, " ").trim();
+
+const splitRealName = (value: string | null | undefined) => {
+  const normalized = normalizeNameWhitespace(value ?? "");
+  if (!normalized) {
+    return { family: "", given: "" };
+  }
+  const parts = normalized.split(" ");
+  if (parts.length === 1) {
+    return { family: parts[0], given: "" };
+  }
+  return {
+    family: parts[0],
+    given: parts.slice(1).join(" "),
+  };
+};
+
+const joinRealName = (family: string, given: string) =>
+  [family.trim(), given.trim()].filter(Boolean).join(" ");
+
 export default function AdminRolesPage() {
   const {
     isAdmin,
@@ -115,7 +136,8 @@ export default function AdminRolesPage() {
   const [form, setForm] = useState({ crew: "User", muted: false });
   const [profileForm, setProfileForm] = useState({
     displayName: "",
-    realName: "",
+    realNameFamily: "",
+    realNameGiven: "",
     email: "",
   });
   const [leaderRoles, setLeaderRoles] = useState<string[]>([]);
@@ -228,7 +250,7 @@ export default function AdminRolesPage() {
   useEffect(() => {
     if (!selectedProfile) {
       setForm({ crew: "User", muted: false });
-      setProfileForm({ displayName: "", realName: "", email: "" });
+      setProfileForm({ displayName: "", realNameFamily: "", realNameGiven: "", email: "" });
       setLeaderRoles([]);
       setLeadersLoading(false);
       setPositions([]);
@@ -245,9 +267,11 @@ export default function AdminRolesPage() {
       crew: selectedProfile.crew,
       muted: Boolean(selectedProfile.muted),
     });
+    const splitName = splitRealName(selectedProfile.real_name);
     setProfileForm({
       displayName: selectedProfile.display_name ?? "",
-      realName: selectedProfile.real_name ?? "",
+      realNameFamily: splitName.family,
+      realNameGiven: splitName.given,
       email: selectedProfile.email ?? "",
     });
     setPrimaryPart(selectedProfile.part && selectedProfile.part !== "none" ? selectedProfile.part : "");
@@ -564,6 +588,7 @@ export default function AdminRolesPage() {
 
     const enrollmentValue = enrollmentYear.trim();
     const enrollmentNumber = enrollmentValue ? Number.parseInt(enrollmentValue, 10) : null;
+    const realNameValue = joinRealName(profileForm.realNameFamily, profileForm.realNameGiven);
     if (enrollmentValue && Number.isNaN(enrollmentNumber)) {
       toast.error("入学年度は数字で入力してください。");
       setSaving(false);
@@ -578,7 +603,7 @@ export default function AdminRolesPage() {
         part: partValue,
         muted: form.muted,
         display_name: profileForm.displayName.trim() || null,
-        real_name: profileForm.realName.trim() || null,
+        real_name: realNameValue || null,
         email: profileForm.email.trim() || null,
       })
       .eq("id", selectedId)
@@ -592,21 +617,30 @@ export default function AdminRolesPage() {
       return;
     }
 
-    const privateRes = await supabase
-      .from("profile_private")
-      .upsert(
-        {
-          profile_id: selectedId,
-          student_id: studentId.trim(),
-          enrollment_year: enrollmentNumber,
-          birth_date: birthDate || null,
-        },
-        { onConflict: "profile_id" }
-      );
+    const privateRes = await fetch("/api/admin/profile-private", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session?.access_token ?? ""}`,
+      },
+      body: JSON.stringify({
+        profileId: selectedId,
+        studentId: studentId.trim(),
+        enrollmentYear: enrollmentNumber,
+        birthDate: birthDate || null,
+      }),
+    });
 
-    if (privateRes.error) {
-      console.error(privateRes.error);
-      toast.error("学籍情報の保存に失敗しました。");
+    if (!privateRes.ok) {
+      const errorBody = (await privateRes.json().catch(() => null)) as
+        | { error?: string; details?: string }
+        | null;
+      console.error(errorBody);
+      toast.error(
+        errorBody?.details
+          ? `学籍情報の保存に失敗しました: ${errorBody.details}`
+          : errorBody?.error ?? "学籍情報の保存に失敗しました。"
+      );
       setSaving(false);
       return;
     }
@@ -1076,16 +1110,30 @@ export default function AdminRolesPage() {
                                 disabled={!canEditFullRoles}
                               />
                             </label>
-                            <label className="space-y-1 text-sm">
-                              <span className="text-foreground">本名</span>
-                              <Input
-                                value={profileForm.realName}
-                                onChange={(e) =>
-                                  setProfileForm((prev) => ({ ...prev, realName: e.target.value }))
-                                }
-                                disabled={!canEditFullRoles}
-                              />
-                            </label>
+                            <div className="space-y-1 text-sm">
+                              <span className="text-foreground">本名（苗字・名前）</span>
+                              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                <Input
+                                  value={profileForm.realNameFamily}
+                                  onChange={(e) =>
+                                    setProfileForm((prev) => ({ ...prev, realNameFamily: e.target.value }))
+                                  }
+                                  placeholder="例: 山田"
+                                  disabled={!canEditFullRoles}
+                                />
+                                <Input
+                                  value={profileForm.realNameGiven}
+                                  onChange={(e) =>
+                                    setProfileForm((prev) => ({ ...prev, realNameGiven: e.target.value }))
+                                  }
+                                  placeholder="例: 太郎"
+                                  disabled={!canEditFullRoles}
+                                />
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                既存データが1欄のみの場合は、苗字側に入ります。必要に応じて修正してください。
+                              </p>
+                            </div>
                           </div>
                           {canEditFullRoles && (
                             <label className="space-y-1 text-sm">

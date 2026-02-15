@@ -95,7 +95,7 @@ export async function POST(request: Request) {
     .upsert(
       {
         profile_id: profileId,
-        student_id: studentIdValue || null,
+        student_id: studentIdValue,
         enrollment_year: enrollmentYear,
         birth_date: birthDateValue || null,
       },

@@ -10,6 +10,7 @@ import {
   IdCard,
   MessageCircle,
   Music,
+  Phone,
   RefreshCw,
   User,
   Users,
@@ -24,6 +25,7 @@ import { AuthGuard } from "@/lib/AuthGuard";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/lib/toast";
+import { formatPhoneNumber } from "@/lib/phone";
 
 type ProfileData = {
   display_name?: string | null;
@@ -84,6 +86,7 @@ export default function ProfilePage() {
   const [studentId, setStudentId] = useState<string | null>(null);
   const [enrollmentYear, setEnrollmentYear] = useState<string | null>(null);
   const [birthDate, setBirthDate] = useState<string | null>(null);
+  const [phoneNumber, setPhoneNumber] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showDiscordFallback, setShowDiscordFallback] = useState(false);
 
@@ -101,7 +104,7 @@ export default function ProfilePage() {
     (async () => {
       setLoading(true);
 
-      const [profileRes, bandRes, leadersRes, privateRes, positionsRes] = await Promise.all([
+      const [profileRes, bandRes, leadersRes, positionsRes] = await Promise.all([
         supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle(),
         supabase
           .from("band_members")
@@ -112,15 +115,44 @@ export default function ProfilePage() {
           .select("leader")
           .eq("profile_id", session.user.id),
         supabase
-          .from("profile_private")
-          .select("student_id, enrollment_year, birth_date")
-          .eq("profile_id", session.user.id)
-          .maybeSingle(),
-        supabase
           .from("profile_positions")
           .select("position")
           .eq("profile_id", session.user.id),
       ]);
+
+      const privateColumns = "student_id, enrollment_year, birth_date, phone_number";
+      const legacyPrivateColumns = "student_id, enrollment_year, birth_date";
+      const privateResWithPhone = await supabase
+        .from("profile_private")
+        .select(privateColumns)
+        .eq("profile_id", session.user.id)
+        .maybeSingle();
+
+      let privateData = privateResWithPhone.data as
+        | {
+            student_id?: string | null;
+            enrollment_year?: number | null;
+            birth_date?: string | null;
+            phone_number?: string | null;
+          }
+        | null;
+      let privateError = privateResWithPhone.error;
+      if (privateError?.code === "42703") {
+        const legacyPrivateRes = await supabase
+          .from("profile_private")
+          .select(legacyPrivateColumns)
+          .eq("profile_id", session.user.id)
+          .maybeSingle();
+        privateData = legacyPrivateRes.data as
+          | {
+              student_id?: string | null;
+              enrollment_year?: number | null;
+              birth_date?: string | null;
+              phone_number?: string | null;
+            }
+          | null;
+        privateError = legacyPrivateRes.error;
+      }
 
       if (cancelled) return;
 
@@ -163,18 +195,24 @@ export default function ProfilePage() {
         setPositions(values);
       }
 
-      if (privateRes.error) {
-        console.error(privateRes.error);
+      if (privateError) {
+        console.error(privateError);
         toast.error("学籍番号の取得に失敗しました。");
       } else {
-        const privateRow = privateRes.data as
-          | { student_id?: string | null; enrollment_year?: number | null; birth_date?: string | null }
+        const privateRow = privateData as
+          | {
+              student_id?: string | null;
+              enrollment_year?: number | null;
+              birth_date?: string | null;
+              phone_number?: string | null;
+            }
           | null;
         setStudentId(privateRow?.student_id ?? null);
         setEnrollmentYear(
           privateRow?.enrollment_year != null ? String(privateRow.enrollment_year) : null
         );
         setBirthDate(privateRow?.birth_date ?? null);
+        setPhoneNumber(formatPhoneNumber(privateRow?.phone_number ?? null));
       }
 
       if (bandRes.error) {
@@ -258,6 +296,7 @@ export default function ProfilePage() {
     roleBadge !== "User" || (!isAdministratorRole && !isOfficialRole);
   const realNameLabel = profile?.real_name?.trim() || "未設定";
   const studentIdLabel = studentId?.trim() || "未設定";
+  const phoneNumberLabel = phoneNumber?.trim() || "未設定";
   const enrollmentYearLabel = enrollmentYear?.trim() || "未設定";
   const birthDateLabel = birthDate?.trim() || "未設定";
   const joinDate = profile?.created_at ? profile.created_at.split("T")[0] : "-";
@@ -423,6 +462,18 @@ export default function ProfilePage() {
                       <div className="min-w-0">
                         <p className="text-xs text-muted-foreground">学籍番号</p>
                         <p className="font-medium text-sm md:text-base truncate">{studentIdLabel}</p>
+                      </div>
+                    </div>
+
+                    <Separator className="bg-border" />
+
+                    <div className="flex items-center gap-3 md:gap-4">
+                      <div className="w-10 h-10 rounded-lg bg-secondary/10 flex items-center justify-center shrink-0">
+                        <Phone className="w-5 h-5 text-secondary" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs text-muted-foreground">連絡先（電話番号）</p>
+                        <p className="font-medium text-sm md:text-base truncate">{phoneNumberLabel}</p>
                       </div>
                     </div>
 

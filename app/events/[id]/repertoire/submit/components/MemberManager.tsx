@@ -91,7 +91,7 @@ export function MemberManager({ members, profiles, myProfileId, setMembers, read
     setIsAdding(false);
   };
 
-  const handleUpdate = (id: string, key: keyof StageMember, value: any) => {
+  const handleUpdate = <K extends keyof StageMember>(id: string, key: K, value: StageMember[K]) => {
     setMembers(members.map((member) => (member.id === id ? { ...member, [key]: value } : member)));
   };
 
@@ -115,7 +115,7 @@ export function MemberManager({ members, profiles, myProfileId, setMembers, read
           <div>
             <CardTitle>メンバー構成</CardTitle>
             <CardDescription>
-              ステージに上がるメンバーと担当パート、返し要望を登録します。
+              ステージに上がるメンバーと担当パート、返し要望、持ち込み機材を登録します。
             </CardDescription>
           </div>
           <Dialog open={isAdding} onOpenChange={setIsAdding}>
@@ -210,6 +210,17 @@ export function MemberManager({ members, profiles, myProfileId, setMembers, read
                   />
                 </div>
 
+                <div className="grid gap-1.5">
+                  <label className="text-xs text-muted-foreground">持ち込み機材</label>
+                  <Input
+                    disabled={readOnly}
+                    value={member.monitorNote}
+                    onChange={(e) => handleUpdate(member.id, "monitorNote", e.target.value)}
+                    placeholder="例: キーボード本体 / 譜面台"
+                    className="h-9"
+                  />
+                </div>
+
                 <label className="flex items-center gap-2 text-sm text-muted-foreground">
                   <input
                     type="checkbox"
@@ -237,6 +248,7 @@ export function MemberManager({ members, profiles, myProfileId, setMembers, read
                 <TableHead className="w-[150px]">名前</TableHead>
                 <TableHead className="w-[150px]">パート/楽器</TableHead>
                 <TableHead>返し要望</TableHead>
+                <TableHead>持ち込み機材</TableHead>
                 <TableHead className="w-[80px] text-center">MC</TableHead>
                 <TableHead className="w-[50px]" />
               </TableRow>
@@ -271,6 +283,15 @@ export function MemberManager({ members, profiles, myProfileId, setMembers, read
                         className="h-8"
                       />
                     </TableCell>
+                    <TableCell>
+                      <Input
+                        disabled={readOnly}
+                        value={member.monitorNote}
+                        onChange={(e) => handleUpdate(member.id, "monitorNote", e.target.value)}
+                        placeholder="例: キーボード本体 / 譜面台"
+                        className="h-8"
+                      />
+                    </TableCell>
                     <TableCell className="text-center">
                       <input
                         type="checkbox"
@@ -296,7 +317,7 @@ export function MemberManager({ members, profiles, myProfileId, setMembers, read
               })}
               {members.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-4 text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="py-4 text-center text-muted-foreground">
                     メンバーがいません
                   </TableCell>
                 </TableRow>

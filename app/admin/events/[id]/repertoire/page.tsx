@@ -615,7 +615,7 @@ export default function AdminRepertoireViewPage() {
                                     <th className="py-2 text-left font-medium">名前</th>
                                     <th className="py-2 text-left font-medium">MC</th>
                                     <th className="py-2 text-left font-medium">返し要望</th>
-                                    <th className="py-2 text-left font-medium">備考</th>
+                                    <th className="py-2 text-left font-medium">持ち込み機材/備考</th>
                                   </tr>
                                 </thead>
                                 <tbody>

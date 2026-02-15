@@ -35,7 +35,7 @@ export function BandInfoForm({ band, onChange, readOnly }: BandInfoFormProps) {
             <Input disabled={readOnly}
               value={band.representative_name ?? ""}
               onChange={(e) => onChange("representative_name", e.target.value)}
-              placeholder="連絡先代表者"
+              placeholder="代表者名"
             />
           </div>
         </div>

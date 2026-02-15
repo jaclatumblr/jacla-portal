@@ -74,9 +74,9 @@ export default function RepertoireSubmitPage() {
     : null;
   const isDeadlinePassed = validDeadline ? Date.now() > validDeadline.getTime() : false;
   const submitDisabledReason = isManualClosed
-    ? "????????????????"
+    ? "提出受付は管理側で停止されています。"
     : isDeadlinePassed
-      ? "????????????????????"
+      ? "提出期限を過ぎたため提出できません。"
       : null;
   const showDeadlineInfo = Boolean(deadlineLabel) || isManualClosed;
 
@@ -151,16 +151,14 @@ export default function RepertoireSubmitPage() {
               {showDeadlineInfo && (
                 <div className="rounded-2xl border border-border/60 bg-card/60 p-4">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-medium text-foreground">????</span>
-                    <span className="text-sm text-muted-foreground">{deadlineLabel ?? "???"}</span>
+                    <span className="text-sm font-medium text-foreground">提出期限</span>
+                    <span className="text-sm text-muted-foreground">{deadlineLabel ?? "未設定"}</span>
                   </div>
                   {isManualClosed && (
-                    <p className="mt-2 text-xs text-destructive">????????????????</p>
+                    <p className="mt-2 text-xs text-destructive">現在、提出受付は停止されています。</p>
                   )}
                   {isDeadlinePassed && (
-                    <p className="mt-1 text-xs text-destructive">
-                      ????????????????????
-                    </p>
+                    <p className="mt-1 text-xs text-destructive">提出期限を過ぎています。下書き保存のみ可能です。</p>
                   )}
                 </div>
               )}

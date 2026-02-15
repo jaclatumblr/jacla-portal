@@ -144,11 +144,11 @@ export function useRepertoireSave({
 
     if (status === "submitted") {
       if (!canBypassClose && submitClosed) {
-        toast.error("?????????????");
+        toast.error("現在、提出受付は停止されています。");
         return;
       }
       if (!canBypassDeadline && isDeadlinePassed(submitDeadline)) {
-        toast.error("????????????");
+        toast.error("提出期限を過ぎたため提出できません。");
         return;
       }
       const warnings = buildSubmitWarnings(normalizedSongs);

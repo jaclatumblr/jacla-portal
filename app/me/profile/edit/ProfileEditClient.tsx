@@ -19,12 +19,18 @@ import {
 const checklistItems = [
   "表示名と本名",
   "学籍番号と入学年度",
+  "連絡先（電話番号）",
   "メインパートとサブパート",
   "Discord 連携状態（任意）",
 ];
 
-export default function ProfileEditClient() {
+type ProfileEditClientProps = {
+  requiredParam?: string | null;
+};
+
+export default function ProfileEditClient({ requiredParam }: ProfileEditClientProps) {
   const { deleting, handleDeleteAccount } = useAccountDeletion();
+  const showPhoneRequiredMessage = requiredParam === "phone";
 
   return (
     <AuthGuard>
@@ -106,6 +112,11 @@ export default function ProfileEditClient() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
+                    {showPhoneRequiredMessage && (
+                      <div className="mb-4 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                        連絡先（電話番号）が未入力です。入力して保存してください。
+                      </div>
+                    )}
                     <ProfileForm isEdit nextUrl="/me/profile/edit" />
                   </CardContent>
                 </Card>

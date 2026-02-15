@@ -18,6 +18,7 @@ import { MemberManager } from "@/app/events/[id]/repertoire/submit/components/Me
 import { SetlistEditor } from "@/app/events/[id]/repertoire/submit/components/SetlistEditor";
 import { StagePlotEditor } from "@/app/events/[id]/repertoire/submit/components/StagePlotEditor";
 import {
+  BandRow,
   EntryType,
   SongEntry,
   formatDuration,
@@ -135,7 +136,7 @@ export function RepertoireSection({
       .sort((a, b) => (a.orderIndex ?? Infinity) - (b.orderIndex ?? Infinity));
   }, [stageMembers]);
 
-  const handleMetadataSchedule = (id: string, url: string, entryType: EntryType) => {
+  const handleMetadataSchedule = (id: string, url: string, _entryType: EntryType) => {
     fetchMetadata(id, url, (targetId, updates) => {
       setSongs((prev) =>
         prev.map((song) => {
@@ -156,7 +157,7 @@ export function RepertoireSection({
     });
   };
 
-  const handleBandChange = (key: any, value: any) => {
+  const handleBandChange = (key: keyof BandRow, value: string | number | null) => {
     setBand((prev) => (prev ? { ...prev, [key]: value } : prev));
   };
 
@@ -261,7 +262,7 @@ export function RepertoireSection({
                   <th className="py-1 text-left">名前</th>
                   <th className="w-6 py-1 text-left">MC</th>
                   <th className="py-1 text-left">返し要望</th>
-                  <th className="py-1 text-left">備考</th>
+                  <th className="py-1 text-left">持ち込み機材/備考</th>
                 </tr>
               </thead>
               <tbody>

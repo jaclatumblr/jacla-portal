@@ -25,6 +25,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { PageHeader } from "@/components/PageHeader";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
+import { formatPhoneNumber } from "@/lib/phone";
 
 type ProfileRow = {
   id: string;
@@ -157,6 +158,7 @@ export default function AdminRolesPage() {
   const [studentId, setStudentId] = useState("");
   const [enrollmentYear, setEnrollmentYear] = useState("");
   const [birthDate, setBirthDate] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [studentIdLoading, setStudentIdLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -260,6 +262,7 @@ export default function AdminRolesPage() {
       setStudentId("");
       setEnrollmentYear("");
       setBirthDate("");
+      setPhoneNumber("");
       setStudentIdLoading(false);
       return;
     }
@@ -296,24 +299,59 @@ export default function AdminRolesPage() {
     let cancelled = false;
     (async () => {
       setStudentIdLoading(true);
-      const { data, error } = await supabase
+      const privateColumns = "student_id, enrollment_year, birth_date, phone_number";
+      const legacyPrivateColumns = "student_id, enrollment_year, birth_date";
+      const privateResWithPhone = await supabase
         .from("profile_private")
-        .select("student_id, enrollment_year, birth_date")
+        .select(privateColumns)
         .eq("profile_id", selectedId)
         .maybeSingle();
+
+      let data = privateResWithPhone.data as
+        | {
+            student_id?: string | null;
+            enrollment_year?: number | null;
+            birth_date?: string | null;
+            phone_number?: string | null;
+          }
+        | null;
+      let error = privateResWithPhone.error;
+      if (error?.code === "42703") {
+        const legacyRes = await supabase
+          .from("profile_private")
+          .select(legacyPrivateColumns)
+          .eq("profile_id", selectedId)
+          .maybeSingle();
+        data = legacyRes.data as
+          | {
+              student_id?: string | null;
+              enrollment_year?: number | null;
+              birth_date?: string | null;
+              phone_number?: string | null;
+            }
+          | null;
+        error = legacyRes.error;
+      }
       if (cancelled) return;
       if (error) {
         console.error(error);
         setStudentId("");
         setEnrollmentYear("");
         setBirthDate("");
+        setPhoneNumber("");
       } else {
         const row = data as
-          | { student_id?: string | null; enrollment_year?: number | null; birth_date?: string | null }
+          | {
+              student_id?: string | null;
+              enrollment_year?: number | null;
+              birth_date?: string | null;
+              phone_number?: string | null;
+            }
           | null;
         setStudentId(row?.student_id ?? "");
         setEnrollmentYear(row?.enrollment_year != null ? String(row.enrollment_year) : "");
         setBirthDate(row?.birth_date ?? "");
+        setPhoneNumber(formatPhoneNumber(row?.phone_number ?? ""));
       }
       setStudentIdLoading(false);
     })();
@@ -628,6 +666,7 @@ export default function AdminRolesPage() {
         studentId: studentId.trim(),
         enrollmentYear: enrollmentNumber,
         birthDate: birthDate || null,
+        phoneNumber: phoneNumber.trim() || null,
       }),
     });
 
@@ -1084,6 +1123,10 @@ export default function AdminRolesPage() {
                               学籍番号:{" "}
                               {studentIdLoading ? "読み込み中..." : studentId || "未登録"}
                             </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              連絡先:{" "}
+                              {studentIdLoading ? "読み込み中..." : phoneNumber || "未登録"}
+                            </p>
                             {selectedProfile.id === userId && (
                               <p className="text-xs text-primary">※自分自身の権限を編集中</p>
                             )}
@@ -1146,7 +1189,7 @@ export default function AdminRolesPage() {
                               />
                             </label>
                           )}
-                          <div className="grid gap-3 sm:grid-cols-3">
+                          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                             <label className="space-y-1 text-sm">
                               <span className="text-foreground">学籍番号</span>
                               <Input
@@ -1162,6 +1205,16 @@ export default function AdminRolesPage() {
                                 onChange={(e) => setEnrollmentYear(e.target.value)}
                                 maxLength={4}
                                 inputMode="numeric"
+                                disabled={!canEditFullRoles || studentIdLoading}
+                              />
+                            </label>
+                            <label className="space-y-1 text-sm">
+                              <span className="text-foreground">連絡先（電話番号）</span>
+                              <Input
+                                value={phoneNumber}
+                                onChange={(e) => setPhoneNumber(formatPhoneNumber(e.target.value))}
+                                placeholder="090-1234-5678"
+                                inputMode="tel"
                                 disabled={!canEditFullRoles || studentIdLoading}
                               />
                             </label>

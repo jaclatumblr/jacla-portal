@@ -2,6 +2,7 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/lib/toast";
+import { formatPhoneNumber } from "@/lib/phone";
 
 export const crewOptions = ["User", "PA", "Lighting"];
 export const partOptions = [
@@ -54,6 +55,7 @@ type ProfilePrivateRow = {
   student_id: string | null;
   enrollment_year: number | null;
   birth_date: string | null;
+  phone_number?: string | null;
 };
 
 const normalizeNameWhitespace = (value: string) =>
@@ -91,6 +93,7 @@ export function useProfileData() {
   const [studentId, setStudentId] = useState("");
   const [enrollmentYear, setEnrollmentYear] = useState("");
   const [birthDate, setBirthDate] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
 
   // Role & Music Info
   const [crew, setCrew] = useState("User");
@@ -148,7 +151,9 @@ export function useProfileData() {
         profile = inserted as ProfileRow;
       }
 
-      const [partsRes, leadersRes, privateRes] = await Promise.all([
+      const privateColumns = "student_id, enrollment_year, birth_date, phone_number";
+      const legacyPrivateColumns = "student_id, enrollment_year, birth_date";
+      const [partsRes, leadersRes, privateResWithPhone] = await Promise.all([
         supabase
           .from("profile_parts")
           .select("part, is_primary")
@@ -159,14 +164,26 @@ export function useProfileData() {
           .eq("profile_id", session.user.id),
         supabase
           .from("profile_private")
-          .select("student_id, enrollment_year, birth_date")
+          .select(privateColumns)
           .eq("profile_id", session.user.id)
           .maybeSingle(),
       ]);
 
+      let privateData = privateResWithPhone.data as ProfilePrivateRow | null;
+      let privateError = privateResWithPhone.error;
+      if (privateError?.code === "42703") {
+        const legacyPrivateRes = await supabase
+          .from("profile_private")
+          .select(legacyPrivateColumns)
+          .eq("profile_id", session.user.id)
+          .maybeSingle();
+        privateData = legacyPrivateRes.data as ProfilePrivateRow | null;
+        privateError = legacyPrivateRes.error;
+      }
+
       if (partsRes.error) console.error(partsRes.error);
       if (leadersRes.error) console.error(leadersRes.error);
-      if (privateRes.error) console.error(privateRes.error);
+      if (privateError) console.error(privateError);
 
       const parts = (partsRes.data ?? []) as ProfilePartRow[];
       const primaryPart =
@@ -195,10 +212,10 @@ export function useProfileData() {
       setPart(primaryPart ?? "");
       setSubParts(subs);
 
-      const privateData = privateRes.data as ProfilePrivateRow | null;
       setStudentId(privateData?.student_id ?? "");
       setEnrollmentYear(privateData?.enrollment_year?.toString() ?? "");
       setBirthDate(privateData?.birth_date ?? "");
+      setPhoneNumber(formatPhoneNumber(privateData?.phone_number ?? ""));
 
       setDiscordInitialId(profile.discord_id ?? null);
       setDiscordInitialUsername(profile.discord_username ?? null);
@@ -235,6 +252,8 @@ export function useProfileData() {
     setEnrollmentYear,
     birthDate,
     setBirthDate,
+    phoneNumber,
+    setPhoneNumber,
     crew,
     setCrew,
     part,

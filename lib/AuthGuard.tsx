@@ -110,15 +110,30 @@ export function AuthGuard({ children }: { children: ReactNode }) {
         .eq("id", session.user.id)
         .maybeSingle();
 
-      const [{ data: leadersData, error: leadersError }, { data: privateData, error: privateError }] =
-        await Promise.all([
-          supabase.from("profile_leaders").select("leader").eq("profile_id", session.user.id),
-          supabase
-            .from("profile_private")
-            .select("student_id, enrollment_year")
-            .eq("profile_id", session.user.id)
-            .maybeSingle(),
-        ]);
+      const [{ data: leadersData, error: leadersError }, privateResWithPhone] = await Promise.all([
+        supabase.from("profile_leaders").select("leader").eq("profile_id", session.user.id),
+        supabase
+          .from("profile_private")
+          .select("student_id, enrollment_year, phone_number")
+          .eq("profile_id", session.user.id)
+          .maybeSingle(),
+      ]);
+
+      let privateData = privateResWithPhone.data as
+        | { student_id?: string | null; enrollment_year?: number | null; phone_number?: string | null }
+        | null;
+      let privateError = privateResWithPhone.error;
+      if (privateError?.code === "42703") {
+        const legacyPrivateRes = await supabase
+          .from("profile_private")
+          .select("student_id, enrollment_year")
+          .eq("profile_id", session.user.id)
+          .maybeSingle();
+        privateData = legacyPrivateRes.data as
+          | { student_id?: string | null; enrollment_year?: number | null; phone_number?: string | null }
+          | null;
+        privateError = legacyPrivateRes.error;
+      }
 
       if (cancelled) return;
       if (profileError || leadersError || privateError) {
@@ -137,12 +152,14 @@ export function AuthGuard({ children }: { children: ReactNode }) {
         (!leadersError && leaders.length === 0 && profileData?.leader === "Administrator") ||
         (leadersError && profileData?.leader === "Administrator");
       const privateRow = privateData as
-        | { student_id?: string | null; enrollment_year?: number | null }
+        | { student_id?: string | null; enrollment_year?: number | null; phone_number?: string | null }
         | null;
       const studentIdValue =
         !privateError && privateRow ? privateRow.student_id ?? "" : "";
       const enrollmentYearValue =
         !privateError && privateRow ? String(privateRow.enrollment_year ?? "") : "";
+      const phoneNumberValue =
+        !privateError && privateRow ? privateRow.phone_number ?? "" : "";
       const needsOnboarding =
         !!profileError ||
         !profileData ||
@@ -153,10 +170,16 @@ export function AuthGuard({ children }: { children: ReactNode }) {
         (!isAdmin && studentIdValue.trim().length === 0) ||
         (!isAdmin && enrollmentYearValue.trim().length === 0) ||
         (!isAdmin && (!profileData.part || profileData.part === "none"));
+      const needsPhoneInput = !isAdmin && phoneNumberValue.trim().length === 0;
 
       if (needsOnboarding) {
         const next = pathname ? `?next=${encodeURIComponent(pathname)}` : "";
         router.replace(`/onboarding${next}`);
+        return;
+      }
+
+      if (needsPhoneInput && pathname !== "/me/profile/edit") {
+        router.replace("/me/profile/edit?required=phone");
       }
     })();
 

@@ -226,13 +226,15 @@ create table if not exists public.profile_private (
   student_id text not null,
   enrollment_year integer,
   birth_date date,
+  phone_number text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 alter table public.profile_private
   add column if not exists enrollment_year integer,
-  add column if not exists birth_date date;
+  add column if not exists birth_date date,
+  add column if not exists phone_number text;
 
 create or replace function public.profile_private_set_updated_at()
 returns trigger

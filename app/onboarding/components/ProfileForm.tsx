@@ -12,6 +12,7 @@ import { RoleSelector } from "./RoleSelector";
 import { useAvatar } from "../hooks/useAvatar";
 import { useDiscord } from "../hooks/useDiscord";
 import { partOptions, useProfileData } from "../hooks/useProfileData";
+import { formatPhoneNumber } from "@/lib/phone";
 
 type ProfileFormProps = {
   isEdit: boolean;
@@ -67,6 +68,10 @@ export function ProfileForm({ isEdit, nextUrl }: ProfileFormProps) {
       toast.error("入学年度を入力してください。");
       return;
     }
+    if (!profileHook.phoneNumber.trim() && !profileHook.isAdminLeader) {
+      toast.error("連絡先（電話番号）を入力してください。");
+      return;
+    }
     if (!profileHook.isAdminLeader && !profileHook.part) {
       toast.error("メインパートを選択してください。");
       return;
@@ -117,6 +122,7 @@ export function ProfileForm({ isEdit, nextUrl }: ProfileFormProps) {
             ? Number(profileHook.enrollmentYear)
             : null,
           birth_date: profileHook.birthDate || null,
+          phone_number: formatPhoneNumber(profileHook.phoneNumber) || null,
         },
         { onConflict: "profile_id" }
       );
@@ -194,7 +200,7 @@ export function ProfileForm({ isEdit, nextUrl }: ProfileFormProps) {
 
     setSaving(false);
     if (isEdit) {
-      router.refresh();
+      router.replace(nextUrl);
       return;
     }
     router.replace(nextUrl);
@@ -229,7 +235,7 @@ export function ProfileForm({ isEdit, nextUrl }: ProfileFormProps) {
 
             <div className="space-y-2">
               <label className="text-sm font-medium">
-                本名（苗字・名前）<span className="text-destructive">*</span>
+                本名（姓・名）<span className="text-destructive">*</span>
               </label>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <Input
@@ -276,6 +282,22 @@ export function ProfileForm({ isEdit, nextUrl }: ProfileFormProps) {
           </div>
 
           <div className="space-y-2">
+            <label className="text-sm font-medium">
+              連絡先（電話番号）
+              {!profileHook.isAdminLeader && <span className="text-destructive"> *</span>}
+            </label>
+            <Input
+              value={profileHook.phoneNumber}
+              onChange={(e) => profileHook.setPhoneNumber(formatPhoneNumber(e.target.value))}
+              placeholder="090-1234-5678"
+              inputMode="tel"
+            />
+            <p className="text-xs text-muted-foreground">
+              緊急連絡に利用します。
+            </p>
+          </div>
+
+          <div className="space-y-2">
             <label className="text-sm font-medium">生年月日</label>
             <Input
               type="date"
@@ -303,7 +325,7 @@ export function ProfileForm({ isEdit, nextUrl }: ProfileFormProps) {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">サブパート（複数選択）</label>
+            <label className="text-sm font-medium">サブパート（複数選択化）</label>
             <div className="max-h-32 overflow-y-auto rounded-md border bg-muted/20 p-3">
               <div className="flex flex-wrap gap-2">
                 {partOptions.map((part) => (

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { formatPhoneNumber } from "@/lib/phone";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -42,6 +43,7 @@ export async function POST(request: Request) {
     studentId?: string | null;
     enrollmentYear?: number | null;
     birthDate?: string | null;
+    phoneNumber?: string | null;
   };
 
   const profileId = (body.profileId ?? "").trim();
@@ -89,6 +91,7 @@ export async function POST(request: Request) {
       ? enrollmentYearRaw
       : null;
   const birthDateValue = (body.birthDate ?? "").toString().trim();
+  const phoneNumberValue = formatPhoneNumber((body.phoneNumber ?? "").toString());
 
   const { error: upsertError } = await adminClient
     .from("profile_private")
@@ -98,6 +101,7 @@ export async function POST(request: Request) {
         student_id: studentIdValue,
         enrollment_year: enrollmentYear,
         birth_date: birthDateValue || null,
+        phone_number: phoneNumberValue || null,
       },
       { onConflict: "profile_id" }
     );

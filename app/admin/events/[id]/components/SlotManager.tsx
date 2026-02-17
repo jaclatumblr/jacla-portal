@@ -335,13 +335,22 @@ export function SlotManager({
         );
         const showEndSlot = [...orderedSlots]
             .reverse()
-            .find((slot) => slot.slot_phase === "show" && slot.end_time);
+            .find((slot) => slot.slot_type === "band" && slot.slot_phase === "show" && slot.end_time);
+        const cleanupEndSlot = [...orderedSlots]
+            .reverse()
+            .find((slot) => {
+                const note = slot.note?.trim() ?? "";
+                return (
+                    (note === CLEANUP_NOTE || note === CLEANUP_NOTE_ALT) &&
+                    Boolean(slot.end_time)
+                );
+            });
 
         const derivedAssembly = prepSlot?.start_time ?? null;
         const derivedRehearsal = prepSlot?.end_time ?? rehearsalSlot?.start_time ?? null;
-        const derivedOpen = showStartSlot?.start_time ?? null;
-        const derivedClose = showEndSlot?.end_time ?? null;
-        const restStart = restSlot?.start_time ?? null;
+        const derivedOpen = restSlot?.start_time ?? showStartSlot?.start_time ?? null;
+        const derivedStart = showStartSlot?.start_time ?? null;
+        const derivedClose = cleanupEndSlot?.end_time ?? showEndSlot?.end_time ?? null;
 
         return [
             {
@@ -360,7 +369,13 @@ export function SlotManager({
                 key: "open",
                 label: "\u958B\u5834",
                 setting: event.open_time ?? null,
-                actual: restStart ?? derivedOpen,
+                actual: derivedOpen,
+            },
+            {
+                key: "start",
+                label: "\u958B\u6F14",
+                setting: event.start_time ?? null,
+                actual: derivedStart,
             },
             {
                 key: "close",
@@ -369,7 +384,7 @@ export function SlotManager({
                 actual: derivedClose,
             },
         ];
-    }, [orderedSlots, event.assembly_time, event.rehearsal_start_time, event.open_time, event.end_time]);
+    }, [orderedSlots, event.assembly_time, event.rehearsal_start_time, event.open_time, event.start_time, event.end_time]);
 
     const timeCheckStatus = (setting: string | null, actual: string | null) => {
         if (!setting && !actual) return { label: "\u672A\u8A2D\u5B9A", tone: "text-muted-foreground" };
@@ -660,6 +675,10 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
 
         const prepIndex = next.findIndex((slot) => slot.note?.trim() === PREP_NOTE);
         const restIndex = next.findIndex((slot) => slot.note?.trim() === REST_NOTE);
+        const cleanupIndex = next.findIndex((slot) => {
+            const note = slot.note?.trim() ?? "";
+            return note === CLEANUP_NOTE || note === CLEANUP_NOTE_ALT;
+        });
         const firstRehearsalIndex = next.findIndex(
             (slot) =>
                 slot.slot_type === "band" &&
@@ -671,7 +690,7 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
         const lastShowIndex = (() => {
             for (let index = next.length - 1; index >= 0; index -= 1) {
                 const slot = next[index];
-                if (slot.slot_phase === "show" && getSlotDurationMin(slot) != null) {
+                if (slot.slot_type === "band" && slot.slot_phase === "show" && getSlotDurationMin(slot) != null) {
                     return index;
                 }
             }
@@ -681,6 +700,7 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
         const assemblyMin = parseTime(event.assembly_time ?? null);
         const rehearsalMin = parseTime(event.rehearsal_start_time ?? null);
         const openMin = parseTime(event.open_time ?? null);
+        const startMin = parseTime(event.start_time ?? null);
         const closeMin = parseTime(event.end_time ?? null);
 
         if (prepIndex >= 0) {
@@ -709,17 +729,39 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
             next[openAnchorIndex] = setSlotStartKeepingDuration(next[openAnchorIndex], openMin);
         }
 
-        if (closeMin != null && lastShowIndex >= 0) {
-            next[lastShowIndex] = setSlotEndKeepingDuration(next[lastShowIndex], closeMin);
+        if (firstShowIndex >= 0 && startMin != null) {
+            next[firstShowIndex] = setSlotStartKeepingDuration(next[firstShowIndex], startMin);
         }
 
         if (restIndex >= 0) {
-            const restStartMin = parseTime(next[restIndex].start_time ?? null);
+            let restStartMin = parseTime(next[restIndex].start_time ?? null);
+            const lastRehearsalBeforeRestIndex = (() => {
+                for (let index = restIndex - 1; index >= 0; index -= 1) {
+                    const slot = next[index];
+                    if (
+                        slot.slot_type === "band" &&
+                        (slot.slot_phase === "rehearsal_normal" || slot.slot_phase === "rehearsal_pre")
+                    ) {
+                        return index;
+                    }
+                }
+                return -1;
+            })();
+
+            if (lastRehearsalBeforeRestIndex >= 0) {
+                const rehearsalEndMin = parseTime(next[lastRehearsalBeforeRestIndex].end_time ?? null);
+                if (rehearsalEndMin != null) {
+                    restStartMin = rehearsalEndMin;
+                    next[restIndex] = setSlotStartKeepingDuration(next[restIndex], rehearsalEndMin);
+                }
+            }
 
             if (lastShowIndex > restIndex) {
                 let cursor = parseTime(next[lastShowIndex].start_time ?? null);
                 if (cursor != null) {
-                    for (let index = lastShowIndex - 1; index > restIndex; index -= 1) {
+                    const backwardAnchorIndex =
+                        startMin != null && firstShowIndex > restIndex ? firstShowIndex : restIndex;
+                    for (let index = lastShowIndex - 1; index > backwardAnchorIndex; index -= 1) {
                         const duration = getSlotDurationMin(next[index]);
                         if (duration == null || cursor == null) {
                             cursor = null;
@@ -732,7 +774,8 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                 }
 
                 let firstAfterRestIndex = -1;
-                for (let index = restIndex + 1; index < next.length; index += 1) {
+                const firstAfterAnchor = firstShowIndex > restIndex ? firstShowIndex : restIndex + 1;
+                for (let index = firstAfterAnchor; index < next.length; index += 1) {
                     if (getSlotDurationMin(next[index]) != null) {
                         firstAfterRestIndex = index;
                         break;
@@ -752,8 +795,25 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
             }
         }
 
-        if (closeMin != null && lastShowIndex >= 0) {
-            next[lastShowIndex] = setSlotEndKeepingDuration(next[lastShowIndex], closeMin);
+        if (closeMin != null) {
+            if (cleanupIndex >= 0) {
+                if (lastShowIndex >= 0) {
+                    const showEndMin = parseTime(next[lastShowIndex].end_time ?? null);
+                    if (showEndMin != null) {
+                        next[cleanupIndex] = {
+                            ...next[cleanupIndex],
+                            start_time: formatTime(normalizeDayMinutes(showEndMin)),
+                            end_time: formatTime(normalizeDayMinutes(closeMin)),
+                        };
+                    } else {
+                        next[cleanupIndex] = setSlotEndKeepingDuration(next[cleanupIndex], closeMin);
+                    }
+                } else {
+                    next[cleanupIndex] = setSlotEndKeepingDuration(next[cleanupIndex], closeMin);
+                }
+            } else if (lastShowIndex >= 0) {
+                next[lastShowIndex] = setSlotEndKeepingDuration(next[lastShowIndex], closeMin);
+            }
         }
 
         return next.map((slot, index) => ({
@@ -1002,26 +1062,7 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
 
     const handleSave = async () => {
         setSaving(true);
-        const ensureRehearsalMin = (slot: EventSlot) => {
-            if (slot.slot_type !== "band") return slot;
-            if (slot.slot_phase !== "rehearsal_normal" && slot.slot_phase !== "rehearsal_pre") {
-                return slot;
-            }
-            const start = parseTime(slot.start_time ?? null);
-            const end = parseTime(slot.end_time ?? null);
-            if (start == null || end == null) return slot;
-            let duration = end - start;
-            if (duration < 0) duration += 24 * 60;
-            if (duration >= MIN_REHEARSAL_MIN) return slot;
-            const nextEnd = start + MIN_REHEARSAL_MIN;
-            const adjustedEnd = nextEnd >= 24 * 60 ? nextEnd - 24 * 60 : nextEnd;
-            return { ...slot, end_time: formatTime(adjustedEnd) };
-        };
-
-        const normalizedSlots = alignSlotsToEventTimeSettings(
-            orderedSlots.map(ensureRehearsalMin)
-        );
-        const payloads = normalizedSlots.map((slot, index) => {
+        const payloads = orderedSlots.map((slot, index) => {
             const note = slot.note?.trim() ?? "";
             let slotType = slot.slot_type;
             let nextNote = slot.note || null;

@@ -47,8 +47,11 @@ type EventRow = {
   status: string;
   event_type: string;
   venue: string | null;
+  assembly_time: string | null;
   open_time: string | null;
   start_time: string | null;
+  end_time: string | null;
+  rehearsal_start_time: string | null;
   default_changeover_min: number;
   tt_is_provisional: boolean;
   tt_is_published: boolean;
@@ -375,6 +378,203 @@ export default function AdminEventTimetableEditPage() {
     return duration;
   };
 
+  const diffForwardMinutes = (start: number, end: number) => {
+    let diff = end - start;
+    if (diff < 0) diff += DAY_MINUTES;
+    return diff;
+  };
+
+  const setSlotStartKeepingDuration = (slot: EventSlot, startMin: number) => {
+    const duration = slotDurationMin(slot);
+    const normalizedStart = normalizeDayMinutes(startMin);
+    if (duration == null) {
+      return { ...slot, start_time: formatTimeValue(normalizedStart) };
+    }
+    return {
+      ...slot,
+      start_time: formatTimeValue(normalizedStart),
+      end_time: formatTimeValue(normalizeDayMinutes(normalizedStart + duration)),
+    };
+  };
+
+  const setSlotEndKeepingDuration = (slot: EventSlot, endMin: number) => {
+    const duration = slotDurationMin(slot);
+    const normalizedEnd = normalizeDayMinutes(endMin);
+    if (duration == null) {
+      return { ...slot, end_time: formatTimeValue(normalizedEnd) };
+    }
+    const nextStart = normalizeDayMinutes(normalizedEnd - duration);
+    return {
+      ...slot,
+      start_time: formatTimeValue(nextStart),
+      end_time: formatTimeValue(normalizedEnd),
+    };
+  };
+
+  const alignSlotsToEventTimeSettings = (source: EventSlot[]) => {
+    if (source.length === 0) return source;
+
+    const sorted = [...source].sort((a, b) => {
+      const orderA = a.order_in_event ?? Number.MAX_SAFE_INTEGER;
+      const orderB = b.order_in_event ?? Number.MAX_SAFE_INTEGER;
+      if (orderA !== orderB) return orderA - orderB;
+      const startA = a.start_time ?? "";
+      const startB = b.start_time ?? "";
+      if (startA !== startB) return startA.localeCompare(startB);
+      return (a.note ?? "").localeCompare(b.note ?? "");
+    });
+
+    const next: EventSlot[] = compactConsecutiveTimedSlots(sorted).map((slot, index) => ({
+      ...slot,
+      order_in_event: index + 1,
+    }));
+
+    const prepIndex = next.findIndex((slot) => slotPhaseKey(slot) === "prep");
+    const restIndex = next.findIndex((slot) => slotPhaseKey(slot) === "rest");
+    const cleanupIndex = next.findIndex((slot) => slotPhaseKey(slot) === "cleanup");
+    const firstRehearsalIndex = next.findIndex(
+      (slot) =>
+        slot.slot_type === "band" &&
+        (slot.slot_phase === "rehearsal_normal" || slot.slot_phase === "rehearsal_pre")
+    );
+    const firstShowIndex = next.findIndex(
+      (slot) => slot.slot_type === "band" && slot.slot_phase === "show"
+    );
+    const lastShowIndex = (() => {
+      for (let index = next.length - 1; index >= 0; index -= 1) {
+        const slot = next[index];
+        if (slot.slot_type === "band" && slot.slot_phase === "show" && slotDurationMin(slot) != null) {
+          return index;
+        }
+      }
+      return -1;
+    })();
+
+    const assemblyMin = parseTimeValue(event?.assembly_time ?? null);
+    const rehearsalMin = parseTimeValue(event?.rehearsal_start_time ?? null);
+    const openMin = parseTimeValue(event?.open_time ?? null);
+    const startMin = parseTimeValue(event?.start_time ?? null);
+    const closeMin = parseTimeValue(event?.end_time ?? null);
+
+    if (prepIndex >= 0) {
+      if (assemblyMin != null && rehearsalMin != null) {
+        const duration = diffForwardMinutes(assemblyMin, rehearsalMin);
+        if (duration > 0) {
+          next[prepIndex] = {
+            ...next[prepIndex],
+            start_time: formatTimeValue(normalizeDayMinutes(assemblyMin)),
+            end_time: formatTimeValue(normalizeDayMinutes(rehearsalMin)),
+          };
+        } else {
+          next[prepIndex] = setSlotStartKeepingDuration(next[prepIndex], assemblyMin);
+        }
+      } else if (assemblyMin != null) {
+        next[prepIndex] = setSlotStartKeepingDuration(next[prepIndex], assemblyMin);
+      } else if (rehearsalMin != null) {
+        next[prepIndex] = setSlotEndKeepingDuration(next[prepIndex], rehearsalMin);
+      }
+    } else if (firstRehearsalIndex >= 0 && rehearsalMin != null) {
+      next[firstRehearsalIndex] = setSlotStartKeepingDuration(next[firstRehearsalIndex], rehearsalMin);
+    }
+
+    const openAnchorIndex = restIndex >= 0 ? restIndex : firstShowIndex;
+    if (openAnchorIndex >= 0 && openMin != null) {
+      next[openAnchorIndex] = setSlotStartKeepingDuration(next[openAnchorIndex], openMin);
+    }
+
+    if (firstShowIndex >= 0 && startMin != null) {
+      next[firstShowIndex] = setSlotStartKeepingDuration(next[firstShowIndex], startMin);
+    }
+
+    if (restIndex >= 0) {
+      let restStartMin = parseTimeValue(next[restIndex].start_time ?? null);
+      const lastRehearsalBeforeRestIndex = (() => {
+        for (let index = restIndex - 1; index >= 0; index -= 1) {
+          const slot = next[index];
+          if (
+            slot.slot_type === "band" &&
+            (slot.slot_phase === "rehearsal_normal" || slot.slot_phase === "rehearsal_pre")
+          ) {
+            return index;
+          }
+        }
+        return -1;
+      })();
+
+      if (lastRehearsalBeforeRestIndex >= 0) {
+        const rehearsalEndMin = parseTimeValue(next[lastRehearsalBeforeRestIndex].end_time ?? null);
+        if (rehearsalEndMin != null) {
+          restStartMin = rehearsalEndMin;
+          next[restIndex] = setSlotStartKeepingDuration(next[restIndex], rehearsalEndMin);
+        }
+      }
+
+      if (lastShowIndex > restIndex) {
+        const backwardAnchorIndex =
+          startMin != null && firstShowIndex > restIndex ? firstShowIndex : restIndex;
+        let cursor = parseTimeValue(next[lastShowIndex].start_time ?? null);
+        if (cursor != null) {
+          for (let index = lastShowIndex - 1; index > backwardAnchorIndex; index -= 1) {
+            const duration = slotDurationMin(next[index]);
+            if (duration == null || cursor == null) {
+              cursor = null;
+              continue;
+            }
+            const endCursor = cursor;
+            next[index] = setSlotEndKeepingDuration(next[index], endCursor);
+            cursor = parseTimeValue(next[index].start_time ?? null);
+          }
+        }
+
+        let firstAfterRestIndex = -1;
+        const firstAfterAnchor = firstShowIndex > restIndex ? firstShowIndex : restIndex + 1;
+        for (let index = firstAfterAnchor; index < next.length; index += 1) {
+          if (slotDurationMin(next[index]) != null) {
+            firstAfterRestIndex = index;
+            break;
+          }
+        }
+
+        if (restStartMin != null && firstAfterRestIndex > restIndex) {
+          const firstAfterStart = parseTimeValue(next[firstAfterRestIndex].start_time ?? null);
+          if (firstAfterStart != null) {
+            const restDuration = Math.max(1, diffForwardMinutes(restStartMin, firstAfterStart));
+            next[restIndex] = applyDurationToSlot(
+              setSlotStartKeepingDuration(next[restIndex], restStartMin),
+              restDuration
+            );
+          }
+        }
+      }
+    }
+
+    if (closeMin != null) {
+      if (cleanupIndex >= 0) {
+        if (lastShowIndex >= 0) {
+          const showEndMin = parseTimeValue(next[lastShowIndex].end_time ?? null);
+          if (showEndMin != null) {
+            next[cleanupIndex] = {
+              ...next[cleanupIndex],
+              start_time: formatTimeValue(normalizeDayMinutes(showEndMin)),
+              end_time: formatTimeValue(normalizeDayMinutes(closeMin)),
+            };
+          } else {
+            next[cleanupIndex] = setSlotEndKeepingDuration(next[cleanupIndex], closeMin);
+          }
+        } else {
+          next[cleanupIndex] = setSlotEndKeepingDuration(next[cleanupIndex], closeMin);
+        }
+      } else if (lastShowIndex >= 0) {
+        next[lastShowIndex] = setSlotEndKeepingDuration(next[lastShowIndex], closeMin);
+      }
+    }
+
+    return next.map((slot, index) => ({
+      ...slot,
+      order_in_event: index + 1,
+    }));
+  };
+
   const slotDurationLabel = (slot: EventSlot) => {
     const duration = slotDurationMin(slot);
     if (duration == null) return "";
@@ -449,7 +649,7 @@ export default function AdminEventTimetableEditPage() {
         supabase
           .from("events")
           .select(
-            "id, name, date, status, event_type, venue, open_time, start_time, default_changeover_min, tt_is_provisional, tt_is_published, normal_rehearsal_order"
+            "id, name, date, status, event_type, venue, assembly_time, open_time, start_time, end_time, rehearsal_start_time, default_changeover_min, tt_is_provisional, tt_is_published, normal_rehearsal_order"
           )
           .eq("id", eventId)
           .maybeSingle(),
@@ -695,7 +895,7 @@ export default function AdminEventTimetableEditPage() {
 
   const handleCompactSlotTimes = () => {
     if (orderedSlots.length === 0) return;
-    const compacted = compactConsecutiveTimedSlots(orderedSlots);
+    const compacted = alignSlotsToEventTimeSettings(orderedSlots);
     const changed = compacted.reduce((count, slot, index) => {
       const prev = orderedSlots[index];
       if (!prev) return count;
@@ -716,8 +916,7 @@ export default function AdminEventTimetableEditPage() {
     setSaving(true);
     setError(null);
 
-    const compactedSlots = compactConsecutiveTimedSlots(orderedSlots);
-    const payloads = compactedSlots.map((slot, index) => {
+    const payloads = orderedSlots.map((slot, index) => {
       const note = slot.note?.trim() ?? "";
       let slotType = slot.slot_type;
       let nextNote = slot.note || null;

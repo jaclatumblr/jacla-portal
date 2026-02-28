@@ -381,6 +381,7 @@ begin
   if actor_is_member or actor_is_leader then
     if (
       to_jsonb(new)
+      - 'name'
       - 'repertoire_status'
       - 'stage_plot_data'
       - 'representative_name'
@@ -391,6 +392,7 @@ begin
       - 'updated_at'
     ) <> (
       to_jsonb(old)
+      - 'name'
       - 'repertoire_status'
       - 'stage_plot_data'
       - 'representative_name'

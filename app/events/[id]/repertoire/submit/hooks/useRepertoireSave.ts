@@ -143,19 +143,22 @@ export function useRepertoireSave({
     }
 
     if (status === "submitted") {
-      if (!canBypassClose && submitClosed) {
-        toast.error("現在、提出受付は停止されています。");
-        return;
-      }
-      if (!canBypassDeadline && isDeadlinePassed(submitDeadline)) {
-        toast.error("提出期限を過ぎたため提出できません。");
-        return;
-      }
-      const warnings = buildSubmitWarnings(normalizedSongs);
-      if (warnings.length > 0) {
-        const message = `未記入・不足があります。\n${warnings.join("\n")}\nこのまま提出しますか？`;
-        if (!window.confirm(message)) {
+      const isAlreadySubmitted = band.repertoire_status === "submitted";
+      if (!isAlreadySubmitted) {
+        if (!canBypassClose && submitClosed) {
+          toast.error("現在、提出受付は停止されています。");
           return;
+        }
+        if (!canBypassDeadline && isDeadlinePassed(submitDeadline)) {
+          toast.error("提出期限を過ぎたため提出できません。");
+          return;
+        }
+        const warnings = buildSubmitWarnings(normalizedSongs);
+        if (warnings.length > 0) {
+          const message = `未記入・不足があります。\n${warnings.join("\n")}\nこのまま提出しますか？`;
+          if (!window.confirm(message)) {
+            return;
+          }
         }
       }
     }

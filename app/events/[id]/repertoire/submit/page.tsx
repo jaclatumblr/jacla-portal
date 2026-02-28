@@ -6,6 +6,8 @@ import { Loader2 } from "lucide-react";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { SideNav } from "@/components/SideNav";
 import { Select } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRepertoireData } from "./hooks/useRepertoireData";
@@ -73,6 +75,7 @@ export default function RepertoireSubmitPage() {
     ? validDeadline.toLocaleString("ja-JP", { dateStyle: "medium", timeStyle: "short" })
     : null;
   const isDeadlinePassed = validDeadline ? Date.now() > validDeadline.getTime() : false;
+  const canEditBandNameAfterDeadline = isSubmitted && (isManualClosed || isDeadlinePassed);
   const submitDisabledReason = isManualClosed
     ? "提出受付は管理側で停止されています。"
     : isDeadlinePassed
@@ -103,6 +106,10 @@ export default function RepertoireSubmitPage() {
 
   const handleBandChange = (key: keyof BandRow, value: string | number | null) => {
     setBand((prev) => (prev ? { ...prev, [key]: value } : null));
+  };
+
+  const handleBandNameSave = async () => {
+    await saveRepertoire("submitted");
   };
 
   if (loading) {
@@ -160,6 +167,27 @@ export default function RepertoireSubmitPage() {
                   {isDeadlinePassed && (
                     <p className="mt-1 text-xs text-destructive">提出期限を過ぎています。下書き保存のみ可能です。</p>
                   )}
+                </div>
+              )}
+
+              {canEditBandNameAfterDeadline && (
+                <div className="rounded-2xl border border-border/60 bg-card/60 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                    <div className="w-full max-w-xl space-y-2">
+                      <label className="text-sm font-medium text-foreground">バンド名</label>
+                      <Input
+                        value={band.name}
+                        onChange={(e) => handleBandChange("name", e.target.value)}
+                        placeholder="バンド名"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        提出期限後でもバンド名のみ変更できます。
+                      </p>
+                    </div>
+                    <Button onClick={handleBandNameSave} disabled={saving}>
+                      {saving ? "保存中..." : "バンド名を保存"}
+                    </Button>
+                  </div>
                 </div>
               )}
               {availableBands.length > 1 && (

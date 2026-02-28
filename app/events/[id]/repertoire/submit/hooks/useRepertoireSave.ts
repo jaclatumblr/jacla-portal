@@ -195,8 +195,21 @@ export function useRepertoireSave({
     const localIds = new Set(stageMembers.map((m) => m.id).filter((id) => !id.startsWith("temp-")));
 
     const toDeleteIds = Array.from(currentDbIds).filter((id) => !localIds.has(id));
+    let memberError: { message?: string } | null = null;
     if (toDeleteIds.length > 0) {
-      await supabase.from("band_members").delete().in("id", toDeleteIds);
+      const { error: deleteMemberError } = await supabase.from("band_members").delete().in("id", toDeleteIds);
+      if (deleteMemberError) {
+        memberError = deleteMemberError;
+      }
+    }
+
+    const hasInvalidMemberUserId = stageMembers.some(
+      (member) => !member.userId || member.userId.startsWith("temp-")
+    );
+    if (hasInvalidMemberUserId) {
+      toast.error("メンバーの選択情報が不正です。メンバーを選び直してください。");
+      setSaving(false);
+      return;
     }
 
     const memberPayloads = stageMembers.map((m, index) => {
@@ -204,7 +217,7 @@ export function useRepertoireSave({
       return {
         ...(isTemp ? {} : { id: m.id }),
         band_id: band.id,
-        user_id: m.userId.startsWith("temp-") ? null : m.userId,
+        user_id: m.userId,
         instrument: m.instrument,
         position_x: m.x,
         position_y: m.y,
@@ -215,7 +228,27 @@ export function useRepertoireSave({
       };
     });
 
-    const { error: memberError } = await supabase.from("band_members").upsert(memberPayloads);
+    const existingMemberPayloads = memberPayloads.filter(
+      (payload): payload is (typeof payload & { id: string }) =>
+        typeof (payload as { id?: string }).id === "string"
+    );
+    const newMemberPayloads = memberPayloads.filter(
+      (payload) => typeof (payload as { id?: string }).id !== "string"
+    );
+
+    if (!memberError && existingMemberPayloads.length > 0) {
+      const { error } = await supabase
+        .from("band_members")
+        .upsert(existingMemberPayloads, { onConflict: "id" });
+      if (error) memberError = error;
+    }
+
+    if (!memberError && newMemberPayloads.length > 0) {
+      const { error } = await supabase
+        .from("band_members")
+        .insert(newMemberPayloads, { defaultToNull: false });
+      if (error) memberError = error;
+    }
 
     if (memberError) {
       console.error(memberError);
@@ -232,9 +265,13 @@ export function useRepertoireSave({
       normalizedSongs.map((s) => s.id).filter((id) => !id.startsWith("temp-"))
     );
     const deleteSongIds = Array.from(dbSongIds).filter((id) => !localSongIds.has(id));
+    let songError: { message?: string } | null = null;
 
     if (deleteSongIds.length > 0) {
-      await supabase.from("songs").delete().in("id", deleteSongIds);
+      const { error: deleteSongError } = await supabase.from("songs").delete().in("id", deleteSongIds);
+      if (deleteSongError) {
+        songError = deleteSongError;
+      }
     }
 
     const songPayloads = normalizedSongs.map((s, index) => {
@@ -266,7 +303,23 @@ export function useRepertoireSave({
       };
     });
 
-    const { error: songError } = await supabase.from("songs").upsert(songPayloads);
+    const existingSongPayloads = songPayloads.filter(
+      (payload): payload is (typeof payload & { id: string }) =>
+        typeof (payload as { id?: string }).id === "string"
+    );
+    const newSongPayloads = songPayloads.filter(
+      (payload) => typeof (payload as { id?: string }).id !== "string"
+    );
+
+    if (!songError && existingSongPayloads.length > 0) {
+      const { error } = await supabase.from("songs").upsert(existingSongPayloads, { onConflict: "id" });
+      if (error) songError = error;
+    }
+
+    if (!songError && newSongPayloads.length > 0) {
+      const { error } = await supabase.from("songs").insert(newSongPayloads, { defaultToNull: false });
+      if (error) songError = error;
+    }
 
     if (songError) {
       console.error(songError);

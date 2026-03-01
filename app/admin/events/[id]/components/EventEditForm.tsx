@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Save, Loader2, Trash2 } from "lucide-react";
+import { Save, Loader2, Trash2, Download } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,6 +43,7 @@ export function EventEditForm({ event, onRefresh }: EventEditFormProps) {
     const router = useRouter();
     const [formData, setFormData] = useState<EventRow>(event);
     const [saving, setSaving] = useState(false);
+    const [exportingRoster, setExportingRoster] = useState(false);
     const [deleting, setDeleting] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [deleteConfirmText, setDeleteConfirmText] = useState("");
@@ -131,6 +132,50 @@ export function EventEditForm({ event, onRefresh }: EventEditFormProps) {
         } else {
             toast.success("イベントを削除しました。");
             router.push("/admin");
+        }
+    };
+
+    const handleExportRosterTemplate = async () => {
+        setExportingRoster(true);
+        try {
+            const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+            const accessToken = sessionData.session?.access_token;
+            if (sessionError || !accessToken) {
+                throw new Error("Failed to get access token.");
+            }
+
+            const response = await fetch(`/api/admin/member-roster-template?eventId=${encodeURIComponent(event.id)}`, {
+                method: "GET",
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                },
+            });
+            if (!response.ok) {
+                const errorText = await response.text().catch(() => "");
+                throw new Error(`Failed to export roster template (${response.status}): ${errorText}`);
+            }
+
+            const blob = await response.blob();
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            const contentDisposition = response.headers.get("content-disposition") ?? "";
+            const utf8NameMatch = contentDisposition.match(/filename\\*=UTF-8''([^;]+)/i);
+            const decodedName = utf8NameMatch?.[1]
+                ? decodeURIComponent(utf8NameMatch[1])
+                : "event-member-roster.xlsx";
+            link.href = downloadUrl;
+            link.download = decodedName;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(downloadUrl);
+
+            toast.success("Roster template exported.");
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to export roster template.");
+        } finally {
+            setExportingRoster(false);
         }
     };
 
@@ -358,6 +403,19 @@ export function EventEditForm({ event, onRefresh }: EventEditFormProps) {
                             </div>
                         )}
 
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={handleExportRosterTemplate}
+                            disabled={exportingRoster || saving}
+                        >
+                            {exportingRoster ? (
+                                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                            ) : (
+                                <Download className="w-4 h-4 mr-2" />
+                            )}
+                            Export roster template
+                        </Button>
                         <Button onClick={handleSave} disabled={saving}>
                             {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
                             保存

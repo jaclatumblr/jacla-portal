@@ -23,6 +23,7 @@ export function ProfileForm({ isEdit, nextUrl }: ProfileFormProps) {
   const { session } = useAuth();
   const router = useRouter();
   const [saving, setSaving] = useState(false);
+  const normalizeStudentId = (value: string) => value.trim().toUpperCase();
 
   const profileHook = useProfileData();
   const { avatarInitialUrl, discordInitialId, discordInitialUsername, loading } = profileHook;
@@ -117,7 +118,7 @@ export function ProfileForm({ isEdit, nextUrl }: ProfileFormProps) {
       .upsert(
         {
           profile_id: session.user.id,
-          student_id: profileHook.studentId.trim(),
+          student_id: normalizeStudentId(profileHook.studentId),
           enrollment_year: profileHook.enrollmentYear
             ? Number(profileHook.enrollmentYear)
             : null,
@@ -264,7 +265,7 @@ export function ProfileForm({ isEdit, nextUrl }: ProfileFormProps) {
               </label>
               <Input
                 value={profileHook.studentId}
-                onChange={(e) => profileHook.setStudentId(e.target.value)}
+                onChange={(e) => profileHook.setStudentId(normalizeStudentId(e.target.value))}
                 placeholder="24A0000"
               />
             </div>

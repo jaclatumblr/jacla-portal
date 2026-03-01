@@ -79,6 +79,9 @@ const splitRealName = (value: string | null | undefined) => {
 const joinRealName = (family: string, given: string) =>
   [family.trim(), given.trim()].filter(Boolean).join(" ");
 
+const normalizeStudentId = (value: string | null | undefined) =>
+  (value ?? "").trim().toUpperCase();
+
 export function useProfileData() {
   const { session } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -212,7 +215,7 @@ export function useProfileData() {
       setPart(primaryPart ?? "");
       setSubParts(subs);
 
-      setStudentId(privateData?.student_id ?? "");
+      setStudentId(normalizeStudentId(privateData?.student_id));
       setEnrollmentYear(privateData?.enrollment_year?.toString() ?? "");
       setBirthDate(privateData?.birth_date ?? "");
       setPhoneNumber(formatPhoneNumber(privateData?.phone_number ?? ""));

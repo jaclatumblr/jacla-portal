@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
 import { Plus, Trash2, UserPlus } from "lucide-react";
@@ -19,14 +19,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   ProfileOption,
   StageMember,
   adminLeaderSet,
@@ -43,7 +35,7 @@ type MemberManagerProps = {
   readOnly?: boolean;
 };
 
-export function MemberManager({ members, profiles, myProfileId, setMembers, readOnly }: MemberManagerProps) {
+export function MemberManager({ members, profiles, setMembers, readOnly }: MemberManagerProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const clampPercent = (value: number) => Math.min(95, Math.max(5, value));
@@ -98,7 +90,7 @@ export function MemberManager({ members, profiles, myProfileId, setMembers, read
   const filteredProfiles = useMemo(() => {
     const search = searchTerm.trim().toLowerCase();
     const memberIds = new Set(members.map((m) => m.userId));
-    
+
     return profiles.filter((profile) => {
       if (memberIds.has(profile.id)) return false;
       if (adminLeaderSet.has(profile.leader ?? "")) return false;
@@ -111,9 +103,9 @@ export function MemberManager({ members, profiles, myProfileId, setMembers, read
   return (
     <Card className="bg-card/60">
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <div>
-            <CardTitle>メンバー構成</CardTitle>
+            <CardTitle>メンバー管理 ({members.length})</CardTitle>
             <CardDescription>
               ステージに上がるメンバーと担当パート、返し要望、持ち込み機材を登録します。
             </CardDescription>
@@ -130,7 +122,8 @@ export function MemberManager({ members, profiles, myProfileId, setMembers, read
                 <DialogTitle>メンバーを選択</DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
-                <Input disabled={readOnly}
+                <Input
+                  disabled={readOnly}
                   placeholder="名前で検索..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -164,17 +157,17 @@ export function MemberManager({ members, profiles, myProfileId, setMembers, read
         </div>
       </CardHeader>
       <CardContent>
-        <div className="space-y-3 md:hidden">
+        <div className="space-y-3 lg:hidden">
           {members.map((member) => {
             const primaryName = member.realName ?? member.name;
             const secondaryName = member.realName ? member.name : null;
             return (
-              <div key={member.id} className="rounded-md border border-border bg-card/40 p-3 space-y-3">
+              <div key={member.id} className="space-y-3 rounded-md border border-border bg-card/40 p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="font-medium truncate">{primaryName}</p>
+                    <p className="truncate font-medium">{primaryName}</p>
                     {secondaryName && (
-                      <span className="block text-xs text-muted-foreground truncate">{secondaryName}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{secondaryName}</span>
                     )}
                   </div>
                   <Button
@@ -194,7 +187,7 @@ export function MemberManager({ members, profiles, myProfileId, setMembers, read
                     disabled={readOnly}
                     value={member.instrument}
                     onChange={(e) => handleUpdate(member.id, "instrument", e.target.value)}
-                    placeholder="例: Gt.1 / 管1 / LINE2"
+                    placeholder="例: Gt.1 / Vo"
                     className="h-9"
                   />
                 </div>
@@ -205,7 +198,7 @@ export function MemberManager({ members, profiles, myProfileId, setMembers, read
                     disabled={readOnly}
                     value={member.monitorRequest}
                     onChange={(e) => handleUpdate(member.id, "monitorRequest", e.target.value)}
-                    placeholder="ボーカル大きめ"
+                    placeholder="例: Vo大きめ"
                     className="h-9"
                   />
                 </div>
@@ -216,7 +209,7 @@ export function MemberManager({ members, profiles, myProfileId, setMembers, read
                     disabled={readOnly}
                     value={member.monitorNote}
                     onChange={(e) => handleUpdate(member.id, "monitorNote", e.target.value)}
-                    placeholder="例: キーボード本体 / 譜面台"
+                    placeholder="例: キーボード持込"
                     className="h-9"
                   />
                 </div>
@@ -241,89 +234,79 @@ export function MemberManager({ members, profiles, myProfileId, setMembers, read
           )}
         </div>
 
-        <div className="hidden md:block rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[150px]">名前</TableHead>
-                <TableHead className="w-[150px]">パート/楽器</TableHead>
-                <TableHead>返し要望</TableHead>
-                <TableHead>持ち込み機材</TableHead>
-                <TableHead className="w-[80px] text-center">MC</TableHead>
-                <TableHead className="w-[50px]" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {members.map((member) => {
-                const primaryName = member.realName ?? member.name;
-                const secondaryName = member.realName ? member.name : null;
-                return (
-                  <TableRow key={member.id}>
-                    <TableCell className="font-medium">
-                      {primaryName}
-                      {secondaryName && (
-                        <span className="block text-xs text-muted-foreground">{secondaryName}</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        disabled={readOnly}
-                        value={member.instrument}
-                        onChange={(e) => handleUpdate(member.id, "instrument", e.target.value)}
-                        placeholder="例: Gt.1 / 管1 / LINE2"
-                        className="h-8"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        disabled={readOnly}
-                        value={member.monitorRequest}
-                        onChange={(e) => handleUpdate(member.id, "monitorRequest", e.target.value)}
-                        placeholder="ボーカル大きめ"
-                        className="h-8"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        disabled={readOnly}
-                        value={member.monitorNote}
-                        onChange={(e) => handleUpdate(member.id, "monitorNote", e.target.value)}
-                        placeholder="例: キーボード本体 / 譜面台"
-                        className="h-8"
-                      />
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <input
-                        type="checkbox"
-                        disabled={readOnly}
-                        checked={member.isMc}
-                        onChange={(e) => handleUpdate(member.id, "isMc", e.target.checked)}
-                        className="rounded border-gray-300"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        disabled={readOnly}
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                        onClick={() => handleRemove(member.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-              {members.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={6} className="py-4 text-center text-muted-foreground">
-                    メンバーがいません
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+        <div className="hidden lg:block max-h-[56vh] space-y-2 overflow-y-auto pr-1">
+          {members.map((member) => {
+            const primaryName = member.realName ?? member.name;
+            const secondaryName = member.realName ? member.name : null;
+            return (
+              <div key={member.id} className="rounded-md border border-border bg-card/40 p-3">
+                <div className="grid grid-cols-[minmax(180px,1fr)_minmax(220px,1.2fr)_auto_auto] items-end gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{primaryName}</p>
+                    {secondaryName && (
+                      <span className="block truncate text-xs text-muted-foreground">{secondaryName}</span>
+                    )}
+                  </div>
+                  <div className="grid gap-1">
+                    <label className="text-[11px] text-muted-foreground">パート/楽器</label>
+                    <Input
+                      disabled={readOnly}
+                      value={member.instrument}
+                      onChange={(e) => handleUpdate(member.id, "instrument", e.target.value)}
+                      placeholder="例: Gt.1 / Vo"
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                  <label className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      disabled={readOnly}
+                      checked={member.isMc}
+                      onChange={(e) => handleUpdate(member.id, "isMc", e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300"
+                    />
+                    MC
+                  </label>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    disabled={readOnly}
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    onClick={() => handleRemove(member.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <div className="grid gap-1">
+                    <label className="text-[11px] text-muted-foreground">返し要望</label>
+                    <Input
+                      disabled={readOnly}
+                      value={member.monitorRequest}
+                      onChange={(e) => handleUpdate(member.id, "monitorRequest", e.target.value)}
+                      placeholder="例: Vo大きめ"
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                  <div className="grid gap-1">
+                    <label className="text-[11px] text-muted-foreground">持ち込み機材</label>
+                    <Input
+                      disabled={readOnly}
+                      value={member.monitorNote}
+                      onChange={(e) => handleUpdate(member.id, "monitorNote", e.target.value)}
+                      placeholder="例: キーボード持込"
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {members.length === 0 && (
+            <div className="rounded-md border border-border bg-card/40 p-4 text-center text-sm text-muted-foreground">
+              メンバーがいません
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>

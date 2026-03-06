@@ -17,6 +17,7 @@ import { BandInfoForm } from "@/app/events/[id]/repertoire/submit/components/Ban
 import { MemberManager } from "@/app/events/[id]/repertoire/submit/components/MemberManager";
 import { SetlistEditor } from "@/app/events/[id]/repertoire/submit/components/SetlistEditor";
 import { StagePlotEditor } from "@/app/events/[id]/repertoire/submit/components/StagePlotEditor";
+import { cn } from "@/lib/utils";
 import {
   BandRow,
   EntryType,
@@ -223,67 +224,81 @@ export function RepertoireSection({
     );
   }
 
+  const needsMemberScroll = memberDetails.length > 8;
+  const needsSetlistScroll = orderedSongs.length > 6;
+
   const previewContent = (
     <div className="space-y-3">
-      <div className="aspect-[2/1] rounded-lg border border-border bg-card/60 p-2">
-        <StagePlotPreview items={stageItems} members={stageMembers} />
-      </div>
+      <div className="grid gap-3 lg:grid-cols-[1.65fr_1fr]">
+        <div className="rounded-xl border border-border/80 bg-card/70 p-2 shadow-sm">
+          <StagePlotPreview
+            items={stageItems}
+            members={stageMembers}
+            className="aspect-[1.35/1] sm:aspect-[1.45/1] lg:aspect-[1.55/1]"
+          />
+        </div>
 
-      <div className="grid grid-cols-3 gap-2">
-        <div className="min-w-0 rounded border border-border bg-card/60 p-2">
-          <div className="mb-0.5 text-[10px] font-medium">共通</div>
-          <div className="line-clamp-2 break-words text-[10px] text-muted-foreground">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:grid-cols-1">
+        <div className="min-w-0 rounded-lg border border-border/80 bg-card/70 p-3">
+          <div className="mb-1 text-xs font-semibold tracking-wide text-foreground">共通</div>
+          <div className="line-clamp-2 break-words text-xs leading-relaxed text-muted-foreground">
             {band.general_note || "-"}
           </div>
         </div>
-        <div className="min-w-0 rounded border border-border bg-card/60 p-2">
-          <div className="mb-0.5 text-[10px] font-medium">PA</div>
-          <div className="line-clamp-2 break-words text-[10px] text-muted-foreground">
+        <div className="min-w-0 rounded-lg border border-border/80 bg-card/70 p-3">
+          <div className="mb-1 text-xs font-semibold tracking-wide text-foreground">PA</div>
+          <div className="line-clamp-2 break-words text-xs leading-relaxed text-muted-foreground">
             {band.sound_note || "-"}
           </div>
         </div>
-        <div className="min-w-0 rounded border border-border bg-card/60 p-2">
-          <div className="mb-0.5 text-[10px] font-medium">照明</div>
-          <div className="line-clamp-2 break-words text-[10px] text-muted-foreground">
+        <div className="min-w-0 rounded-lg border border-border/80 bg-card/70 p-3">
+          <div className="mb-1 text-xs font-semibold tracking-wide text-foreground">照明</div>
+          <div className="line-clamp-2 break-words text-xs leading-relaxed text-muted-foreground">
             {band.lighting_note || "-"}
             {band.lighting_total_min != null && ` (${band.lighting_total_min}分)`}
           </div>
         </div>
       </div>
+      </div>
 
       <div className="grid gap-3 lg:grid-cols-2">
-        <div className="min-w-0 rounded-lg border border-border bg-card/60 p-3">
-          <div className="mb-2 text-xs font-semibold">メンバー ({memberDetails.length})</div>
-          <div className="max-h-44 overflow-y-auto overflow-x-hidden">
-            <table className="w-full text-xs">
-              <thead className="sticky top-0 bg-card/60 text-[11px] text-muted-foreground">
+        <div className="min-w-0 rounded-xl border border-border/80 bg-card/70 p-3">
+          <div className="mb-3 text-sm font-semibold">メンバー ({memberDetails.length})</div>
+          <div
+            className={cn(
+              "overflow-x-hidden pr-1",
+              needsMemberScroll ? "max-h-56 overflow-y-auto" : "overflow-y-visible"
+            )}
+          >
+            <table className="w-full text-[12px]">
+              <thead className="sticky top-0 bg-card/90 text-[12px] text-muted-foreground backdrop-blur">
                 <tr className="border-b border-border">
-                  <th className="py-1 text-left">パート</th>
-                  <th className="py-1 text-left">名前</th>
-                  <th className="w-6 py-1 text-left">MC</th>
-                  <th className="py-1 text-left">返し要望</th>
-                  <th className="py-1 text-left">持ち込み機材/備考</th>
+                  <th className="py-1.5 text-left">パート</th>
+                  <th className="py-1.5 text-left">名前</th>
+                  <th className="w-8 py-1.5 text-left">MC</th>
+                  <th className="py-1.5 text-left">返し要望</th>
+                  <th className="py-1.5 text-left">持ち込み機材/備考</th>
                 </tr>
               </thead>
               <tbody>
                 {memberDetails.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-1 text-muted-foreground">
+                    <td colSpan={5} className="py-1.5 text-muted-foreground">
                       メンバーが登録されていません。
                     </td>
                   </tr>
                 ) : (
                   memberDetails.map((member) => (
                     <tr key={member.id} className="border-b border-border/50">
-                      <td className="max-w-20 truncate py-1 text-muted-foreground">
+                      <td className="max-w-24 truncate py-1.5 text-muted-foreground">
                         {member.instrument}
                       </td>
-                      <td className="max-w-24 truncate py-1">{member.name}</td>
-                      <td className="py-1">{member.isMc ? "○" : ""}</td>
-                      <td className="max-w-24 truncate py-1 text-muted-foreground">
+                      <td className="max-w-28 truncate py-1.5">{member.name}</td>
+                      <td className="py-1.5">{member.isMc ? "○" : ""}</td>
+                      <td className="max-w-28 truncate py-1.5 text-muted-foreground">
                         {member.monitorRequest}
                       </td>
-                      <td className="max-w-24 truncate py-1 text-muted-foreground">
+                      <td className="max-w-28 truncate py-1.5 text-muted-foreground">
                         {member.monitorNote}
                       </td>
                     </tr>
@@ -294,30 +309,35 @@ export function RepertoireSection({
           </div>
         </div>
 
-        <div className="min-w-0 rounded-lg border border-border bg-card/60 p-3">
-          <div className="mb-2 text-xs font-semibold">セットリスト ({orderedSongs.length})</div>
-          <div className="max-h-44 overflow-y-auto overflow-x-hidden">
-            <table className="w-full text-xs">
-              <thead className="sticky top-0 bg-card/60 text-[11px] text-muted-foreground">
+        <div className="min-w-0 rounded-xl border border-border/80 bg-card/70 p-3">
+          <div className="mb-3 text-sm font-semibold">セットリスト ({orderedSongs.length})</div>
+          <div
+            className={cn(
+              "overflow-x-hidden pr-1",
+              needsSetlistScroll ? "max-h-56 overflow-y-auto" : "overflow-y-visible"
+            )}
+          >
+            <table className="w-full text-[12px]">
+              <thead className="sticky top-0 bg-card/90 text-[12px] text-muted-foreground backdrop-blur">
                 <tr className="border-b border-border">
-                  <th className="w-5 py-1 text-left">#</th>
-                  <th className="py-1 text-left">曲名 / MC</th>
-                  <th className="w-12 py-1 text-left">時間</th>
+                  <th className="w-8 py-1.5 text-left">#</th>
+                  <th className="py-1.5 text-left">曲名 / MC</th>
+                  <th className="w-14 py-1.5 text-left">時間</th>
                 </tr>
               </thead>
               <tbody>
                 {orderedSongs.length === 0 ? (
                   <tr>
-                    <td colSpan={3} className="py-1 text-muted-foreground">
+                    <td colSpan={3} className="py-1.5 text-muted-foreground">
                       セットリストが登録されていません。
                     </td>
                   </tr>
                 ) : (
                   orderedSongs.map((song, index) => (
                     <tr key={song.id} className="border-b border-border/50">
-                      <td className="py-1 text-muted-foreground">{index + 1}</td>
-                      <td className="py-1">
-                        <div className="truncate">
+                      <td className="py-1.5 text-muted-foreground">{index + 1}</td>
+                      <td className="py-1.5">
+                        <div className="line-clamp-2 break-words pr-1 leading-relaxed">
                           {song.entry_type === "mc" ? (
                             <>
                               <span className="text-muted-foreground">MC:</span>{" "}
@@ -333,20 +353,20 @@ export function RepertoireSection({
                                   rel="noreferrer"
                                   className="ml-0.5 text-primary"
                                 >
-                                  <ExternalLink className="inline h-2 w-2" />
+                                  <ExternalLink className="inline h-3 w-3" />
                                 </Link>
                               )}
                             </>
                           )}
                         </div>
-                        <div className="line-clamp-1 text-[11px] text-muted-foreground">
+                        <div className="line-clamp-1 text-[11px] leading-relaxed text-muted-foreground">
                           PA: {song.memo || "-"}
                         </div>
-                        <div className="line-clamp-1 text-[11px] text-muted-foreground">
+                        <div className="line-clamp-1 text-[11px] leading-relaxed text-muted-foreground">
                           照明: {formatLightingSummary(song)}
                         </div>
                       </td>
-                      <td className="py-1 text-muted-foreground">{getDurationText(song)}</td>
+                      <td className="py-1.5 text-muted-foreground">{getDurationText(song)}</td>
                     </tr>
                   ))
                 )}

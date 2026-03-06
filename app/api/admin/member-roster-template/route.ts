@@ -53,6 +53,8 @@ type RosterEntry = {
   role: string;
 };
 
+type ExcelJsLoadBuffer = Parameters<Workbook["xlsx"]["load"]>[0];
+
 const sanitizeFileName = (value: string) =>
   value.replace(/[\\/:*?"<>|]/g, "_").replace(/\s+/g, " ").trim();
 
@@ -150,7 +152,7 @@ const buildRosterWorkbook = async (
   eventMemberEntries: RosterEntry[]
 ) => {
   const workbook = new Workbook();
-  await workbook.xlsx.load(templateBuffer);
+  await workbook.xlsx.load(templateBuffer as unknown as ExcelJsLoadBuffer);
 
   const allSheet = workbook.getWorksheet(allMembersSheetName) ?? workbook.worksheets[0];
   const eventSheet = workbook.getWorksheet(eventMembersSheetName) ?? workbook.worksheets[1];
@@ -488,7 +490,7 @@ export async function GET(request: Request) {
   const downloadFilename = `${asciiEventName}_member_roster.xlsx`;
   const downloadFilenameUtf8 = `${eventName}_\u69cb\u6210\u54e1\u540d\u7c3f.xlsx`;
 
-  return new NextResponse(outputBuffer, {
+  return new NextResponse(new Uint8Array(outputBuffer), {
     status: 200,
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

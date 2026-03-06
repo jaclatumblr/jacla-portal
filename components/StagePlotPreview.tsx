@@ -53,12 +53,12 @@ export function StagePlotPreview({
   return (
     <div
       className={cn(
-        "relative w-full aspect-[2/1] rounded-lg border border-border bg-zinc-900 overflow-hidden",
+        "relative w-full aspect-[2/1] rounded-xl border border-border/80 bg-zinc-900/95 overflow-hidden shadow-inner",
         className
       )}
     >
       <div
-        className="absolute inset-0 opacity-20 pointer-events-none"
+        className="absolute inset-0 opacity-30 pointer-events-none"
         style={{
           backgroundImage:
             "linear-gradient(to right, #333 1px, transparent 1px), linear-gradient(to bottom, #333 1px, transparent 1px)",
@@ -66,24 +66,24 @@ export function StagePlotPreview({
         }}
       />
 
-      <div className="absolute top-2 left-4 text-xs font-bold text-muted-foreground pointer-events-none select-none">
+      <div className="absolute top-2 left-4 rounded bg-zinc-900/70 px-2 py-0.5 text-xs font-semibold text-zinc-300 pointer-events-none select-none">
         舞台奥 (Stage Back)
       </div>
-      <div className="absolute bottom-2 left-4 text-xs font-bold text-muted-foreground pointer-events-none select-none">
+      <div className="absolute bottom-2 left-4 rounded bg-zinc-900/70 px-2 py-0.5 text-xs font-semibold text-zinc-300 pointer-events-none select-none">
         下手 (Shimote)
       </div>
-      <div className="absolute bottom-2 right-4 text-xs font-bold text-muted-foreground pointer-events-none select-none">
+      <div className="absolute bottom-2 right-4 rounded bg-zinc-900/70 px-2 py-0.5 text-xs font-semibold text-zinc-300 pointer-events-none select-none">
         上手 (Kamite)
       </div>
-      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs font-bold text-muted-foreground pointer-events-none select-none">
+      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded bg-zinc-900/70 px-2 py-0.5 text-xs font-semibold text-zinc-300 pointer-events-none select-none">
         客席 (Audience)
       </div>
 
       <div
-        className="absolute left-1/2 -translate-x-1/2 top-[8%] w-[20%] h-[25%] opacity-40 pointer-events-none select-none"
+        className="absolute left-1/2 -translate-x-1/2 top-[8%] w-[20%] h-[25%] opacity-50 pointer-events-none select-none"
         style={{ zIndex: 0 }}
       >
-        <StagePlotDrumKit className="w-full h-full text-zinc-600" />
+        <StagePlotDrumKit className="w-full h-full text-zinc-500" />
       </div>
 
       {fixedItems.map((item) => {
@@ -92,17 +92,17 @@ export function StagePlotPreview({
           <div
             key={item.id}
             className={cn(
-              "absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center text-[10px] font-bold text-zinc-400 bg-zinc-800 border border-zinc-600 rounded select-none pointer-events-none",
+              "absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center text-[11px] font-bold text-zinc-200 bg-zinc-800/90 border border-zinc-500 rounded-md select-none pointer-events-none shadow",
               !isMain && "border-dashed"
             )}
             style={{
               left: `${item.x}%`,
               top: `${item.y}%`,
-              width: isMain ? "12%" : "8%",
+              width: isMain ? "13%" : "8.5%",
               height: isMain ? "8%" : "8%",
             }}
           >
-            <span>{item.label}</span>
+            <span className="px-1 text-center leading-none">{item.label}</span>
           </div>
         );
       })}
@@ -111,7 +111,7 @@ export function StagePlotPreview({
         <div
           key={item.id}
           className={cn(
-            "absolute -translate-x-1/2 -translate-y-1/2 flex h-12 w-12 flex-col items-center justify-center rounded-full border border-muted-foreground text-[10px] font-semibold leading-none bg-background text-muted-foreground shadow-sm z-10",
+            "absolute -translate-x-1/2 -translate-y-1/2 flex h-11 w-11 flex-col items-center justify-center rounded-full border border-muted-foreground/90 bg-background/95 text-[11px] font-semibold leading-none text-muted-foreground shadow-sm z-10",
             item.dashed ? "border-dashed" : "border-solid"
           )}
           style={{
@@ -119,7 +119,7 @@ export function StagePlotPreview({
             top: `${clampPercent(item.y)}%`,
           }}
         >
-          <span className="max-w-[44px] overflow-hidden text-ellipsis px-1 leading-none">
+          <span className="max-w-[52px] overflow-hidden text-ellipsis px-1 text-center leading-tight">
             {item.label}
           </span>
         </div>
@@ -128,16 +128,16 @@ export function StagePlotPreview({
       {members.map((member) => (
         <div
           key={member.id}
-          className="absolute -translate-x-1/2 -translate-y-1/2 flex h-12 w-12 flex-col items-center justify-center rounded-full border border-primary bg-background text-foreground text-[10px] font-bold leading-none shadow-sm z-20"
+          className="absolute -translate-x-1/2 -translate-y-1/2 flex h-11 w-11 flex-col items-center justify-center rounded-full border border-primary bg-background/95 text-foreground text-[10px] font-bold leading-none shadow-sm z-20"
           style={{
             left: `${clampPercent(member.x)}%`,
             top: `${clampPercent(member.y)}%`,
           }}
         >
-          <span className="max-w-[44px] overflow-hidden text-ellipsis px-1 leading-none">
+          <span className="max-w-[48px] overflow-hidden text-ellipsis px-1 text-center leading-tight">
             {member.instrument ?? "Part"}
           </span>
-          <span className="max-w-[44px] overflow-hidden text-ellipsis text-[8px] leading-none text-muted-foreground">
+          <span className="max-w-[48px] overflow-hidden text-ellipsis px-1 text-center text-[8px] leading-tight text-muted-foreground">
             {member.name}
           </span>
         </div>

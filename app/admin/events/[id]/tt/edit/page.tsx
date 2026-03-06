@@ -302,14 +302,16 @@ export default function AdminEventTimetableEditPage() {
     return map;
   }, [bands]);
 
-  const orderedSlots = useMemo(() => {
-    return [...slots].sort((a, b) => {
+  const sortSlotsByOrder = (source: EventSlot[]) => {
+    return [...source].sort((a, b) => {
       const orderA = a.order_in_event ?? Number.MAX_SAFE_INTEGER;
       const orderB = b.order_in_event ?? Number.MAX_SAFE_INTEGER;
       if (orderA !== orderB) return orderA - orderB;
       return (a.start_time ?? "").localeCompare(b.start_time ?? "");
     });
-  }, [slots]);
+  };
+
+  const orderedSlots = useMemo(() => sortSlotsByOrder(slots), [slots]);
 
   const selectedSlot = useMemo(
     () => orderedSlots.find((slot) => slot.id === selectedSlotId) ?? orderedSlots[0] ?? null,
@@ -409,6 +411,36 @@ export default function AdminEventTimetableEditPage() {
       start_time: formatTimeValue(nextStart),
       end_time: formatTimeValue(normalizedEnd),
     };
+  };
+
+  const signedDiffMinutes = (fromMin: number, toMin: number) => {
+    let diff = toMin - fromMin;
+    if (diff > DAY_MINUTES / 2) diff -= DAY_MINUTES;
+    if (diff < -DAY_MINUTES / 2) diff += DAY_MINUTES;
+    return diff;
+  };
+
+  const shiftTimeByMinutes = (value: string | null, diffMin: number) => {
+    if (!value || diffMin === 0) return value;
+    const parsed = parseTimeValue(value);
+    if (parsed == null) return value;
+    return formatTimeValue(normalizeDayMinutes(parsed + diffMin));
+  };
+
+  const shiftSlotsBelow = (
+    source: EventSlot[],
+    slotIndex: number,
+    diffMin: number
+  ) => {
+    if (diffMin === 0) return source;
+    return source.map((slot, index) => {
+      if (index <= slotIndex) return slot;
+      return {
+        ...slot,
+        start_time: shiftTimeByMinutes(slot.start_time, diffMin),
+        end_time: shiftTimeByMinutes(slot.end_time, diffMin),
+      };
+    });
   };
 
   const alignSlotsToEventTimeSettings = (source: EventSlot[]) => {
@@ -869,28 +901,79 @@ export default function AdminEventTimetableEditPage() {
   };
 
   const handleSlotChange = <K extends keyof EventSlot>(id: string, key: K, value: EventSlot[K]) => {
-    setSlots((prev) =>
-      prev.map((slot) => {
-        if (slot.id !== id) return slot;
-        if (key === "slot_type") {
-          const nextType = value as EventSlot["slot_type"];
-          return {
-            ...slot,
-            slot_type: nextType,
-            band_id: nextType === "band" ? slot.band_id : null,
-          };
+    setSlots((prev) => {
+      const sorted = sortSlotsByOrder(prev);
+      const slotIndex = sorted.findIndex((slot) => slot.id === id);
+      if (slotIndex < 0) return prev;
+
+      const current = sorted[slotIndex];
+      let updated = current as EventSlot;
+      let diffMin = 0;
+
+      if (key === "slot_type") {
+        const nextType = value as EventSlot["slot_type"];
+        updated = {
+          ...current,
+          slot_type: nextType,
+          band_id: nextType === "band" ? current.band_id : null,
+        };
+      } else if (key === "start_time") {
+        const nextStart = parseTimeValue((value as string | null) ?? null);
+        const prevStart = parseTimeValue(current.start_time ?? null);
+        if (nextStart != null) {
+          updated = setSlotStartKeepingDuration(current, nextStart);
+        } else {
+          updated = { ...current, start_time: null };
         }
-        return { ...slot, [key]: value };
-      })
-    );
+        if (prevStart != null && nextStart != null) {
+          diffMin = signedDiffMinutes(prevStart, nextStart);
+        }
+      } else if (key === "end_time") {
+        const nextEnd = parseTimeValue((value as string | null) ?? null);
+        const prevEnd = parseTimeValue(current.end_time ?? null);
+        if (nextEnd != null) {
+          updated = {
+            ...current,
+            end_time: formatTimeValue(normalizeDayMinutes(nextEnd)),
+          };
+        } else {
+          updated = { ...current, end_time: null };
+        }
+        if (prevEnd != null && nextEnd != null) {
+          diffMin = signedDiffMinutes(prevEnd, nextEnd);
+        }
+      } else {
+        updated = { ...current, [key]: value };
+      }
+
+      const next = [...sorted];
+      next[slotIndex] = updated;
+      return shiftSlotsBelow(next, slotIndex, diffMin);
+    });
   };
 
   const handleSlotDurationChange = (id: string, raw: string) => {
     const duration = Number.parseInt(raw, 10);
     if (!Number.isFinite(duration) || duration <= 0) return;
-    setSlots((prev) =>
-      prev.map((slot) => (slot.id === id ? applyDurationToSlot(slot, duration) : slot))
-    );
+    setSlots((prev) => {
+      const sorted = sortSlotsByOrder(prev);
+      const slotIndex = sorted.findIndex((slot) => slot.id === id);
+      if (slotIndex < 0) return prev;
+
+      const current = sorted[slotIndex];
+      const prevEnd = parseTimeValue(current.end_time ?? null);
+      const updated = applyDurationToSlot(current, duration);
+      const nextEnd = parseTimeValue(updated.end_time ?? null);
+
+      const next = [...sorted];
+      next[slotIndex] = updated;
+
+      if (prevEnd == null || nextEnd == null) {
+        return next;
+      }
+      const diffMin = signedDiffMinutes(prevEnd, nextEnd);
+      return shiftSlotsBelow(next, slotIndex, diffMin);
+    });
   };
 
   const handleCompactSlotTimes = () => {

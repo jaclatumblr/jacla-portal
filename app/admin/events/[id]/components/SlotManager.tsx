@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
     DndContext,
     closestCenter,
@@ -18,7 +18,7 @@ import {
     arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Plus, Save, Trash2, RefreshCw, Download } from "lucide-react";
+import { GripVertical, Plus, Save, Trash2, RefreshCw, Download, Undo2, Redo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -97,6 +97,10 @@ export function SlotManager({
 }: SlotManagerProps) {
     const [saving, setSaving] = useState(false);
     const [generating, setGenerating] = useState(false);
+    const [historyPast, setHistoryPast] = useState<EventSlot[][]>([]);
+    const [historyFuture, setHistoryFuture] = useState<EventSlot[][]>([]);
+    const slotsRef = useRef<EventSlot[]>(slots);
+    const MAX_HISTORY_STEPS = 50;
     const [rehearsalOrder, setRehearsalOrder] = useState<"same" | "reverse">(
         event.normal_rehearsal_order ?? "same"
     );
@@ -111,8 +115,8 @@ export function SlotManager({
         })
     );
 
-    const orderedSlots = useMemo(() => {
-        return [...slots].sort((a, b) => {
+    const sortSlotsByOrder = (source: EventSlot[]) => {
+        return [...source].sort((a, b) => {
             const orderA = a.order_in_event ?? Number.MAX_SAFE_INTEGER;
             const orderB = b.order_in_event ?? Number.MAX_SAFE_INTEGER;
             if (orderA !== orderB) return orderA - orderB;
@@ -121,12 +125,86 @@ export function SlotManager({
             if (startA !== startB) return startA.localeCompare(startB);
             return (a.note ?? "").localeCompare(b.note ?? "");
         });
-    }, [slots]);
+    };
+
+    const orderedSlots = useMemo(() => sortSlotsByOrder(slots), [slots]);
+    const hasSelectedRehearsalBands = useMemo(
+        () =>
+            orderedSlots.some(
+                (slot) =>
+                    slot.slot_type === "band" &&
+                    (slot.slot_phase ?? "show") === rehearsalPhase
+            ),
+        [orderedSlots, rehearsalPhase]
+    );
+    const canUndo = historyPast.length > 0;
+    const canRedo = historyFuture.length > 0;
+
+    const cloneSlotsSnapshot = (source: EventSlot[]) => source.map((slot) => ({ ...slot }));
+
+    const areSlotsEqual = (left: EventSlot[], right: EventSlot[]) => {
+        if (left.length !== right.length) return false;
+        for (let index = 0; index < left.length; index += 1) {
+            const a = left[index];
+            const b = right[index];
+            if (!a || !b) return false;
+            if (
+                a.id !== b.id ||
+                a.event_id !== b.event_id ||
+                a.band_id !== b.band_id ||
+                a.slot_type !== b.slot_type ||
+                a.slot_phase !== b.slot_phase ||
+                a.order_in_event !== b.order_in_event ||
+                a.start_time !== b.start_time ||
+                a.end_time !== b.end_time ||
+                a.changeover_min !== b.changeover_min ||
+                a.note !== b.note
+            ) {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    const applySlotsUpdate = (
+        updater: EventSlot[] | ((prev: EventSlot[]) => EventSlot[]),
+        options?: { recordHistory?: boolean; clearHistory?: boolean }
+    ) => {
+        const previous = cloneSlotsSnapshot(slotsRef.current);
+        const computed =
+            typeof updater === "function"
+                ? updater(cloneSlotsSnapshot(previous))
+                : updater;
+        const next = cloneSlotsSnapshot(computed);
+        if (areSlotsEqual(previous, next)) {
+            if (options?.clearHistory) {
+                setHistoryPast([]);
+                setHistoryFuture([]);
+            }
+            return;
+        }
+
+        if (options?.clearHistory) {
+            setHistoryPast([]);
+            setHistoryFuture([]);
+        } else if (options?.recordHistory !== false) {
+            setHistoryPast((past) => {
+                const nextPast = [...past, previous];
+                return nextPast.length > MAX_HISTORY_STEPS
+                    ? nextPast.slice(nextPast.length - MAX_HISTORY_STEPS)
+                    : nextPast;
+            });
+            setHistoryFuture([]);
+        }
+
+        slotsRef.current = next;
+        setSlots(next);
+    };
 
     const slotPhaseOptions = [
-        { value: "show", label: "本番" },
-        { value: "rehearsal_normal", label: "通常リハ" },
-        { value: "rehearsal_pre", label: "直前リハ" },
+        { value: "show", label: "\u672C\u756A" },
+        { value: "rehearsal_normal", label: "\u901A\u5E38\u30EA\u30CF" },
+        { value: "rehearsal_pre", label: "\u76F4\u524D\u30EA\u30CF" },
     ];
 
     const DEFAULT_OTHER_DURATION_MIN = 60;
@@ -256,6 +334,32 @@ export function SlotManager({
         };
     };
 
+    const signedDiffMinutes = (fromMin: number, toMin: number) => {
+        let diff = toMin - fromMin;
+        if (diff > DAY_MINUTES / 2) diff -= DAY_MINUTES;
+        if (diff < -DAY_MINUTES / 2) diff += DAY_MINUTES;
+        return diff;
+    };
+
+    const shiftTimeByMinutes = (value: string | null, diffMin: number) => {
+        if (!value || diffMin === 0) return value;
+        const parsed = parseTime(value);
+        if (parsed == null) return value;
+        return formatTime(normalizeDayMinutes(parsed + diffMin));
+    };
+
+    const shiftSlotsBelow = (source: EventSlot[], slotIndex: number, diffMin: number) => {
+        if (diffMin === 0) return source;
+        return source.map((slot, index) => {
+            if (index <= slotIndex) return slot;
+            return {
+                ...slot,
+                start_time: shiftTimeByMinutes(slot.start_time ?? null, diffMin),
+                end_time: shiftTimeByMinutes(slot.end_time ?? null, diffMin),
+            };
+        });
+    };
+
     const suggestedBandDurationMin = (slot: EventSlot) => {
         const bandId = slot.band_id ?? null;
         if (!bandId) return null;
@@ -302,15 +406,6 @@ export function SlotManager({
         return value;
     };
 
-    const formatTimeRangeText = (value: string | null) => {
-        if (!value) return "-";
-        if (value.includes("-")) {
-            const [startText, endText] = value.split("-").map((v) => v.trim());
-            return `${formatTimeText(startText)}-${formatTimeText(endText)}`;
-        }
-        return formatTimeText(value);
-    };
-
     const slotMainLabelForExport = (slot: EventSlot, bandName: string) => {
         const note = slot.note?.trim() ?? "";
         if (slot.slot_type === "band") return bandName || "\u672A\u8A2D\u5B9A\u30D0\u30F3\u30C9";
@@ -320,87 +415,6 @@ export function SlotManager({
 
     const slotSectionLabelForExport = (slot: EventSlot) => {
         return slot.slot_phase === "show" ? "\u672C\u756A" : "\u30EA\u30CF";
-    };
-
-    const timeChecks = useMemo(() => {
-        const prepSlot = orderedSlots.find((slot) => slot.note?.trim() === PREP_NOTE);
-        const restSlot = orderedSlots.find((slot) => slot.note?.trim() === REST_NOTE);
-        const rehearsalSlot = orderedSlots.find(
-            (slot) =>
-                slot.slot_type === "band" &&
-                (slot.slot_phase === "rehearsal_normal" || slot.slot_phase === "rehearsal_pre")
-        );
-        const showStartSlot = orderedSlots.find(
-            (slot) => slot.slot_type === "band" && slot.slot_phase === "show"
-        );
-        const showEndSlot = [...orderedSlots]
-            .reverse()
-            .find((slot) => slot.slot_type === "band" && slot.slot_phase === "show" && slot.end_time);
-        const cleanupEndSlot = [...orderedSlots]
-            .reverse()
-            .find((slot) => {
-                const note = slot.note?.trim() ?? "";
-                return (
-                    (note === CLEANUP_NOTE || note === CLEANUP_NOTE_ALT) &&
-                    Boolean(slot.end_time)
-                );
-            });
-
-        const derivedAssembly = prepSlot?.start_time ?? null;
-        const derivedRehearsal = prepSlot?.end_time ?? rehearsalSlot?.start_time ?? null;
-        const derivedOpen = restSlot?.start_time ?? showStartSlot?.start_time ?? null;
-        const derivedStart = showStartSlot?.start_time ?? null;
-        const derivedClose = cleanupEndSlot?.end_time ?? showEndSlot?.end_time ?? null;
-
-        return [
-            {
-                key: "assembly",
-                label: "\u96C6\u5408",
-                setting: event.assembly_time ?? null,
-                actual: derivedAssembly,
-            },
-            {
-                key: "rehearsal",
-                label: "\u30EA\u30CF\u958B\u59CB",
-                setting: event.rehearsal_start_time ?? null,
-                actual: derivedRehearsal,
-            },
-            {
-                key: "open",
-                label: "\u958B\u5834",
-                setting: event.open_time ?? null,
-                actual: derivedOpen,
-            },
-            {
-                key: "start",
-                label: "\u958B\u6F14",
-                setting: event.start_time ?? null,
-                actual: derivedStart,
-            },
-            {
-                key: "close",
-                label: "\u9589\u6F14",
-                setting: event.end_time ?? null,
-                actual: derivedClose,
-            },
-        ];
-    }, [orderedSlots, event.assembly_time, event.rehearsal_start_time, event.open_time, event.start_time, event.end_time]);
-
-    const timeCheckStatus = (setting: string | null, actual: string | null) => {
-        if (!setting && !actual) return { label: "\u672A\u8A2D\u5B9A", tone: "text-muted-foreground" };
-        if (!setting) return { label: "\u672A\u8A2D\u5B9A", tone: "text-amber-400" };
-        if (!actual) return { label: "\u672A\u53CD\u6620", tone: "text-amber-400" };
-
-        const settingMin = parseTime(setting);
-        const actualMin = parseTime(actual);
-        const matched =
-            settingMin != null && actualMin != null
-                ? settingMin === actualMin
-                : setting.trim() === actual.trim();
-
-        return matched
-            ? { label: "OK", tone: "text-emerald-400" }
-            : { label: "NG", tone: "text-rose-400" };
     };
 
 type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
@@ -418,7 +432,7 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
         if (note === PREP_NOTE || note === CLEANUP_NOTE || note === CLEANUP_NOTE_ALT || note === REST_NOTE) {
             return "before:bg-amber-400/80";
         }
-        if (slot.slot_type === "break" || note.includes("転換")) {
+        if (slot.slot_type === "break" || note.includes("\u8EE2\u63DB")) {
             return "before:bg-amber-400/80";
         }
         const phase = slotPhaseKey(slot);
@@ -437,6 +451,49 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
         }
     }, [event.normal_rehearsal_order]);
 
+    useEffect(() => {
+        slotsRef.current = cloneSlotsSnapshot(slots);
+    }, [slots]);
+
+    useEffect(() => {
+        setHistoryPast([]);
+        setHistoryFuture([]);
+    }, [event.id]);
+
+    const handleUndo = () => {
+        if (historyPast.length === 0) return;
+        const previous = cloneSlotsSnapshot(historyPast[historyPast.length - 1] ?? []);
+        const current = cloneSlotsSnapshot(slotsRef.current);
+
+        setHistoryPast((past) => past.slice(0, -1));
+        setHistoryFuture((future) => {
+            const nextFuture = [current, ...future];
+            return nextFuture.length > MAX_HISTORY_STEPS
+                ? nextFuture.slice(0, MAX_HISTORY_STEPS)
+                : nextFuture;
+        });
+
+        slotsRef.current = previous;
+        setSlots(previous);
+    };
+
+    const handleRedo = () => {
+        if (historyFuture.length === 0) return;
+        const next = cloneSlotsSnapshot(historyFuture[0] ?? []);
+        const current = cloneSlotsSnapshot(slotsRef.current);
+
+        setHistoryFuture((future) => future.slice(1));
+        setHistoryPast((past) => {
+            const nextPast = [...past, current];
+            return nextPast.length > MAX_HISTORY_STEPS
+                ? nextPast.slice(nextPast.length - MAX_HISTORY_STEPS)
+                : nextPast;
+        });
+
+        slotsRef.current = next;
+        setSlots(next);
+    };
+
     const handleDragEnd = (event: DragEndEvent) => {
         const { active, over } = event;
         if (!over || active.id === over.id) return;
@@ -446,11 +503,17 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
         const newIndex = orderedSlots.findIndex((slot) => slot.id === overId);
         if (oldIndex < 0 || newIndex < 0) return;
 
-        const reordered = arrayMove(orderedSlots, oldIndex, newIndex).map((slot, index) => ({
-            ...slot,
-            order_in_event: index + 1,
-        }));
-        setSlots(reordered);
+        const moved = arrayMove(orderedSlots, oldIndex, newIndex);
+        const reordered = moved.map((slot, index) => {
+            const positionSource = orderedSlots[index];
+            return {
+                ...slot,
+                order_in_event: index + 1,
+                start_time: positionSource?.start_time ?? null,
+                end_time: positionSource?.end_time ?? null,
+            };
+        });
+        applySlotsUpdate(reordered);
     };
 
     const handleSlotChange = <K extends keyof EventSlot>(
@@ -458,45 +521,109 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
         key: K,
         value: EventSlot[K]
     ) => {
-        setSlots((prev) => prev.map((slot) => (slot.id === id ? { ...slot, [key]: value } : slot)));
+        applySlotsUpdate((prev) => {
+            const sorted = sortSlotsByOrder(prev);
+            const slotIndex = sorted.findIndex((slot) => slot.id === id);
+            if (slotIndex < 0) return prev;
+
+            const current = sorted[slotIndex];
+            let updated: EventSlot = current;
+            let diffMin = 0;
+
+            if (key === "start_time") {
+                const nextStart = parseTime((value as string | null) ?? null);
+                const prevStart = parseTime(current.start_time ?? null);
+                if (nextStart != null) {
+                    updated = setSlotStartKeepingDuration(current, nextStart);
+                } else {
+                    updated = { ...current, start_time: null };
+                }
+                if (prevStart != null && nextStart != null) {
+                    diffMin = signedDiffMinutes(prevStart, nextStart);
+                }
+            } else if (key === "end_time") {
+                const nextEnd = parseTime((value as string | null) ?? null);
+                const prevEnd = parseTime(current.end_time ?? null);
+                if (nextEnd != null) {
+                    updated = {
+                        ...current,
+                        end_time: formatTime(normalizeDayMinutes(nextEnd)),
+                    };
+                } else {
+                    updated = { ...current, end_time: null };
+                }
+                if (prevEnd != null && nextEnd != null) {
+                    diffMin = signedDiffMinutes(prevEnd, nextEnd);
+                }
+            } else {
+                updated = { ...current, [key]: value };
+            }
+
+            const next = [...sorted];
+            next[slotIndex] = updated;
+            return shiftSlotsBelow(next, slotIndex, diffMin);
+        });
     };
 
     const handleSlotDurationChange = (id: string, raw: string) => {
         const duration = Number.parseInt(raw, 10);
         if (!Number.isFinite(duration) || duration <= 0) return;
-        setSlots((prev) =>
-            prev.map((slot) => (slot.id === id ? applyDurationToSlot(slot, duration) : slot))
-        );
+        applySlotsUpdate((prev) => {
+            const sorted = sortSlotsByOrder(prev);
+            const slotIndex = sorted.findIndex((slot) => slot.id === id);
+            if (slotIndex < 0) return prev;
+
+            const current = sorted[slotIndex];
+            const prevEnd = parseTime(current.end_time ?? null);
+            const updated = applyDurationToSlot(current, duration);
+            const nextEnd = parseTime(updated.end_time ?? null);
+
+            const next = [...sorted];
+            next[slotIndex] = updated;
+            if (prevEnd == null || nextEnd == null) {
+                return next;
+            }
+            const diffMin = signedDiffMinutes(prevEnd, nextEnd);
+            return shiftSlotsBelow(next, slotIndex, diffMin);
+        });
     };
 
     const resolveSlotTypeValue = (slot: EventSlot) => {
         if (slot.slot_type === "band") return "band";
         if (slot.slot_type === "break") return "break";
         const note = slot.note?.trim() ?? "";
-        if (note.includes("転換")) return "break";
+        if (note.includes("\u8EE2\u63DB")) return "break";
         return "other";
     };
 
     const handleSlotTypeSelect = (slot: EventSlot, nextType: "band" | "break" | "other") => {
-        const note = slot.note?.trim() ?? "";
-        if (nextType === "band") {
-            handleSlotChange(slot.id, "slot_type", "band");
-            return;
-        }
-        if (nextType === "break") {
-            handleSlotChange(slot.id, "slot_type", "break");
-            handleSlotChange(slot.id, "band_id", null);
-            handleSlotChange(slot.id, "note", "転換");
-            return;
-        }
-        handleSlotChange(slot.id, "slot_type", "other");
-        handleSlotChange(slot.id, "band_id", null);
-        if (note === "転換") {
-            handleSlotChange(slot.id, "note", "");
-        }
-        if (slot.changeover_min == null) {
-            handleSlotChange(slot.id, "changeover_min", DEFAULT_OTHER_DURATION_MIN);
-        }
+        applySlotsUpdate((prev) => {
+            const sorted = sortSlotsByOrder(prev);
+            const slotIndex = sorted.findIndex((current) => current.id === slot.id);
+            if (slotIndex < 0) return prev;
+
+            const current = sorted[slotIndex];
+            const note = current.note?.trim() ?? "";
+
+            let updated: EventSlot = current;
+            if (nextType === "band") {
+                updated = { ...current, slot_type: "band" };
+            } else if (nextType === "break") {
+                updated = { ...current, slot_type: "break", band_id: null, note: "\u8EE2\u63DB" };
+            } else {
+                updated = {
+                    ...current,
+                    slot_type: "other",
+                    band_id: null,
+                    note: note === "\u8EE2\u63DB" ? "" : current.note,
+                    changeover_min: current.changeover_min ?? DEFAULT_OTHER_DURATION_MIN,
+                };
+            }
+
+            const next = [...sorted];
+            next[slotIndex] = updated;
+            return next;
+        });
     };
 
     const handleAddSlot = () => {
@@ -514,12 +641,12 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
             changeover_min: event.default_changeover_min ?? 15,
             note: "",
         };
-        setSlots((prev) => [...prev, newSlot]);
+        applySlotsUpdate((prev) => [...prev, newSlot]);
     };
 
     const handleAddRehearsalSlots = (phase: EventSlot["slot_phase"]) => {
         if (bands.length === 0) {
-            toast.error("バンドがありません。");
+            toast.error("\u30D0\u30F3\u30C9\u304C\u3042\u308A\u307E\u305B\u3093\u3002");
             return;
         }
         const nextOrder =
@@ -537,7 +664,7 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
             changeover_min: event.default_changeover_min ?? 15,
             note: "",
         }));
-        setSlots((prev) => [...prev, ...newSlots]);
+        applySlotsUpdate((prev) => [...prev, ...newSlots]);
     };
 
     const handleAddSpecialSlot = (note: string, phase: EventSlot["slot_phase"]) => {
@@ -579,7 +706,7 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
             changeover_min: duration,
             note,
         };
-        setSlots((prev) => [...prev, newSlot]);
+        applySlotsUpdate((prev) => [...prev, newSlot]);
     };
 
     const applyRehearsalSort = (
@@ -627,7 +754,7 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
         const currentOrder = orderedSlots.map((slot) => slot.id).join("|");
         const nextOrder = next.map((slot) => slot.id).join("|");
         if (currentOrder === nextOrder) return;
-        setSlots(next);
+        applySlotsUpdate(next);
     };
 
     const handleRehearsalOrderChange = async (nextOrder: "same" | "reverse") => {
@@ -641,9 +768,9 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
             .eq("id", event.id);
         if (error) {
             console.error(error);
-            toast.error("通常リハ順序の保存に失敗しました。");
+            toast.error("\u901A\u5E38\u30EA\u30CF\u9806\u5E8F\u306E\u4FDD\u5B58\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002");
         } else {
-            toast.success("通常リハ順序を保存しました。");
+            toast.success("\u901A\u5E38\u30EA\u30CF\u9806\u5E8F\u3092\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002");
             await onRefresh();
         }
         setSavingRehearsalOrder(false);
@@ -653,6 +780,76 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
         if (nextPhase === rehearsalPhase) return;
         setRehearsalPhase(nextPhase);
         applyRehearsalSort(nextPhase, rehearsalOrder);
+    };
+
+    const phaseLabelByValue = (phase: "show" | "rehearsal_normal" | "rehearsal_pre") =>
+        slotPhaseOptions.find((opt) => opt.value === phase)?.label ?? phase;
+
+    const alignBandOrderByPhase = (
+        sourcePhase: "show" | "rehearsal_normal" | "rehearsal_pre",
+        targetPhase: "show" | "rehearsal_normal" | "rehearsal_pre"
+    ) => {
+        const resolveBandPhase = (slot: EventSlot) => slot.slot_phase ?? "show";
+        const sorted = sortSlotsByOrder(slots);
+        const sourceBandIds = sorted
+            .filter(
+                (slot) =>
+                    slot.slot_type === "band" &&
+                    resolveBandPhase(slot) === sourcePhase
+            )
+            .map((slot) => slot.band_id ?? null);
+        const targetIndexes = sorted
+            .map((slot, index) => ({ slot, index }))
+            .filter(
+                ({ slot }) => slot.slot_type === "band" && resolveBandPhase(slot) === targetPhase
+            )
+            .map(({ index }) => index);
+
+        if (sourceBandIds.length === 0) {
+            toast.info(`${phaseLabelByValue(sourcePhase)}側にバンド枠がありません。`);
+            return;
+        }
+        if (targetIndexes.length === 0) {
+            toast.info(`${phaseLabelByValue(targetPhase)}側にバンド枠がありません。`);
+            return;
+        }
+
+        // show <-> 通常リハ の同期では、通常リハ順序（同順/逆順）に合わせて対応位置を決める。
+        const shouldFlipByRehearsalOrder =
+            rehearsalOrder === "reverse" &&
+            ((sourcePhase === "show" && targetPhase === "rehearsal_normal") ||
+                (sourcePhase === "rehearsal_normal" && targetPhase === "show"));
+
+        const syncCount = Math.min(sourceBandIds.length, targetIndexes.length);
+        let changed = 0;
+        const next = [...sorted];
+        for (let i = 0; i < targetIndexes.length; i += 1) {
+            const index = targetIndexes[i];
+            const sourceIndex = shouldFlipByRehearsalOrder
+                ? sourceBandIds.length - 1 - i
+                : i;
+            const nextBandId = sourceBandIds[sourceIndex] ?? null;
+            const target = next[index];
+            if (!target || target.band_id === nextBandId) continue;
+            next[index] = { ...target, band_id: nextBandId };
+            changed += 1;
+        }
+
+        if (changed === 0) {
+            toast.info("同期対象の変更はありませんでした。");
+            return;
+        }
+
+        applySlotsUpdate(next);
+        if (sourceBandIds.length !== targetIndexes.length) {
+            toast.success(
+                `${phaseLabelByValue(targetPhase)}を${phaseLabelByValue(sourcePhase)}に合わせました（${syncCount}件同期・枠数差あり）。`
+            );
+            return;
+        }
+        toast.success(
+            `${phaseLabelByValue(targetPhase)}を${phaseLabelByValue(sourcePhase)}に合わせました。`
+        );
     };
 
     const alignSlotsToEventTimeSettings = (source: EventSlot[]) => {
@@ -837,7 +1034,7 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
             toast.info("No time adjustments were needed.");
             return;
         }
-        setSlots(adjusted);
+        applySlotsUpdate(adjusted);
         toast.success("Adjusted " + changed + " slot timing(s).");
     };
 
@@ -1041,22 +1238,20 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
     };
 
     const handleDeleteSlot = async (slotId: string) => {
-        if (!window.confirm("このスロットを削除しますか？")) return;
+        if (!window.confirm("\u3053\u306E\u30B9\u30ED\u30C3\u30C8\u3092\u524A\u9664\u3057\u307E\u3059\u304B\uff1f")) return;
 
-        // UI反映を先に行う
-        setSlots((prev) => prev.filter((s) => s.id !== slotId));
+        // 先にUIから削除してレスポンスを早くする
+        applySlotsUpdate((prev) => prev.filter((s) => s.id !== slotId));
 
-        // もし既に保存済みならDBからも削除
-        // ※ 新規作成で未保存の場合はここでのDB削除は不要だが、UUIDを使っているため判別が難しい
-        // 今回は単純にDB削除を試みる
+        // DB削除に失敗した場合は再取得してUIを巻き戻す
         const { error } = await supabase.from("event_slots").delete().eq("id", slotId);
         if (error) {
             console.error(error);
-            // エラーでもUI上は消しておくか、リフレッシュするか
-            toast.error("削除に失敗しました。");
+            // エラー時は再取得してUI整合を回復
+            toast.error("\u524A\u9664\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002");
             await onRefresh();
         } else {
-            toast.success("スロットを削除しました。");
+            toast.success("\u30B9\u30ED\u30C3\u30C8\u3092\u524A\u9664\u3057\u307E\u3057\u305F\u3002");
         }
     };
 
@@ -1067,12 +1262,12 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
             let slotType = slot.slot_type;
             let nextNote = slot.note || null;
             if (slotType === "mc") slotType = "other";
-            if (slotType === "other" && note.includes("転換")) {
+            if (slotType === "other" && note.includes("\u8EE2\u63DB")) {
                 slotType = "break";
-                nextNote = "転換";
+                nextNote = "\u8EE2\u63DB";
             }
             if (slotType === "break") {
-                nextNote = "転換";
+                nextNote = "\u8EE2\u63DB";
             }
             return ({
                 id: slot.id,
@@ -1098,11 +1293,11 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
 
         if (error) {
             console.error(error);
-            toast.error("保存に失敗しました。");
+            toast.error("\u4FDD\u5B58\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002");
         } else {
-            // 戻り値で更新
-            setSlots((data ?? []) as EventSlot[]);
-            toast.success("タイムテーブルを保存しました。");
+            // 返却データで最新化
+            applySlotsUpdate((data ?? []) as EventSlot[], { recordHistory: false, clearHistory: true });
+            toast.success("\u30BF\u30A4\u30E0\u30C6\u30FC\u30D6\u30EB\u3092\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002");
         }
         setSaving(false);
     };
@@ -1319,7 +1514,7 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
             console.error(error);
             toast.error("Failed to auto-generate slots.");
         } else {
-            setSlots(data as EventSlot[]);
+            applySlotsUpdate(data as EventSlot[], { recordHistory: false, clearHistory: true });
             toast.success("Slots generated.");
         }
         setGenerating(false);
@@ -1328,141 +1523,150 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
     return (
         <Card className="bg-card/60">
             <CardHeader>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-3">
                     <div>
                         <CardTitle className="text-lg">タイムテーブル</CardTitle>
                         <CardDescription>
                             各バンドの演奏順や付帯作業、転換時間を設定します。
                         </CardDescription>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                        <div className="flex flex-wrap items-center gap-2 rounded-md border border-border/60 bg-muted/30 px-2 py-1 text-xs text-muted-foreground">
-                            <span className="font-medium text-foreground">通常リハ順序</span>
-                            <label className="inline-flex items-center gap-1">
-                                <input
-                                    type="radio"
-                                    name="rehearsal-order"
-                                    value="same"
-                                    checked={rehearsalOrder === "same"}
-                                    onChange={() => handleRehearsalOrderChange("same")}
-                                    disabled={savingRehearsalOrder}
-                                />
-                                同順
-                            </label>
-                            <label className="inline-flex items-center gap-1">
-                                <input
-                                    type="radio"
-                                    name="rehearsal-order"
-                                    value="reverse"
-                                    checked={rehearsalOrder === "reverse"}
-                                    onChange={() => handleRehearsalOrderChange("reverse")}
-                                    disabled={savingRehearsalOrder}
-                                />
-                                逆順
-                            </label>
-                            {savingRehearsalOrder && (
-                                <span className="inline-flex items-center gap-1">
-                                    <RefreshCw className="w-3 h-3 animate-spin" />
-                                    保存中
-                                </span>
-                            )}
+                    <div className="w-full">
+                        <div className="flex flex-wrap gap-2 pb-1">
+                            <div className="flex flex-wrap items-center gap-2 rounded-md border border-border/60 bg-muted/30 px-2 py-1 text-xs text-muted-foreground shrink-0">
+                                <span className="font-medium text-foreground">通常リハ順序</span>
+                                <label className="inline-flex items-center gap-1">
+                                    <input
+                                        type="radio"
+                                        name="rehearsal-order"
+                                        value="same"
+                                        checked={rehearsalOrder === "same"}
+                                        onChange={() => handleRehearsalOrderChange("same")}
+                                        disabled={savingRehearsalOrder}
+                                    />
+                                    同順
+                                </label>
+                                <label className="inline-flex items-center gap-1">
+                                    <input
+                                        type="radio"
+                                        name="rehearsal-order"
+                                        value="reverse"
+                                        checked={rehearsalOrder === "reverse"}
+                                        onChange={() => handleRehearsalOrderChange("reverse")}
+                                        disabled={savingRehearsalOrder}
+                                    />
+                                    逆順
+                                </label>
+                                {savingRehearsalOrder && (
+                                    <span className="inline-flex items-center gap-1">
+                                        <RefreshCw className="w-3 h-3 animate-spin" />
+                                        保存中
+                                    </span>
+                                )}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 rounded-md border border-border/60 bg-muted/30 px-2 py-1 text-xs text-muted-foreground shrink-0">
+                                <span className="font-medium text-foreground">リハ種別</span>
+                                <label className="inline-flex items-center gap-1">
+                                    <input
+                                        type="radio"
+                                        name="rehearsal-phase"
+                                        value="rehearsal_normal"
+                                        checked={rehearsalPhase === "rehearsal_normal"}
+                                        onChange={() => handleRehearsalPhaseChange("rehearsal_normal")}
+                                    />
+                                    通常リハ
+                                </label>
+                                <label className="inline-flex items-center gap-1">
+                                    <input
+                                        type="radio"
+                                        name="rehearsal-phase"
+                                        value="rehearsal_pre"
+                                        checked={rehearsalPhase === "rehearsal_pre"}
+                                        onChange={() => handleRehearsalPhaseChange("rehearsal_pre")}
+                                    />
+                                    直前リハ
+                                </label>
+                                <Button variant="outline" size="sm" onClick={() => handleAddRehearsalSlots(rehearsalPhase)}>
+                                    リハ追加
+                                </Button>
+                            </div>
+                            <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/30 px-2 py-1 shrink-0">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="w-24"
+                                    onClick={() => handleAddSpecialSlot(PREP_NOTE, "rehearsal_normal")}
+                                >
+                                    準備追加
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="w-24"
+                                    onClick={() => handleAddSpecialSlot(CLEANUP_NOTE, "show")}
+                                >
+                                    撤収追加
+                                </Button>
+                            </div>
+                            <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/30 px-2 py-1 shrink-0">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => alignBandOrderByPhase("show", rehearsalPhase)}
+                                    disabled={orderedSlots.length === 0 || !hasSelectedRehearsalBands}
+                                >
+                                    リハに本番を合わせる
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => alignBandOrderByPhase(rehearsalPhase, "show")}
+                                    disabled={orderedSlots.length === 0 || !hasSelectedRehearsalBands}
+                                >
+                                    本番にリハを合わせる
+                                </Button>
+                            </div>
+                            <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/30 px-2 py-1 shrink-0">
+                                <Button variant="outline" size="sm" onClick={handleUndo} disabled={!canUndo}>
+                                    <Undo2 className="w-4 h-4 mr-2" />
+                                    戻す
+                                </Button>
+                                <Button variant="outline" size="sm" onClick={handleRedo} disabled={!canRedo}>
+                                    <Redo2 className="w-4 h-4 mr-2" />
+                                    やり直し
+                                </Button>
+                            </div>
+                            <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/30 px-2 py-1 shrink-0">
+                                <Button variant="outline" size="sm" onClick={handleGenerate} disabled={generating}>
+                                    <RefreshCw className={cn("w-4 h-4 mr-2", generating && "animate-spin")} />
+                                    自動生成
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleExportTimetable}
+                                    disabled={orderedSlots.length === 0}
+                                >
+                                    <Download className="w-4 h-4 mr-2" />
+                                    エクスポート
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleCompactTimes}
+                                    disabled={orderedSlots.length === 0}
+                                >
+                                    時間補正
+                                </Button>
+                                <Button onClick={handleSave} disabled={saving} size="sm">
+                                    <Save className="w-4 h-4 mr-2" />
+                                    保存
+                                </Button>
+                            </div>
                         </div>
-                        <div className="flex flex-wrap items-center gap-2 rounded-md border border-border/60 bg-muted/30 px-2 py-1 text-xs text-muted-foreground">
-                            <span className="font-medium text-foreground">リハ種別</span>
-                            <label className="inline-flex items-center gap-1">
-                                <input
-                                    type="radio"
-                                    name="rehearsal-phase"
-                                    value="rehearsal_normal"
-                                    checked={rehearsalPhase === "rehearsal_normal"}
-                                    onChange={() => handleRehearsalPhaseChange("rehearsal_normal")}
-                                />
-                                通常リハ
-                            </label>
-                            <label className="inline-flex items-center gap-1">
-                                <input
-                                    type="radio"
-                                    name="rehearsal-phase"
-                                    value="rehearsal_pre"
-                                    checked={rehearsalPhase === "rehearsal_pre"}
-                                    onChange={() => handleRehearsalPhaseChange("rehearsal_pre")}
-                                />
-                                直前リハ
-                            </label>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleAddRehearsalSlots(rehearsalPhase)}
-                            >
-                                リハ追加
-                            </Button>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="w-24"
-                                onClick={() => handleAddSpecialSlot(PREP_NOTE, "rehearsal_normal")}
-                            >
-                                準備追加
-                            </Button>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="w-24"
-                                onClick={() => handleAddSpecialSlot(CLEANUP_NOTE, "show")}
-                            >
-                                撤収追加
-                            </Button>
-                        </div>
-                        <Button variant="outline" size="sm" onClick={handleGenerate} disabled={generating}>
-                            <RefreshCw className={cn("w-4 h-4 mr-2", generating && "animate-spin")} />
-                            {"\u81EA\u52D5\u751F\u6210"}
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={handleExportTimetable}
-                            disabled={orderedSlots.length === 0}
-                        >
-                            <Download className="w-4 h-4 mr-2" />
-                            {"\u30A8\u30AF\u30B9\u30DD\u30FC\u30C8"}
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={handleCompactTimes}
-                            disabled={orderedSlots.length === 0}
-                        >
-                            {"\u6642\u9593\u88DC\u6B63"}
-                        </Button>
-                        <Button onClick={handleSave} disabled={saving} size="sm">
-                            <Save className="w-4 h-4 mr-2" />
-                            保存
-                        </Button>
                     </div>
                 </div>
             </CardHeader>
             <CardContent>
-                <div className="mb-3 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-[11px]">
-                    <div className="flex flex-wrap gap-x-4 gap-y-2">
-                        {timeChecks.map((item) => {
-                            const status = timeCheckStatus(item.setting, item.actual);
-                            return (
-                                <div key={item.key} className="flex items-center gap-2">
-                                    <span className="font-medium text-foreground">{item.label}</span>
-                                    <span className="text-muted-foreground">
-                                        {"\u8a2d\u5b9a"} {formatTimeText(item.setting)}
-                                    </span>
-                                    <span className="text-muted-foreground">
-                                        / TT {formatTimeRangeText(item.actual)}
-                                    </span>
-                                    <span className={status.tone}>{status.label}</span>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
                 <DndContext
                     sensors={sensors}
                     collisionDetection={closestCenter}
@@ -1472,7 +1676,8 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                         items={orderedSlots.map((s) => s.id)}
                         strategy={verticalListSortingStrategy}
                     >
-                        <div className="space-y-2">
+                        <div className="max-h-[68vh] overflow-y-auto overflow-x-hidden pr-1">
+                            <div className="space-y-2">
                             {orderedSlots.map((slot) => (
                                 <SortableItem key={slot.id} id={slot.id}>
                                     {({ attributes, listeners, setActivatorNodeRef, isDragging }) => {
@@ -1579,7 +1784,7 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
 
                                                     {slot.slot_type !== "band" && (
                                                         <Input
-                                                            placeholder="メモ"
+                                                            placeholder="\u30E1\u30E2"
                                                             value={slot.note ?? ""}
                                                             onChange={(e) =>
                                                                 handleSlotChange(slot.id, "note", e.target.value)
@@ -1625,6 +1830,7 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                                     }}
                                 </SortableItem>
                             ))}
+                            </div>
                         </div>
                     </SortableContext>
                 </DndContext>
@@ -1641,3 +1847,6 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
         </Card>
     );
 }
+
+
+

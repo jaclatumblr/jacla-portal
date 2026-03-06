@@ -21,6 +21,7 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   ArrowDown,
   ArrowUp,
+  ChevronDown,
   GripVertical,
   Loader2,
   Mic,
@@ -81,6 +82,8 @@ function SongCard({
   const isMc = entry.entry_type === "mc";
   const isReadOnly = !!isOverlay || !!readOnly;
   const canEditInstructions = !isReadOnly && (isSong || isMc);
+  const [expanded, setExpanded] = useState(false);
+  const durationSummary = `${entry.durationMin || "-"}:${String(entry.durationSec || "00").padStart(2, "0")}`;
 
   return (
     <div
@@ -91,7 +94,24 @@ function SongCard({
       )}
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          {!isOverlay && (
+            <Button
+              type="button"
+              variant={expanded ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => setExpanded((prev) => !prev)}
+              className={cn(
+                "h-9 shrink-0 gap-1.5 px-3 font-medium",
+                expanded && "border-primary/40 bg-primary/10 text-primary hover:bg-primary/15"
+              )}
+              aria-expanded={expanded}
+              aria-label={expanded ? "詳細を閉じる" : "詳細を開く"}
+            >
+              <ChevronDown className={cn("h-4 w-4 transition-transform", expanded && "rotate-180")} />
+              <span>{expanded ? "閉じる" : "展開"}</span>
+            </Button>
+          )}
           <button
             type="button"
             className="cursor-grab rounded-md border border-border p-1 text-muted-foreground hover:text-foreground active:cursor-grabbing touch-none"
@@ -114,37 +134,47 @@ function SongCard({
             disabled={isReadOnly}
           />
         </div>
-        <div className="flex items-center gap-1 sm:ml-auto">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => onMove(index, Math.max(0, index - 1))}
-            disabled={isReadOnly || index === 0}
-          >
-            <ArrowUp className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => onMove(index, Math.min(totalCount - 1, index + 1))}
-            disabled={isReadOnly || index === totalCount - 1}
-          >
-            <ArrowDown className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => onRemove(entry.id)}
-            disabled={isReadOnly}
-          >
-            <Trash2 className="h-4 w-4 text-destructive" />
-          </Button>
+        <div className="flex items-center sm:ml-auto">
+          <div className="flex items-center gap-1 rounded-md border border-border/60 bg-background/30 px-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => onMove(index, Math.max(0, index - 1))}
+              disabled={isReadOnly || index === 0}
+            >
+              <ArrowUp className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => onMove(index, Math.min(totalCount - 1, index + 1))}
+              disabled={isReadOnly || index === totalCount - 1}
+            >
+              <ArrowDown className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => onRemove(entry.id)}
+              disabled={isReadOnly}
+            >
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
+          </div>
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        <span className="max-w-[240px] truncate">{isSong ? (entry.artist || "-") : "MC"}</span>
+        <span>{durationSummary}</span>
+        {isSong && entry.url && <span className="max-w-[320px] truncate">{entry.url}</span>}
+      </div>
+
+      {expanded && (
+      <>
       <div className="grid gap-3 md:grid-cols-2">
         <label className="space-y-1 text-sm">
           <span className="text-muted-foreground">アーティスト</span>
@@ -288,6 +318,8 @@ function SongCard({
           </label>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }
@@ -313,11 +345,10 @@ function SortableSongItem(props: SongCardProps) {
 export function SetlistEditor({ songs, setSongs, onScheduleMetadata, readOnly }: SetlistEditorProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
 
-  const sensors = readOnly ? [] : useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 8 },
-    })
-  );
+  const pointerSensor = useSensor(PointerSensor, {
+    activationConstraint: { distance: 8 },
+  });
+  const sensors = useSensors(pointerSensor);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(String(event.active.id));
@@ -386,13 +417,13 @@ export function SetlistEditor({ songs, setSongs, onScheduleMetadata, readOnly }:
       </CardHeader>
       <CardContent>
         <DndContext
-          sensors={sensors}
+          sensors={readOnly ? [] : sensors}
           collisionDetection={closestCenter}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
           <SortableContext items={songs.map((s) => s.id)} strategy={verticalListSortingStrategy}>
-            <div className="space-y-4">
+            <div className="max-h-[62vh] space-y-3 overflow-y-auto pr-1">
               {songs.map((song, index) => (
                 <SortableSongItem
                   key={song.id}

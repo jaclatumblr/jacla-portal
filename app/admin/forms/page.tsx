@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowRight, Plus, RefreshCw, Trash2 } from "@/lib/icons";
 import { SideNav } from "@/components/SideNav";
 import { PageHeader } from "@/components/PageHeader";
 import { AuthGuard } from "@/lib/AuthGuard";

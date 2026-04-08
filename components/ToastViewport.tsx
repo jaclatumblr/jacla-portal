@@ -18,9 +18,9 @@ const getToastId = () => {
 };
 
 const variantStyles: Record<ToastVariant, string> = {
-  success: "border-emerald-400/40 bg-emerald-500/15 text-emerald-100",
-  error: "border-destructive/40 bg-destructive/10 text-destructive",
-  info: "border-primary/40 bg-primary/10 text-primary",
+  success: "border-success/20 bg-card text-foreground shadow-[0_10px_24px_rgba(15,23,42,0.12)]",
+  error: "border-destructive/20 bg-card text-foreground shadow-[0_10px_24px_rgba(15,23,42,0.12)]",
+  info: "border-primary/20 bg-card text-foreground shadow-[0_10px_24px_rgba(15,23,42,0.12)]",
 };
 
 export function ToastViewport() {
@@ -58,7 +58,7 @@ export function ToastViewport() {
           key={toast.id}
           role={toast.variant === "error" ? "alert" : "status"}
           className={cn(
-            "pointer-events-auto min-w-[220px] max-w-[90vw] rounded-lg border px-4 py-3 shadow-lg toast-in",
+            "pointer-events-auto min-w-[220px] max-w-[90vw] rounded-xl border px-4 py-3 toast-in",
             variantStyles[toast.variant]
           )}
         >

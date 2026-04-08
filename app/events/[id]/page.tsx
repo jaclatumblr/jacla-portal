@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Calendar, Clock, MapPin, Music, FileText, List, ArrowRight } from "lucide-react";
+import { Calendar, Clock, MapPin, Music, FileText, List, ArrowRight } from "@/lib/icons";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SideNav } from "@/components/SideNav";

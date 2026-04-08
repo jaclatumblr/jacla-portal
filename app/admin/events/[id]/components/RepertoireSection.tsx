@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ExternalLink, Loader2, Trash2 } from "lucide-react";
+import { ExternalLink, Loader2, Trash2 } from "@/lib/icons";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
 import { Badge } from "@/components/ui/badge";

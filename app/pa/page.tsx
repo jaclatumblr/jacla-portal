@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { NotebookPen, Package, SlidersHorizontal } from "lucide-react";
+import { NotebookPen, Package, SlidersHorizontal } from "@/lib/icons";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { PageHeader } from "@/components/PageHeader";

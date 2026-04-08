@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { Calendar, Clock, Download, List } from "lucide-react";
+import { Calendar, Clock, Download, List } from "@/lib/icons";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { SideNav } from "@/components/SideNav";
 import { PageHeader } from "@/components/PageHeader";

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { RefreshCw, TrendingUp, Users, Eye } from "lucide-react";
+import { RefreshCw, TrendingUp, Users, Eye } from "@/lib/icons";
 import {
   BarChart,
   Bar,

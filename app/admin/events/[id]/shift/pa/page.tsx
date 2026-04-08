@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
-import { Calendar, RefreshCw, Users } from "lucide-react";
+import { Calendar, RefreshCw, Users } from "@/lib/icons";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { SideNav } from "@/components/SideNav";
 import { PageHeader } from "@/components/PageHeader";

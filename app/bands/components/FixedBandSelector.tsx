@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { Loader2 } from "@/lib/icons";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { FixedBandSummary } from "../types";

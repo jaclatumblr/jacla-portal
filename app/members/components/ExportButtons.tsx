@@ -1,6 +1,6 @@
 "use client";
 
-import { Download } from "lucide-react";
+import { Download } from "@/lib/icons";
 import { Button } from "@/components/ui/button";
 import { downloadExcelFile } from "@/lib/exportExcel";
 import { toast } from "@/lib/toast";

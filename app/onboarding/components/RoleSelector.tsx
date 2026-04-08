@@ -1,4 +1,4 @@
-import { Lightbulb, Music, User, type LucideIcon } from "lucide-react";
+import { Lightbulb, Music, User, type LucideIcon } from "@/lib/icons";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { crewOptions } from "../hooks/useProfileData";

@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, Loader2, ShieldAlert } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, ShieldAlert } from "@/lib/icons";
 import { SideNav } from "@/components/SideNav";
 import { PageHeader } from "@/components/PageHeader";
 import { AuthGuard } from "@/lib/AuthGuard";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Users } from "lucide-react";
+import { Loader2, Users } from "@/lib/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

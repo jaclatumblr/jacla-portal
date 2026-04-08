@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ClipboardList, Package, Guitar } from "lucide-react";
+import { ClipboardList, Package, Guitar } from "@/lib/icons";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { SideNav } from "@/components/SideNav";
 import { PageHeader } from "@/components/PageHeader";

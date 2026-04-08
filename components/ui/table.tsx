@@ -20,7 +20,7 @@ const TableHeader = React.forwardRef<
   <thead
     ref={ref}
     data-slot="table-header"
-    className={cn("[&_tr]:border-b", className)}
+    className={cn("[&_tr]:border-b [&_tr]:border-border", className)}
     {...props}
   />
 ));
@@ -44,7 +44,7 @@ const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTML
     <tr
       ref={ref}
       data-slot="table-row"
-      className={cn("border-b transition-colors", className)}
+      className={cn("border-b border-border transition-colors hover:bg-surface-hover/70", className)}
       {...props}
     />
   )
@@ -59,7 +59,7 @@ const TableHead = React.forwardRef<
     ref={ref}
     data-slot="table-head"
     className={cn(
-      "h-10 px-4 text-left align-middle font-medium text-muted-foreground",
+      "h-11 bg-surface-secondary px-4 text-left align-middle text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground",
       className
     )}
     {...props}
@@ -81,4 +81,3 @@ const TableCell = React.forwardRef<
 TableCell.displayName = "TableCell";
 
 export { Table, TableHeader, TableBody, TableRow, TableHead, TableCell };
-

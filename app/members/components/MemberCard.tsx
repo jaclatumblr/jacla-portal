@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageCircle, Music } from "lucide-react";
+import { MessageCircle, Music } from "@/lib/icons";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import type { Member } from "../types";

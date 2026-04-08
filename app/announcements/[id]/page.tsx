@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { Calendar, Link as LinkIcon, Pin, User } from "lucide-react";
+import { Calendar, Link as LinkIcon, Pin, User } from "@/lib/icons";
 import { Badge } from "@/components/ui/badge";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";

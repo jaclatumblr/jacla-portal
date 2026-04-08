@@ -10,7 +10,7 @@ import { InstructionSetlistTable } from "@/components/instructions/InstructionSe
 import { InstructionStagePlot } from "@/components/instructions/InstructionStagePlot";
 import { InstructionMemberTable } from "@/components/instructions/InstructionMemberTable";
 import { EventSlotRow } from "@/app/types/instructions";
-import { Info, Lightbulb } from "lucide-react";
+import { Info, Lightbulb } from "@/lib/icons";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatTimeText } from "@/lib/time";
 

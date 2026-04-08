@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Lightbulb, NotebookPen } from "lucide-react";
+import { Lightbulb, NotebookPen } from "@/lib/icons";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { PageHeader } from "@/components/PageHeader";

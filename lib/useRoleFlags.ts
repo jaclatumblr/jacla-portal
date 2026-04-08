@@ -1,8 +1,9 @@
 ﻿"use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAdminMode } from "@/contexts/AdminModeContext";
+import { fetchLeaderRoles } from "@/lib/leaderRoles";
 
 type RoleFlagsResult = {
   isAdministrator: boolean;
@@ -18,6 +19,7 @@ type RoleFlagsResult = {
 
 export function useRoleFlags(): RoleFlagsResult {
   const { session, loading: authLoading } = useAuth();
+  const { suppressPrivilegedAccess, loading: modeLoading } = useAdminMode();
   const userId = session?.user.id;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,42 +38,21 @@ export function useRoleFlags(): RoleFlagsResult {
     if (!userId) return;
     let cancelled = false;
 
-    setLoading(true);
-    setError(null);
-
     (async () => {
-      const { data: leadersData, error: leadersError } = await supabase
-        .from("profile_leaders")
-        .select("leader")
-        .eq("profile_id", userId);
+      setLoading(true);
+      setError(null);
+      let leaders: string[] = [];
+      try {
+        leaders = await fetchLeaderRoles(userId);
+      } catch (leaderError) {
+        if (cancelled) return;
+        console.error(leaderError);
+        setError("権限情報の取得に失敗しました。");
+        setLoading(false);
+        return;
+      }
 
       if (cancelled) return;
-
-      let leaders = (leadersData ?? [])
-        .map((row) => (row as { leader?: string }).leader)
-        .filter((role) => role && role !== "none") as string[];
-
-      if (leadersError || leaders.length === 0) {
-        if (leadersError) {
-          console.error(leadersError);
-        }
-        const { data, error: profileError } = await supabase
-          .from("profiles")
-          .select("leader")
-          .eq("id", userId)
-          .maybeSingle();
-        if (cancelled) return;
-        if (profileError) {
-          console.error(profileError);
-          setError("権限情報の取得に失敗しました。");
-          setLoading(false);
-          return;
-        }
-        const leader = (data as { leader?: string } | null)?.leader;
-        if (leader && leader !== "none") {
-          leaders = [leader];
-        }
-      }
 
       const isAdministrator = leaders.includes("Administrator");
       const isSupervisor = leaders.includes("Supervisor");
@@ -100,8 +81,18 @@ export function useRoleFlags(): RoleFlagsResult {
   }, [authLoading, userId]);
 
   return {
-    ...flags,
-    loading: authLoading || (userId ? loading : false),
+    ...(suppressPrivilegedAccess
+      ? {
+          isAdministrator: false,
+          isSupervisor: false,
+          isPaLeader: false,
+          isLightingLeader: false,
+          isPartLeader: false,
+          isAdmin: false,
+          canAccessAdmin: false,
+        }
+      : flags),
+    loading: authLoading || modeLoading || (userId ? loading : false),
     error: userId ? error : null,
   };
 }

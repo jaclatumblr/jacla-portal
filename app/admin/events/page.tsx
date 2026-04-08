@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Calendar, ChevronDown, ChevronUp, Clock, MapPin, Music, Plus, RefreshCw, Trash2, Users } from "lucide-react";
+import { ArrowRight, Calendar, ChevronDown, ChevronUp, Clock, MapPin, Music, Plus, RefreshCw, Trash2, Users } from "@/lib/icons";
 import { SideNav } from "@/components/SideNav";
 import { PageHeader } from "@/components/PageHeader";
 import { AuthGuard } from "@/lib/AuthGuard";

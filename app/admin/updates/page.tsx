@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw } from "@/lib/icons";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/contexts/AuthContext";

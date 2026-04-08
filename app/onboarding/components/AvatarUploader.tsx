@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { Image as ImageIcon, Loader2, Upload } from "lucide-react";
+import { Image as ImageIcon, Loader2, Upload } from "@/lib/icons";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAvatar } from "../hooks/useAvatar";
 import { cn } from "@/lib/utils";

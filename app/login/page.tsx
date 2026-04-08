@@ -5,7 +5,7 @@ import { Suspense, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Chrome, Loader2 } from "lucide-react";
+import { Chrome, Loader2 } from "@/lib/icons";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/lib/toast";

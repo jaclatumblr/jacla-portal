@@ -27,7 +27,7 @@ import {
   Mic,
   Music,
   Trash2,
-} from "lucide-react";
+} from "@/lib/icons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";

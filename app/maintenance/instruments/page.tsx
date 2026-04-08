@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ClipboardList } from "lucide-react";
+import { ClipboardList } from "@/lib/icons";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { SideNav } from "@/components/SideNav";
 import { useRoleFlags } from "@/lib/useRoleFlags";

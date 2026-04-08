@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -18,7 +18,7 @@ import {
     arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Plus, Save, Trash2, RefreshCw, Download, Undo2, Redo2 } from "lucide-react";
+import { GripVertical, Plus, Save, Trash2, RefreshCw, Download, Undo2, Redo2 } from "@/lib/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";

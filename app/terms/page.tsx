@@ -1,7 +1,11 @@
+import { BackToPreviousButton } from "@/components/BackToPreviousButton";
+
 export default function TermsPage() {
   return (
     <main className="min-h-screen bg-background">
       <div className="container mx-auto max-w-3xl px-4 py-12 sm:px-6">
+        <BackToPreviousButton />
+
         <div className="space-y-2">
           <h1 className="text-2xl font-bold">利用規約</h1>
           <div className="text-xs text-muted-foreground">

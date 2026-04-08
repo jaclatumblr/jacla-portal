@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown } from "@/lib/icons";
 import { BandNoteRow } from "@/app/types/instructions";
 import { cn } from "@/lib/utils";
 

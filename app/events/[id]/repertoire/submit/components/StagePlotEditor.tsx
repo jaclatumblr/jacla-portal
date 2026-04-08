@@ -19,7 +19,7 @@ import {
     Trash2,
     Plus,
     Monitor,
-} from "lucide-react";
+} from "@/lib/icons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";

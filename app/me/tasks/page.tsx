@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Calendar, Clock } from "lucide-react";
+import { Calendar, Clock } from "@/lib/icons";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SideNav } from "@/components/SideNav";

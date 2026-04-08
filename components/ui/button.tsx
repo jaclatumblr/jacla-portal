@@ -4,23 +4,23 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-[color,box-shadow] disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-transparent text-sm font-medium transition-[background-color,border-color,color,box-shadow] disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/20 aria-invalid:ring-destructive/15 aria-invalid:border-destructive",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
-        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        outline:
-          "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
-        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/90",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
+        default: "bg-primary text-primary-foreground shadow-sm hover:bg-primary/92",
+        destructive: "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/92",
+        outline: "border-input bg-card text-foreground shadow-sm hover:bg-surface-hover",
+        secondary:
+          "border-input bg-surface-secondary text-foreground hover:bg-surface-hover",
+        ghost: "text-foreground hover:bg-surface-hover",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-9 px-4 py-2",
-        sm: "h-8 rounded-md px-3 text-xs",
-        lg: "h-10 rounded-md px-8",
-        icon: "h-9 w-9",
+        default: "h-10 px-4 py-2.5",
+        sm: "h-8 px-3 text-xs",
+        lg: "h-11 px-6 text-sm",
+        icon: "h-10 w-10",
       },
     },
     defaultVariants: {
@@ -50,4 +50,3 @@ function Button({
 }
 
 export { Button, buttonVariants };
-

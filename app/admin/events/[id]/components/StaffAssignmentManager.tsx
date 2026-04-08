@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Loader2, Save, Trash2, Plus } from "lucide-react";
+import { Loader2, Save, Trash2, Plus } from "@/lib/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";

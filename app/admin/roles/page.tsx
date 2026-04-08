@@ -11,7 +11,7 @@ import {
   Shield,
   SwitchCamera,
   UserCog,
-} from "lucide-react";
+} from "@/lib/icons";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { useRoleFlags } from "@/lib/useRoleFlags";

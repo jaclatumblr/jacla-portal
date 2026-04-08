@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { X } from "lucide-react";
+import { X } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 
 type DialogProps = {
@@ -98,7 +98,7 @@ function DialogContent({
         <div className="fixed inset-0 z-50 flex items-center justify-center">
             {/* Overlay */}
             <div
-                className="fixed inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in-0"
+                className="fixed inset-0 bg-foreground/18 backdrop-blur-[2px] animate-in fade-in-0"
                 onClick={() => context.onOpenChange(false)}
                 aria-hidden="true"
             />
@@ -110,7 +110,7 @@ function DialogContent({
                 aria-labelledby={title ? "dialog-title" : undefined}
                 aria-describedby={description ? "dialog-description" : undefined}
                 className={cn(
-                    "relative z-50 w-full max-w-lg mx-4 rounded-lg border border-border bg-card p-6 shadow-lg",
+                    "relative z-50 mx-4 w-full max-w-lg rounded-2xl border border-border/80 bg-card p-6 shadow-[0_18px_44px_rgba(15,23,42,0.16)]",
                     "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-4",
                     className
                 )}
@@ -119,7 +119,7 @@ function DialogContent({
                     <button
                         type="button"
                         onClick={() => context.onOpenChange(false)}
-                        className="absolute right-4 top-4 rounded-sm p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                        className="absolute right-4 top-4 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
                         aria-label="閉じる"
                     >
                         <X className="h-4 w-4" />

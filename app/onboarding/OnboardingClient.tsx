@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useAccountDeletion } from "./hooks/useAccountDeletion";
 import { ProfileForm } from "./components/ProfileForm";
 import { Suspense } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2 } from "@/lib/icons";
 
 type OnboardingContentProps = {
   mode?: "edit" | "new";

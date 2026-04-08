@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Image as ImageIcon, Loader2, Save, Trash2 } from "lucide-react";
+import { Image as ImageIcon, Loader2, Save, Trash2 } from "@/lib/icons";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { SideNav } from "@/components/SideNav";
 import { useRoleFlags } from "@/lib/useRoleFlags";

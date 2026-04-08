@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Calendar, Clock, MapPin } from "lucide-react";
+import { ArrowRight, Calendar, Clock, MapPin } from "@/lib/icons";
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { SkeletonEventCard } from "@/components/ui/skeleton";

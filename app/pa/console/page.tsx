@@ -1,4 +1,4 @@
-import { SlidersHorizontal } from "lucide-react";
+import { SlidersHorizontal } from "@/lib/icons";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { cn } from "@/lib/utils";

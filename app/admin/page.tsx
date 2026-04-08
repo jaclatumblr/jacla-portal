@@ -12,7 +12,7 @@ import {
   Power,
   Shield,
   Terminal,
-} from "lucide-react";
+} from "@/lib/icons";
 import { SideNav } from "@/components/SideNav";
 import { PageHeader } from "@/components/PageHeader";
 import { AuthGuard } from "@/lib/AuthGuard";

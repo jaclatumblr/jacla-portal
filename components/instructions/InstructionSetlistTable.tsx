@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/table";
 import { SongRow } from "@/app/types/instructions";
 import { Badge } from "@/components/ui/badge";
-import { Music, Lightbulb, Link as LinkIcon, ExternalLink } from "lucide-react";
+import { Music, Lightbulb, Link as LinkIcon, ExternalLink } from "@/lib/icons";
 
 type InstructionSetlistTableProps = {
     songs: SongRow[];

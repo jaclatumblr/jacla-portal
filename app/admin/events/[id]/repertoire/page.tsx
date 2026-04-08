@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink } from "@/lib/icons";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { supabase } from "@/lib/supabaseClient";
 import { useIsAdmin } from "@/lib/useIsAdmin";

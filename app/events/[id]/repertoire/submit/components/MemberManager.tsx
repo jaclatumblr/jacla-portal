@@ -1,7 +1,7 @@
-﻿"use client";
+"use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Trash2, UserPlus } from "lucide-react";
+import { Plus, Trash2, UserPlus } from "@/lib/icons";
 import { Button } from "@/components/ui/button";
 import {
   Card,

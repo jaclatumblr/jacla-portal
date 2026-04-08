@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Calendar, ExternalLink, Lightbulb } from "lucide-react";
+import { Calendar, ExternalLink, Lightbulb } from "@/lib/icons";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { SideNav } from "@/components/SideNav";
 import { supabase } from "@/lib/supabaseClient";

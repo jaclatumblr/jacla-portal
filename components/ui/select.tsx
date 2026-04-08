@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 
 type SelectOption = {
@@ -35,6 +35,7 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
   ) => {
     const [isOpen, setIsOpen] = React.useState(false);
     const containerRef = React.useRef<HTMLDivElement>(null);
+    const listboxId = React.useId();
 
     const selectedOption = options.find((opt) => opt.value === value);
     const displayLabel = selectedOption?.label ?? placeholder;
@@ -74,14 +75,15 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
           ref={ref}
           type="button"
           role="combobox"
+          aria-controls={listboxId}
           aria-expanded={isOpen}
           aria-haspopup="listbox"
           aria-label={ariaLabel}
           disabled={disabled}
           onClick={() => setIsOpen(!isOpen)}
           className={cn(
-            "flex h-10 w-full items-center justify-between gap-2 rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground transition-colors",
-            "hover:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/40",
+            "flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-input bg-surface px-3.5 py-2 text-sm text-foreground shadow-[0_1px_0_rgba(15,23,42,0.03)] transition-[background-color,border-color,box-shadow]",
+            "hover:bg-surface-secondary focus:border-ring focus:outline-none focus:ring-[3px] focus:ring-ring/20",
             "disabled:cursor-not-allowed disabled:opacity-50",
             !selectedOption && "text-muted-foreground",
             className
@@ -98,8 +100,9 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
 
         {isOpen && (
           <div
+            id={listboxId}
             role="listbox"
-            className="absolute z-50 mt-1 w-full overflow-hidden rounded-md border border-border bg-card shadow-lg animate-in fade-in-0 zoom-in-95"
+            className="absolute z-50 mt-1.5 w-full overflow-hidden rounded-xl border border-border bg-popover shadow-[0_12px_28px_rgba(15,23,42,0.12)] animate-in fade-in-0 zoom-in-95"
           >
             <div className="max-h-60 overflow-y-auto py-1">
               {options.map((option) => (
@@ -111,9 +114,9 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
                   disabled={option.disabled}
                   onClick={() => handleSelect(option.value)}
                   className={cn(
-                    "flex w-full items-center px-3 py-2 text-sm transition-colors",
-                    "hover:bg-muted focus:bg-muted focus:outline-none",
-                    option.value === value && "bg-primary/10 text-primary font-medium",
+                    "flex w-full items-center px-3.5 py-2.5 text-sm transition-colors",
+                    "hover:bg-surface-hover focus:bg-surface-hover focus:outline-none",
+                    option.value === value && "bg-surface-selected text-primary font-medium",
                     option.disabled && "cursor-not-allowed opacity-50"
                   )}
                 >

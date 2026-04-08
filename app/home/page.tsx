@@ -11,7 +11,7 @@ import {
   Lightbulb,
   Music,
   Users,
-} from "lucide-react";
+} from "@/lib/icons";
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { SideNav } from "@/components/SideNav";

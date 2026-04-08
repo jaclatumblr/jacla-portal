@@ -1,6 +1,6 @@
-﻿"use client";
+"use client";
 
-import { Loader2 } from "lucide-react";
+import { Loader2 } from "@/lib/icons";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { SideNav } from "@/components/SideNav";
 import { PageHeader } from "@/components/PageHeader";

@@ -1,8 +1,8 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Loader2, Music, Users } from "lucide-react";
+import { Loader2, Music, Users } from "@/lib/icons";
 import { Button } from "@/components/ui/button";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";

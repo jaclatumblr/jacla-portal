@@ -8,21 +8,23 @@ const exactTitles: Record<string, string> = {
   "/members": "部員一覧",
   "/events": "イベント",
   "/announcements": "お知らせ",
+  "/links": "外部リンク集",
+  "/links/archive": "限定公開動画アーカイブ",
   "/maintenance": "備品管理",
   "/maintenance/equipment": "備品管理",
   "/maintenance/instruments": "楽器管理",
   "/pa": "PA",
-  "/pa/instructions": "PA指示",
+  "/pa/instructions": "PA ガイド",
   "/pa/live-adviser": "Live Adviser",
-  "/pa/equipment": "PA機材",
+  "/pa/equipment": "PA 機材",
   "/lighting": "照明",
-  "/lighting/instructions": "照明指示",
+  "/lighting/instructions": "照明ガイド",
   "/lighting/equipment": "照明機材",
   "/admin": "管理",
   "/admin/roles": "ユーザー管理",
   "/admin/events": "イベント管理",
   "/admin/announcements": "お知らせ管理",
-  "/admin/analytics": "ログ/分析",
+  "/admin/analytics": "ログ / 分析",
   "/admin/forms": "フォーム管理",
   "/admin/feedback": "フィードバック",
   "/admin/site": "サイト設定",
@@ -36,7 +38,7 @@ const exactTitles: Record<string, string> = {
   "/terms": "利用規約",
   "/privacy": "プライバシーポリシー",
   "/feedback": "フィードバック",
-  "/onboarding": "初回設定",
+  "/onboarding": "初期設定",
   "/auth/callback": "ログイン処理",
   "/debug-auth": "認証チェック",
   "/closed": "クローズ中",
@@ -56,7 +58,7 @@ export function getPageTitle(pathname: string): string | null {
   }
 
   if (pathname.startsWith("/pa/events/")) {
-    return "PAイベント詳細";
+    return "PA イベント詳細";
   }
 
   if (pathname.startsWith("/lighting/events/")) {
@@ -64,8 +66,8 @@ export function getPageTitle(pathname: string): string | null {
   }
 
   if (pathname.startsWith("/events/")) {
-    if (pathname.includes("/repertoire/submit")) return "レパ表提出";
-    if (pathname.includes("/repertoire/view")) return "レパ表一覧";
+    if (pathname.includes("/repertoire/submit")) return "レパートリー提出";
+    if (pathname.includes("/repertoire/view")) return "レパートリー一覧";
     if (pathname.includes("/tt/view")) return "タイムテーブル";
     return "イベント詳細";
   }

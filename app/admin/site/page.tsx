@@ -2,17 +2,23 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Lock, Unlock } from "lucide-react";
+import { Lock, Unlock } from "@/lib/icons";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { supabase } from "@/lib/supabaseClient";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import { useAuth } from "@/contexts/AuthContext";
 import { PageHeader } from "@/components/PageHeader";
 import { SideNav } from "@/components/SideNav";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/lib/toast";
+
+type SiteSettingsRow = {
+  is_open?: boolean;
+};
+
+const SITE_SETTINGS_ROW_ID = 1;
 
 export default function AdminSitePage() {
   const { isAdmin, loading: adminLoading } = useIsAdmin();
@@ -29,7 +35,7 @@ export default function AdminSitePage() {
       const { data, error } = await supabase
         .from("site_settings")
         .select("id, is_open")
-        .eq("id", 1)
+        .eq("id", SITE_SETTINGS_ROW_ID)
         .maybeSingle();
 
       if (cancelled) return;
@@ -44,18 +50,22 @@ export default function AdminSitePage() {
       if (!data) {
         const { error: insertError } = await supabase
           .from("site_settings")
-          .insert([{ id: 1, is_open: true }]);
+          .insert([{ id: SITE_SETTINGS_ROW_ID, is_open: true }]);
+
+        if (cancelled) return;
+
         if (insertError) {
           console.error(insertError);
           toast.error("サイト設定の初期化に失敗しました。");
           setIsOpen(null);
           return;
         }
+
         setIsOpen(true);
         return;
       }
 
-      setIsOpen(Boolean((data as { is_open?: boolean }).is_open));
+      setIsOpen(Boolean((data as SiteSettingsRow).is_open));
     })();
 
     return () => {
@@ -65,17 +75,20 @@ export default function AdminSitePage() {
 
   const handleToggle = async (nextOpen: boolean) => {
     if (isOpen === null || saving) return;
+
     setSaving(true);
     const { error } = await supabase
       .from("site_settings")
       .update({ is_open: nextOpen, updated_by: userId })
-      .eq("id", 1);
+      .eq("id", SITE_SETTINGS_ROW_ID);
+
     if (error) {
       console.error(error);
-      toast.error("サイト設定の更新に失敗しました。");
+      toast.error("サイト状態の更新に失敗しました。");
       setSaving(false);
       return;
     }
+
     setIsOpen(nextOpen);
     toast.success(nextOpen ? "サイトを公開しました。" : "サイトをクローズしました。");
     setSaving(false);
@@ -84,7 +97,7 @@ export default function AdminSitePage() {
   if (adminLoading) {
     return (
       <AuthGuard>
-        <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex min-h-screen items-center justify-center bg-background">
           <p className="text-sm text-muted-foreground">権限を確認しています...</p>
         </div>
       </AuthGuard>
@@ -94,13 +107,15 @@ export default function AdminSitePage() {
   if (!isAdmin) {
     return (
       <AuthGuard>
-        <div className="min-h-screen flex items-center justify-center bg-background px-6">
-          <div className="text-center space-y-3">
+        <div className="flex min-h-screen items-center justify-center bg-background px-6">
+          <div className="space-y-3 text-center">
             <p className="text-xl font-semibold text-foreground">管理者のみアクセスできます。</p>
-            <p className="text-sm text-muted-foreground">管理者にお問い合わせください。</p>
+            <p className="text-sm text-muted-foreground">
+              管理メニューに戻って必要なページを開いてください。
+            </p>
             <Link
               href="/"
-              className="inline-flex items-center justify-center px-4 py-2 rounded-lg border border-border text-sm text-foreground hover:border-primary/60 hover:text-primary transition-colors"
+              className="inline-flex items-center justify-center rounded-lg border border-border px-4 py-2 text-sm text-foreground transition-colors hover:border-primary/60 hover:text-primary"
             >
               ホームに戻る
             </Link>
@@ -118,17 +133,20 @@ export default function AdminSitePage() {
         <main className="flex-1 md:ml-20">
           <PageHeader
             kicker="Admin"
-            title="サイト公開設定"
-            description="サイトの公開 / クローズを切り替えます。"
+            title="サイト設定"
+            description="サイト全体の公開状態を管理します。"
             backHref="/admin"
             backLabel="管理ダッシュボードに戻る"
           />
 
           <section className="pb-12 md:pb-16">
             <div className="container mx-auto px-4 sm:px-6">
-              <Card className="bg-card/60 border-border max-w-xl">
+              <Card className="max-w-xl bg-card/60">
                 <CardHeader>
                   <CardTitle className="text-lg">公開ステータス</CardTitle>
+                  <CardDescription>
+                    クローズ中でも管理者はログインして確認できます。
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex items-center justify-between">
@@ -141,14 +159,14 @@ export default function AdminSitePage() {
                           <>
                             <Badge>公開中</Badge>
                             <span className="text-xs text-muted-foreground">
-                              通常通りアクセスできます
+                              一般ユーザーもアクセスできます。
                             </span>
                           </>
                         ) : (
                           <>
                             <Badge variant="secondary">クローズ中</Badge>
                             <span className="text-xs text-muted-foreground">
-                              管理者のみアクセス可能
+                              管理者のみアクセス可能です。
                             </span>
                           </>
                         )}

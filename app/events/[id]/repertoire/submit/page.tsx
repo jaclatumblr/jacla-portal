@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Loader2 } from "@/lib/icons";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { SideNav } from "@/components/SideNav";
 import { Select } from "@/components/ui/select";

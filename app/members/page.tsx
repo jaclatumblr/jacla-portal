@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowUp, Users } from "lucide-react";
+import { ArrowUp, Users } from "@/lib/icons";
 import { SkeletonMemberCard } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { SideNav } from "@/components/SideNav";

@@ -10,7 +10,7 @@ import {
   Plus,
   RefreshCw,
   Save,
-} from "lucide-react";
+} from "@/lib/icons";
 import {
   DndContext,
   PointerSensor,

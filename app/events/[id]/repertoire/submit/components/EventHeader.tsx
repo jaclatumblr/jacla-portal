@@ -3,7 +3,7 @@
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Save, Loader2, RotateCcw } from "lucide-react";
+import { Save, Loader2, RotateCcw } from "@/lib/icons";
 
 type EventHeaderProps = {
   eventName: string;

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
-import { RefreshCw, Terminal, Play, Pause, Trash2, Users, Eye } from "lucide-react";
+import { RefreshCw, Terminal, Play, Pause, Trash2, Users, Eye } from "@/lib/icons";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import { PageHeader } from "@/components/PageHeader";

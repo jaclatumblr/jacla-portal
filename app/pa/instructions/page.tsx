@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { Badge } from "@/components/ui/badge";
 import { SideNav } from "@/components/SideNav";
@@ -10,7 +10,7 @@ import { InstructionSetlistTable } from "@/components/instructions/InstructionSe
 import { InstructionStagePlot } from "@/components/instructions/InstructionStagePlot";
 import { InstructionMemberTable } from "@/components/instructions/InstructionMemberTable";
 import { StageItem, StageMember, EventSlotRow } from "@/app/types/instructions";
-import { Info, Volume2 } from "lucide-react";
+import { Info, Volume2 } from "@/lib/icons";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatTimeText } from "@/lib/time";
 

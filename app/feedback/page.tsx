@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { Loader2, MessageCircle, Send } from "lucide-react";
+import { Loader2, MessageCircle, Send } from "@/lib/icons";
 import { SideNav } from "@/components/SideNav";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { Textarea } from "@/components/ui/textarea";

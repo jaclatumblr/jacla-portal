@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Save, Loader2, Trash2, Download } from "lucide-react";
+import Link from "next/link";
+import { Save, Loader2, Trash2, Download } from "@/lib/icons";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/lib/toast";
+import { normalizeVoxSetlistLayout } from "@/lib/voxSetlistLayout";
 import {
     EventRow,
     statusOptions,
@@ -44,6 +46,7 @@ export function EventEditForm({ event, onRefresh }: EventEditFormProps) {
     const [formData, setFormData] = useState<EventRow>(event);
     const [saving, setSaving] = useState(false);
     const [exportingRoster, setExportingRoster] = useState(false);
+    const [exportingVoxSetlist, setExportingVoxSetlist] = useState(false);
     const [deleting, setDeleting] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [deleteConfirmText, setDeleteConfirmText] = useState("");
@@ -176,6 +179,57 @@ export function EventEditForm({ event, onRefresh }: EventEditFormProps) {
             toast.error("Failed to export roster template.");
         } finally {
             setExportingRoster(false);
+        }
+    };
+
+    const handleExportMatchVoxSetlist = async () => {
+        setExportingVoxSetlist(true);
+        try {
+            const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+            const accessToken = sessionData.session?.access_token;
+            if (sessionError || !accessToken) {
+                throw new Error("Failed to get access token.");
+            }
+
+            // The frontend no longer sends the layout from localStorage.
+            // It relies on the backend's defaultVoxSetlistLayout.
+
+            const response = await fetch(`/api/admin/match-vox-setlist-template`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${accessToken}`,
+                },
+                body: JSON.stringify({
+                    eventId: event.id,
+                }),
+            });
+            if (!response.ok) {
+                const errorText = await response.text().catch(() => "");
+                throw new Error(`Failed to export Match Vox setlist (${response.status}): ${errorText}`);
+            }
+
+            const blob = await response.blob();
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            const contentDisposition = response.headers.get("content-disposition") ?? "";
+            const utf8NameMatch = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+            const decodedName = utf8NameMatch?.[1]
+                ? decodeURIComponent(utf8NameMatch[1])
+                : "match-vox-setlist.pdf";
+            link.href = downloadUrl;
+            link.download = decodedName;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(downloadUrl);
+
+            toast.success("Match Vox setlist exported.");
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to export Match Vox setlist.");
+        } finally {
+            setExportingVoxSetlist(false);
         }
     };
 
@@ -403,23 +457,41 @@ export function EventEditForm({ event, onRefresh }: EventEditFormProps) {
                             </div>
                         )}
 
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={handleExportRosterTemplate}
-                            disabled={exportingRoster || saving}
-                        >
-                            {exportingRoster ? (
-                                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                            ) : (
-                                <Download className="w-4 h-4 mr-2" />
-                            )}
-                            Export roster template
-                        </Button>
-                        <Button onClick={handleSave} disabled={saving}>
-                            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-                            保存
-                        </Button>
+                        <div className="flex items-center gap-2">
+                            <Button type="button" variant="outline" asChild>
+                                <Link href={`/admin/events/${event.id}/vox-layout`}>Voxレイアウト編集</Link>
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={handleExportRosterTemplate}
+                                disabled={exportingRoster || saving || exportingVoxSetlist}
+                            >
+                                {exportingRoster ? (
+                                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                ) : (
+                                    <Download className="w-4 h-4 mr-2" />
+                                )}
+                                Export roster template
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={handleExportMatchVoxSetlist}
+                                disabled={exportingVoxSetlist || saving || exportingRoster}
+                            >
+                                {exportingVoxSetlist ? (
+                                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                ) : (
+                                    <Download className="w-4 h-4 mr-2" />
+                                )}
+                                Export Match Vox setlist
+                            </Button>
+                            <Button onClick={handleSave} disabled={saving}>
+                                {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                                保存
+                            </Button>
+                        </div>
                     </div>
                 </CardContent>
             </Card>

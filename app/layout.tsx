@@ -15,6 +15,7 @@ import { TitleManager } from "@/components/TitleManager";
 import { ToastViewport } from "@/components/ToastViewport";
 import { PageViewTracker } from "@/components/PageViewTracker";
 import { siteTitle, titleTemplate } from "@/lib/pageTitles";
+import { PWA_THEME_COLORS } from "@/lib/pwaTheme";
 
 export const metadata: Metadata = {
   title: {
@@ -47,8 +48,8 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   colorScheme: "light dark",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#67C4FF" },
-    { media: "(prefers-color-scheme: dark)", color: "#7A4DFF" },
+    { media: "(prefers-color-scheme: light)", color: PWA_THEME_COLORS.light },
+    { media: "(prefers-color-scheme: dark)", color: PWA_THEME_COLORS.dark },
   ],
 };
 

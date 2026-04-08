@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { siteTitle } from "@/lib/pageTitles";
+import { PWA_BACKGROUND_COLOR, PWA_THEME_COLORS } from "@/lib/pwaTheme";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
@@ -11,8 +12,8 @@ export default function manifest(): MetadataRoute.Manifest {
     scope: "/",
     display: "standalone",
     orientation: "portrait",
-    background_color: "#f7fbff",
-    theme_color: "#67C4FF",
+    background_color: PWA_BACKGROUND_COLOR,
+    theme_color: PWA_THEME_COLORS.light,
     lang: "ja",
     categories: ["education", "music", "productivity"],
     icons: [

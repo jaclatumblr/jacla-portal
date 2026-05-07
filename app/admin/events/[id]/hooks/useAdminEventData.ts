@@ -34,6 +34,21 @@ type UseAdminEventDataResult = {
     ) => void;
 };
 
+type ProfileRow = {
+    id: string;
+    display_name?: string | null;
+    full_name?: string | null;
+    name?: string | null;
+    email?: string | null;
+    discord_username?: string | null;
+    discord?: string | null;
+    crew?: string | null;
+};
+
+type SlotRow = {
+    id: string;
+};
+
 export function useAdminEventData(
     eventId: string,
     isAdmin: boolean,
@@ -111,7 +126,7 @@ export function useAdminEventData(
             const bandList = (bandsRes.data ?? []) as Band[];
             setBands(bandList);
 
-            const profileList = (profilesRes.data ?? []).map((p: any) => ({
+            const profileList = ((profilesRes.data ?? []) as ProfileRow[]).map((p) => ({
                 id: p.id,
                 display_name:
                     p.display_name ??
@@ -129,7 +144,7 @@ export function useAdminEventData(
             setEventStaff((staffRes.data ?? []) as EventStaffMember[]);
 
             // Assignments
-            const slotIds = (slotsRes.data ?? []).map((s: any) => s.id).filter(Boolean);
+            const slotIds = ((slotsRes.data ?? []) as SlotRow[]).map((s) => s.id).filter(Boolean);
             if (slotIds.length > 0) {
                 const { data: assignData, error: assignError } = await supabase
                     .from("slot_staff_assignments")
@@ -169,9 +184,9 @@ export function useAdminEventData(
                 setMembers([]);
                 setSongs([]);
             }
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error(err);
-            setError(err.message || "データ取得エラー");
+            setError(err instanceof Error ? err.message : "データ取得エラー");
             toast.error("データの読み込みに失敗しました。");
         } finally {
             setLoading(false);

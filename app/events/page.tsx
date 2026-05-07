@@ -3,13 +3,14 @@
 
 import Link from "next/link";
 import { ArrowRight, Calendar, Clock, MapPin } from "@/lib/icons";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { SkeletonEventCard } from "@/components/ui/skeleton";
 import { SideNav } from "@/components/SideNav";
 import { PageHeader } from "@/components/PageHeader";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { supabase } from "@/lib/supabaseClient";
+import { groupItemsByFiscalYear } from "@/lib/fiscalYear";
 import { toast } from "@/lib/toast";
 import { formatTimeText } from "@/lib/time";
 
@@ -42,6 +43,7 @@ function statusLabel(status: string) {
 export default function EventsPage() {
   const [events, setEvents] = useState<EventRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const fiscalYearSections = useMemo(() => groupItemsByFiscalYear(events), [events]);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,55 +98,66 @@ export default function EventsPage() {
                 ) : events.length === 0 ? (
                   <div className="text-sm text-muted-foreground">イベントがありません。</div>
                 ) : (
-                  events.map((event, index) => {
-                    const openText = formatTimeText(event.open_time) ?? event.open_time;
-                    const startText = formatTimeText(event.start_time) ?? event.start_time;
-                    const timeRange =
-                      openText && startText ? `${openText} - ${startText}` : "\u6642\u9593\u672a\u5b9a";
-                    return (
-                      <Link key={event.id} href={`/events/${event.id}`} className="group block">
-                        <div className="relative p-4 sm:p-6 bg-card/50 border border-border rounded-lg hover:border-primary/50 transition-all duration-300">
-                          <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-lg" />
+                  fiscalYearSections.map((section) => (
+                    <div key={section.fiscalYear} className="space-y-3 md:space-y-4">
+                      <div className="flex items-center gap-3 border-b border-border/70 pb-2">
+                        <h2 className="text-lg font-semibold text-foreground">{section.label}</h2>
+                        <Badge variant="secondary">{section.items.length}</Badge>
+                      </div>
 
-                          <div className="relative">
-                            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4 mb-4">
-                              <div className="flex items-center gap-3 flex-wrap">
-                                <span className="text-xs text-muted-foreground font-mono">
-                                  {String(index + 1).padStart(2, "0")}
-                                </span>
-                                <h3 className="text-lg sm:text-xl font-bold text-foreground group-hover:text-primary transition-colors">
-                                  {event.name}
-                                </h3>
-                                <Badge variant={statusVariant(event.status)}>
-                                  {statusLabel(event.status)}
-                                </Badge>
-                              </div>
-                              <ArrowRight className="hidden sm:block w-5 h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all shrink-0" />
-                            </div>
+                      <div className="space-y-4">
+                        {section.items.map((event, index) => {
+                          const openText = formatTimeText(event.open_time) ?? event.open_time;
+                          const startText = formatTimeText(event.start_time) ?? event.start_time;
+                          const timeRange =
+                            openText && startText ? `${openText} - ${startText}` : "時間未定";
+                          return (
+                            <Link key={event.id} href={`/events/${event.id}`} className="group block">
+                              <div className="relative rounded-lg border border-border bg-card/50 p-4 transition-all duration-300 hover:border-primary/50 sm:p-6">
+                                <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-primary/5 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
 
-                            <p className="text-muted-foreground mb-4 text-sm sm:text-base line-clamp-2">
-                              {event.note ?? "詳細を確認できます。"}
-                            </p>
+                                <div className="relative">
+                                  <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                                    <div className="flex flex-wrap items-center gap-3">
+                                      <span className="font-mono text-xs text-muted-foreground">
+                                        {String(index + 1).padStart(2, "0")}
+                                      </span>
+                                      <h3 className="text-lg font-bold text-foreground transition-colors group-hover:text-primary sm:text-xl">
+                                        {event.name}
+                                      </h3>
+                                      <Badge variant={statusVariant(event.status)}>
+                                        {statusLabel(event.status)}
+                                      </Badge>
+                                    </div>
+                                    <ArrowRight className="hidden h-5 w-5 shrink-0 text-muted-foreground transition-all group-hover:translate-x-1 group-hover:text-primary sm:block" />
+                                  </div>
 
-                            <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-3 sm:gap-6 text-sm">
-                              <div className="flex items-center gap-2 text-muted-foreground">
-                                <Calendar className="w-4 h-4 text-primary shrink-0" />
-                                <span className="truncate">{event.date}</span>
+                                  <p className="mb-4 line-clamp-2 text-sm text-muted-foreground sm:text-base">
+                                    {event.note ?? "詳細を確認できます。"}
+                                  </p>
+
+                                  <div className="grid grid-cols-2 items-center gap-3 text-sm sm:flex sm:flex-wrap sm:gap-6">
+                                    <div className="flex items-center gap-2 text-muted-foreground">
+                                      <Calendar className="h-4 w-4 shrink-0 text-primary" />
+                                      <span className="truncate">{event.date}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-muted-foreground">
+                                      <Clock className="h-4 w-4 shrink-0 text-primary" />
+                                      <span className="truncate">{timeRange}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-muted-foreground">
+                                      <MapPin className="h-4 w-4 shrink-0 text-primary" />
+                                      <span className="truncate">{event.venue ?? "未設定"}</span>
+                                    </div>
+                                  </div>
+                                </div>
                               </div>
-                              <div className="flex items-center gap-2 text-muted-foreground">
-                                <Clock className="w-4 h-4 text-primary shrink-0" />
-                                <span className="truncate">{timeRange}</span>
-                              </div>
-                              <div className="flex items-center gap-2 text-muted-foreground">
-                                <MapPin className="w-4 h-4 text-primary shrink-0" />
-                                <span className="truncate">{event.venue ?? "未設定"}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                    );
-                  })
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))
                 )}
               </div>
             </div>

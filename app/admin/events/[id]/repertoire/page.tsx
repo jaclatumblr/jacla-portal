@@ -12,7 +12,8 @@ import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { StagePlotPreview } from "@/components/StagePlotPreview";
+import { StagePlotPreviewTabs } from "@/components/StagePlotPreviewTabs";
+import { applyStagePlotAssignments, readStagePlotData } from "@/lib/stagePlot";
 import { toast } from "@/lib/toast";
 
 type EventRow = {
@@ -41,6 +42,7 @@ type SongRow = {
   entry_type: "song" | "mc" | null;
   url: string | null;
   order_index: number | null;
+  stagePlotId?: string | null;
   duration_sec: number | null;
   arrangement_note: string | null;
   lighting_spot: string | null;
@@ -81,6 +83,15 @@ type StageItem = {
   dashed?: boolean;
   x: number;
   y: number;
+  variant?: import("@/lib/stagePlot").StageItemVariant;
+  templateId?: import("@/lib/stagePlot").DefaultStageItemTemplateId;
+};
+
+type StagePlot = {
+  id: string;
+  name: string;
+  items: StageItem[];
+  memberPositions?: import("@/lib/stagePlot").StagePlotMemberPositionMap;
 };
 
 type StageMember = {
@@ -219,30 +230,6 @@ const formatLightingChoice = (value: string | null) => {
   return "-";
 };
 
-const parseStageItems = (value: Record<string, unknown> | null | undefined): StageItem[] => {
-  const rawItems = (value as { items?: unknown } | null)?.items;
-  if (!Array.isArray(rawItems)) return [];
-  return rawItems
-    .map((item, index) => {
-      const entry = item as {
-        id?: string;
-        label?: string;
-        dashed?: boolean;
-        x?: number;
-        y?: number;
-      };
-      if (!entry.label) return null;
-      return {
-        id: entry.id ?? `stage-${index}`,
-        label: entry.label,
-        dashed: Boolean(entry.dashed),
-        x: clampPercent(Number(entry.x ?? 50)),
-        y: clampPercent(Number(entry.y ?? 50)),
-      } satisfies StageItem;
-    })
-    .filter(Boolean) as StageItem[];
-};
-
 export default function AdminRepertoireViewPage() {
   const params = useParams<{ id: string }>();
   const eventId = params?.id as string | undefined;
@@ -372,6 +359,13 @@ export default function AdminRepertoireViewPage() {
 
   const songsByBand = useMemo(() => {
     const grouped: Record<string, SongRow[]> = {};
+    const stagePlotDataByBand = new Map(
+      bands.map((band) => {
+        const plotData = readStagePlotData<StageItem>(band.stage_plot_data);
+        return [band.id, plotData] as const;
+      })
+    );
+
     songs.forEach((song) => {
       if (!grouped[song.band_id]) grouped[song.band_id] = [];
       grouped[song.band_id].push(song);
@@ -384,8 +378,19 @@ export default function AdminRepertoireViewPage() {
         return (a.created_at ?? "").localeCompare(b.created_at ?? "");
       });
     });
+
+    Object.entries(grouped).forEach(([bandId, list]) => {
+      const plotData = stagePlotDataByBand.get(bandId);
+      if (!plotData) return;
+      grouped[bandId] = applyStagePlotAssignments(
+        list,
+        plotData.plots,
+        plotData.songPlotAssignments
+      );
+    });
+
     return grouped;
-  }, [songs]);
+  }, [bands, songs]);
 
   const memberDetailsByBand = useMemo(() => {
     const grouped: Record<string, MemberDetail[]> = {};
@@ -415,10 +420,10 @@ export default function AdminRepertoireViewPage() {
     return grouped;
   }, [members]);
 
-  const stageItemsByBand = useMemo(() => {
-    const grouped: Record<string, StageItem[]> = {};
+  const stagePlotsByBand = useMemo(() => {
+    const grouped: Record<string, StagePlot[]> = {};
     bands.forEach((band) => {
-      grouped[band.id] = parseStageItems(band.stage_plot_data);
+      grouped[band.id] = readStagePlotData<StageItem>(band.stage_plot_data).plots as StagePlot[];
     });
     return grouped;
   }, [bands]);
@@ -542,7 +547,7 @@ export default function AdminRepertoireViewPage() {
                       band.repertoire_status === "submitted" ? "提出済み" : "下書き";
                     const bandSongs = songsByBand[band.id] ?? [];
                     const memberDetails = memberDetailsByBand[band.id] ?? [];
-                    const stageItems = stageItemsByBand[band.id] ?? [];
+                    const stagePlots = stagePlotsByBand[band.id] ?? [];
                     const stageMembers = stageMembersByBand[band.id] ?? [];
 
                     return (
@@ -598,7 +603,11 @@ export default function AdminRepertoireViewPage() {
                             <CardTitle className="text-base">ステージ配置図</CardTitle>
                           </CardHeader>
                           <CardContent>
-                            <StagePlotPreview items={stageItems} members={stageMembers} />
+                            <StagePlotPreviewTabs
+                              plots={stagePlots}
+                              members={stageMembers}
+                              songs={bandSongs}
+                            />
                           </CardContent>
                         </Card>
 

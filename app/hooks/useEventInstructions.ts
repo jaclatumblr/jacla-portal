@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { applyStagePlotAssignments, readStagePlotData } from "@/lib/stagePlot";
 import {
   EventRow,
   BandNoteRow,
   BandMemberRow,
   SongRow,
   EventGroup,
-  StageItem,
+  StagePlot,
   StageMember,
   BandMemberDetail,
   EventSlotRow,
@@ -15,32 +16,6 @@ import {
 } from "../types/instructions";
 
 const clampPercent = (value: number) => Math.min(95, Math.max(5, value));
-
-const parseStageItems = (
-  value: Record<string, unknown> | null | undefined
-): StageItem[] => {
-  const rawItems = (value as { items?: unknown } | null)?.items;
-  if (!Array.isArray(rawItems)) return [];
-  return rawItems
-    .map((item, index) => {
-      const entry = item as {
-        id?: string;
-        label?: string;
-        dashed?: boolean;
-        x?: number;
-        y?: number;
-      };
-      if (!entry.label) return null;
-      return {
-        id: entry.id ?? `stage-${index}`,
-        label: entry.label,
-        dashed: Boolean(entry.dashed),
-        x: clampPercent(Number(entry.x ?? 50)),
-        y: clampPercent(Number(entry.y ?? 50)),
-      } satisfies StageItem;
-    })
-    .filter(Boolean) as StageItem[];
-};
 
 export function useEventInstructions() {
   const [events, setEvents] = useState<EventRow[]>([]);
@@ -237,10 +212,10 @@ export function useEventInstructions() {
     }));
   }, [events, bands]);
 
-  const stageItemsByBand = useMemo<Record<string, StageItem[]>>(() => {
-    const next: Record<string, StageItem[]> = {};
+  const stagePlotsByBand = useMemo<Record<string, StagePlot[]>>(() => {
+    const next: Record<string, StagePlot[]> = {};
     bands.forEach((band) => {
-      next[band.id] = parseStageItems(band.stage_plot_data);
+      next[band.id] = readStagePlotData(band.stage_plot_data).plots as StagePlot[];
     });
     return next;
   }, [bands]);
@@ -303,6 +278,13 @@ export function useEventInstructions() {
 
   const songsByBand = useMemo<Record<string, SongRow[]>>(() => {
     const next: Record<string, SongRow[]> = {};
+    const stagePlotDataByBand = new Map(
+      bands.map((band) => {
+        const plotData = readStagePlotData(band.stage_plot_data);
+        return [band.id, plotData] as const;
+      })
+    );
+
     songs.forEach((song) => {
       if (!next[song.band_id]) next[song.band_id] = [];
       next[song.band_id].push(song);
@@ -315,8 +297,13 @@ export function useEventInstructions() {
         return (a.created_at ?? "").localeCompare(b.created_at ?? "");
       });
     });
+    Object.entries(next).forEach(([bandId, list]) => {
+      const plotData = stagePlotDataByBand.get(bandId);
+      if (!plotData) return;
+      next[bandId] = applyStagePlotAssignments(list, plotData.plots, plotData.songPlotAssignments);
+    });
     return next;
-  }, [songs]);
+  }, [bands, songs]);
 
   const slotsByEvent = useMemo<Record<string, EventSlotRow[]>>(() => {
     const next: Record<string, EventSlotRow[]> = {};
@@ -360,7 +347,7 @@ export function useEventInstructions() {
     loading,
     error,
     groupedEvents,
-    stageItemsByBand,
+    stagePlotsByBand,
     bandMembersByBand,
     bandMemberDetailsByBand,
     songsByBand,

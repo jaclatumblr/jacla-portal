@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -26,6 +26,12 @@ import { PageHeader } from "@/components/PageHeader";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { formatPhoneNumber } from "@/lib/phone";
+import {
+  getProfileGenderLabel,
+  normalizeProfileGender,
+  profileGenderOptions,
+  type ProfileGender,
+} from "@/lib/profileGender";
 
 type ProfileRow = {
   id: string;
@@ -159,6 +165,7 @@ export default function AdminRolesPage() {
   const [enrollmentYear, setEnrollmentYear] = useState("");
   const [birthDate, setBirthDate] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [gender, setGender] = useState<ProfileGender | "">("");
   const [studentIdLoading, setStudentIdLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -250,34 +257,38 @@ export default function AdminRolesPage() {
   }, [roleFlags]);
 
   useEffect(() => {
-    if (!selectedProfile) {
-      setForm({ crew: "User", muted: false });
-      setProfileForm({ displayName: "", realNameFamily: "", realNameGiven: "", email: "" });
-      setLeaderRoles([]);
-      setLeadersLoading(false);
-      setPositions([]);
-      setPositionsLoading(false);
-      setPrimaryPart("");
-      setSubParts([]);
-      setStudentId("");
-      setEnrollmentYear("");
-      setBirthDate("");
-      setPhoneNumber("");
-      setStudentIdLoading(false);
-      return;
-    }
-    setForm({
-      crew: selectedProfile.crew,
-      muted: Boolean(selectedProfile.muted),
+    startTransition(() => {
+      if (!selectedProfile) {
+        setForm({ crew: "User", muted: false });
+        setProfileForm({ displayName: "", realNameFamily: "", realNameGiven: "", email: "" });
+        setLeaderRoles([]);
+        setLeadersLoading(false);
+        setPositions([]);
+        setPositionsLoading(false);
+        setPrimaryPart("");
+        setSubParts([]);
+        setStudentId("");
+        setEnrollmentYear("");
+        setBirthDate("");
+        setPhoneNumber("");
+        setStudentIdLoading(false);
+        return;
+      }
+      setForm({
+        crew: selectedProfile.crew,
+        muted: Boolean(selectedProfile.muted),
+      });
+      const splitName = splitRealName(selectedProfile.real_name);
+      setProfileForm({
+        displayName: selectedProfile.display_name ?? "",
+        realNameFamily: splitName.family,
+        realNameGiven: splitName.given,
+        email: selectedProfile.email ?? "",
+      });
+      setPrimaryPart(
+        selectedProfile.part && selectedProfile.part !== "none" ? selectedProfile.part : ""
+      );
     });
-    const splitName = splitRealName(selectedProfile.real_name);
-    setProfileForm({
-      displayName: selectedProfile.display_name ?? "",
-      realNameFamily: splitName.family,
-      realNameGiven: splitName.given,
-      email: selectedProfile.email ?? "",
-    });
-    setPrimaryPart(selectedProfile.part && selectedProfile.part !== "none" ? selectedProfile.part : "");
   }, [selectedProfile]);
 
   useEffect(() => {
@@ -299,7 +310,8 @@ export default function AdminRolesPage() {
     let cancelled = false;
     (async () => {
       setStudentIdLoading(true);
-      const privateColumns = "student_id, enrollment_year, birth_date, phone_number";
+      const privateColumns = "student_id, enrollment_year, birth_date, phone_number, gender";
+      const legacyPrivateColumnsWithPhone = "student_id, enrollment_year, birth_date, phone_number";
       const legacyPrivateColumns = "student_id, enrollment_year, birth_date";
       const privateResWithPhone = await supabase
         .from("profile_private")
@@ -313,9 +325,27 @@ export default function AdminRolesPage() {
             enrollment_year?: number | null;
             birth_date?: string | null;
             phone_number?: string | null;
+            gender?: string | null;
           }
         | null;
       let error = privateResWithPhone.error;
+      if (error?.code === "42703") {
+        const legacyResWithPhone = await supabase
+          .from("profile_private")
+          .select(legacyPrivateColumnsWithPhone)
+          .eq("profile_id", selectedId)
+          .maybeSingle();
+        data = legacyResWithPhone.data as
+          | {
+              student_id?: string | null;
+              enrollment_year?: number | null;
+              birth_date?: string | null;
+              phone_number?: string | null;
+              gender?: string | null;
+            }
+          | null;
+        error = legacyResWithPhone.error;
+      }
       if (error?.code === "42703") {
         const legacyRes = await supabase
           .from("profile_private")
@@ -328,6 +358,7 @@ export default function AdminRolesPage() {
               enrollment_year?: number | null;
               birth_date?: string | null;
               phone_number?: string | null;
+              gender?: string | null;
             }
           | null;
         error = legacyRes.error;
@@ -339,6 +370,7 @@ export default function AdminRolesPage() {
         setEnrollmentYear("");
         setBirthDate("");
         setPhoneNumber("");
+        setGender("");
       } else {
         const row = data as
           | {
@@ -346,12 +378,14 @@ export default function AdminRolesPage() {
               enrollment_year?: number | null;
               birth_date?: string | null;
               phone_number?: string | null;
+              gender?: string | null;
             }
           | null;
         setStudentId(row?.student_id ?? "");
         setEnrollmentYear(row?.enrollment_year != null ? String(row.enrollment_year) : "");
         setBirthDate(row?.birth_date ?? "");
         setPhoneNumber(formatPhoneNumber(row?.phone_number ?? ""));
+        setGender(normalizeProfileGender(row?.gender) ?? "");
       }
       setStudentIdLoading(false);
     })();
@@ -501,24 +535,28 @@ export default function AdminRolesPage() {
 
   useEffect(() => {
     if (!selectedId || leadersLoading || positionsLoading) return;
-    setPositions((prev) => {
-      const next = new Set(prev);
-      ["PA Chief", "Lighting Chief"].forEach((value) => {
-        if (!autoPositions.has(value)) {
-          next.delete(value);
-        }
+    startTransition(() => {
+      setPositions((prev) => {
+        const next = new Set(prev);
+        ["PA Chief", "Lighting Chief"].forEach((value) => {
+          if (!autoPositions.has(value)) {
+            next.delete(value);
+          }
+        });
+        autoPositions.forEach((value) => next.add(value));
+        return Array.from(next).filter((value) => allowedPositions.has(value));
       });
-      autoPositions.forEach((value) => next.add(value));
-      return Array.from(next).filter((value) => allowedPositions.has(value));
     });
   }, [allowedPositions, autoPositions, leadersLoading, positionsLoading, selectedId]);
 
   useEffect(() => {
-    if (!primaryPart) {
-      setSubParts([]);
-      return;
-    }
-    setSubParts((prev) => prev.filter((value) => value !== primaryPart));
+    startTransition(() => {
+      if (!primaryPart) {
+        setSubParts([]);
+        return;
+      }
+      setSubParts((prev) => prev.filter((value) => value !== primaryPart));
+    });
   }, [primaryPart]);
 
   useEffect(() => {
@@ -667,6 +705,7 @@ export default function AdminRolesPage() {
         enrollmentYear: enrollmentNumber,
         birthDate: birthDate || null,
         phoneNumber: phoneNumber.trim() || null,
+        gender: gender || null,
       }),
     });
 
@@ -1127,6 +1166,10 @@ export default function AdminRolesPage() {
                               連絡先:{" "}
                               {studentIdLoading ? "読み込み中..." : phoneNumber || "未登録"}
                             </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              性別:{" "}
+                              {studentIdLoading ? "読み込み中..." : getProfileGenderLabel(gender)}
+                            </p>
                             {selectedProfile.id === userId && (
                               <p className="text-xs text-primary">※自分自身の権限を編集中</p>
                             )}
@@ -1189,7 +1232,7 @@ export default function AdminRolesPage() {
                               />
                             </label>
                           )}
-                          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                             <label className="space-y-1 text-sm">
                               <span className="text-foreground">学籍番号</span>
                               <Input
@@ -1226,6 +1269,22 @@ export default function AdminRolesPage() {
                                 onChange={(e) => setBirthDate(e.target.value)}
                                 disabled={!canEditFullRoles || studentIdLoading}
                               />
+                            </label>
+                            <label className="space-y-1 text-sm">
+                              <span className="text-foreground">性別</span>
+                              <select
+                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                value={gender}
+                                onChange={(e) => setGender(e.target.value as ProfileGender | "")}
+                                disabled={!canEditFullRoles || studentIdLoading}
+                              >
+                                <option value="">未設定</option>
+                                {profileGenderOptions.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
                             </label>
                           </div>
                         </div>

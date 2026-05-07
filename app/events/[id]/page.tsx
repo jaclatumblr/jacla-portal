@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Calendar, Clock, MapPin, Music, FileText, List, ArrowRight } from "@/lib/icons";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -36,6 +36,7 @@ type BandSummary = {
 
 export default function EventDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const eventId = params?.id as string | undefined;
   const { isAdmin } = useRoleFlags();
 
@@ -87,7 +88,7 @@ export default function EventDetailPage() {
           repertoire_status: string | null;
         }[];
         const bandIds = bandList.map((band) => band.id);
-        let counts: Record<string, number> = {};
+        const counts: Record<string, number> = {};
         if (bandIds.length > 0) {
           const { data: songsData, error: songsError } = await supabase
             .from("songs")
@@ -148,10 +149,26 @@ export default function EventDetailPage() {
     if (list.length === 0) {
       return <p className="text-muted-foreground text-center py-8">該当するバンドがありません。</p>;
     }
-    return list.map((band, index) => (
+    return list.map((band, index) => {
+      const href = eventId ? `/events/${eventId}/repertoire/view?bandId=${band.id}` : null;
+      return (
       <div
         key={band.id}
-        className="flex items-center justify-between p-3 md:p-4 bg-card/50 border border-border rounded-lg hover:border-primary/30 transition-all"
+        className={`flex items-center justify-between p-3 md:p-4 bg-card/50 border border-border rounded-lg transition-all ${
+          href ? "cursor-pointer hover:border-primary/30 hover:bg-card/70" : "hover:border-primary/30"
+        }`}
+        onClick={() => {
+          if (href) router.push(href);
+        }}
+        onKeyDown={(event) => {
+          if (!href) return;
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            router.push(href);
+          }
+        }}
+        role={href ? "link" : undefined}
+        tabIndex={href ? 0 : undefined}
       >
         <div className="flex items-center gap-3 md:gap-4 min-w-0">
           <span className="hidden sm:block text-xs text-muted-foreground font-mono w-6">
@@ -161,7 +178,17 @@ export default function EventDetailPage() {
             <Music className="w-4 h-4 md:w-5 md:h-5 text-primary" />
           </div>
           <div className="min-w-0">
-            <p className="font-medium text-sm md:text-base truncate">{band.name}</p>
+            {eventId ? (
+              <Link
+                href={`/events/${eventId}/repertoire/view?bandId=${band.id}`}
+                className="inline-flex max-w-full items-center gap-1 font-medium text-sm md:text-base text-foreground transition-colors hover:text-primary"
+              >
+                <span className="truncate">{band.name}</span>
+                <ArrowRight className="h-3.5 w-3.5 shrink-0" />
+              </Link>
+            ) : (
+              <p className="font-medium text-sm md:text-base truncate">{band.name}</p>
+            )}
             <p className="text-xs md:text-sm text-muted-foreground">
               {band.songs > 0 ? `${band.songs}曲` : "未提出"}
             </p>
@@ -174,7 +201,8 @@ export default function EventDetailPage() {
           {band.status === "submitted" ? "提出済み" : "未提出"}
         </Badge>
       </div>
-    ));
+    );
+    });
   };
 
   return (

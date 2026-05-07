@@ -58,6 +58,7 @@ export type SongEntry = {
   lightingMoving: LightingChoice;
   lightingColor: string;
   memo: string;
+  stagePlotId: string | null;
   order_index: number | null;
 };
 
@@ -123,7 +124,16 @@ export type StageItem = {
   dashed: boolean;
   x: number;
   y: number;
+  variant?: import("@/lib/stagePlot").StageItemVariant;
+  templateId?: import("@/lib/stagePlot").DefaultStageItemTemplateId;
   fixed?: boolean;
+};
+
+export type StagePlot = {
+  id: string;
+  name: string;
+  items: StageItem[];
+  memberPositions?: import("@/lib/stagePlot").StagePlotMemberPositionMap;
 };
 
 export type RepertoireDraft = {
@@ -139,7 +149,9 @@ export type RepertoireDraft = {
   repertoireStatus: RepertoireStatus;
   songs: SongEntry[];
   removedSongIds: string[];
-  stageItems: StageItem[];
+  stagePlots: StagePlot[];
+  activeStagePlotId?: string | null;
+  stageItems?: StageItem[];
   bandMembers: StageMember[];
 };
 
@@ -227,6 +239,7 @@ export const normalizeSongs = (rows: SongRow[]): SongEntry[] =>
       lightingMoving: (row.lighting_moving as LightingChoice) ?? "",
       lightingColor: row.lighting_color ?? "",
       memo: row.memo ?? "",
+      stagePlotId: null,
       order_index: row.order_index ?? index + 1,
     };
   });
@@ -333,18 +346,4 @@ export const stageSlots: Record<StageCategory, { x: number; y: number }[]> = {
     { x: 18, y: 72 },
     { x: 82, y: 72 },
   ],
-};
-
-export const stagePresets = [
-  { id: "marshall", label: "Marshall", dashed: true },
-  { id: "jc", label: "JC", dashed: true },
-  { id: "active", label: "Active", dashed: true },
-  { id: "passive", label: "Passive", dashed: true },
-];
-
-export const stagePresetPositions: Record<string, { x: number; y: number }> = {
-  Marshall: { x: 68, y: 34 },
-  JC: { x: 62, y: 34 },
-  Active: { x: 32, y: 34 },
-  Passive: { x: 28, y: 34 },
 };

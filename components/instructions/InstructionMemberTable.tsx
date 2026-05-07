@@ -1,113 +1,191 @@
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
 import { BandMemberDetail } from "@/app/types/instructions";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import { instructionTheme, InstructionRole } from "@/components/instructions/theme";
 
 type InstructionMemberTableProps = {
-    members: BandMemberDetail[];
-    role: "pa" | "lighting";
+  members: BandMemberDetail[];
+  role: InstructionRole;
 };
 
+const hasText = (value: string | null | undefined) => Boolean(value?.trim());
+
 export function InstructionMemberTable({
-    members,
-    role,
+  members,
+  role,
 }: InstructionMemberTableProps) {
-    if (members.length === 0) {
-        return (
-            <p className="text-sm text-muted-foreground p-3 border rounded-md border-border/50 bg-muted/20">
-                メンバー情報は未入力です。
-            </p>
-        );
-    }
-
+  if (members.length === 0) {
     return (
-        <div className="space-y-3">
-            {/* Mobile View */}
-            <div className="space-y-2 md:hidden">
-                {members.map((member) => (
-                    <div
-                        key={member.id}
-                        className="rounded-md border border-border bg-card/50 p-3 text-sm"
-                    >
-                        <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                                <span className="font-bold text-base">
-                                    {member.instrument || "Part"}
-                                </span>
-                                {member.isMc && <Badge variant="secondary" className="text-[10px] h-5">MC</Badge>}
-                            </div>
-                            <span className="text-muted-foreground text-xs">{member.name}</span>
-                        </div>
-
-                        {/* PAの場合のみ返し要望を詳細表示 */}
-                        {role === "pa" && (
-                            <div className="grid gap-2 text-xs border-t border-border/50 pt-2 mt-1">
-                                <div className="grid grid-cols-[60px,1fr] gap-2">
-                                    <span className="text-muted-foreground">返し要望</span>
-                                    <span className="text-foreground font-medium whitespace-pre-wrap">
-                                        {member.monitorRequest?.trim() || "-"}
-                                    </span>
-                                </div>
-                                <div className="grid grid-cols-[60px,1fr] gap-2">
-                                    <span className="text-muted-foreground">備考</span>
-                                    <span className="text-foreground whitespace-pre-wrap">
-                                        {member.monitorNote?.trim() || "-"}
-                                    </span>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                ))}
-            </div>
-
-            {/* Desktop View */}
-            <div className="hidden md:block overflow-x-auto rounded-md border border-border bg-card/40">
-                <Table className="min-w-[600px]">
-                    <TableHeader>
-                        <TableRow className="hover:bg-transparent">
-                            <TableHead className="w-[150px]">パート</TableHead>
-                            <TableHead className="w-[180px]">名前</TableHead>
-                            <TableHead className="w-[60px] text-center">MC</TableHead>
-                            {role === "pa" && (
-                                <>
-                                    <TableHead className="w-[200px] text-blue-400">返し要望</TableHead>
-                                    <TableHead className="w-[200px] text-blue-400">備考</TableHead>
-                                </>
-                            )}
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {members.map((member) => (
-                            <TableRow key={member.id} className="hover:bg-muted/30">
-                                <TableCell className="font-semibold">
-                                    {member.instrument || "Part"}
-                                </TableCell>
-                                <TableCell>{member.name}</TableCell>
-                                <TableCell className="text-center">
-                                    {member.isMc ? "○" : "-"}
-                                </TableCell>
-
-                                {role === "pa" && (
-                                    <>
-                                        <TableCell className="text-sm whitespace-pre-wrap">
-                                            {member.monitorRequest?.trim() || "-"}
-                                        </TableCell>
-                                        <TableCell className="text-sm whitespace-pre-wrap">
-                                            {member.monitorNote?.trim() || "-"}
-                                        </TableCell>
-                                    </>
-                                )}
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </div>
-        </div>
+      <p className="rounded-xl border border-border/50 bg-muted/20 p-3 text-sm text-muted-foreground">
+        メンバー情報は未入力です。
+      </p>
     );
+  }
+
+  const theme = instructionTheme[role];
+  const monitorRequestCount = members.filter(
+    (member) => hasText(member.monitorRequest) || hasText(member.monitorNote)
+  ).length;
+  const mcCount = members.filter((member) => member.isMc).length;
+
+  return (
+    <div className="space-y-3">
+      <div
+        className={cn(
+          "rounded-xl border px-3 py-2 text-xs",
+          role === "pa"
+            ? `${theme.accentBorder} ${theme.accentSurfaceStrong} ${theme.accentStrongText}`
+            : `${theme.accentBorder} ${theme.accentSurfaceStrong} ${theme.accentStrongText}`
+        )}
+      >
+        {role === "pa"
+          ? `返し要望あり ${monitorRequestCount} / ${members.length} 人`
+          : `MCあり ${mcCount} / ${members.length} 人`}
+      </div>
+
+      <div className="space-y-2 md:hidden">
+        {members.map((member) => {
+          const hasMonitorNote = hasText(member.monitorRequest) || hasText(member.monitorNote);
+
+          return (
+            <div
+              key={member.id}
+              className={cn(
+                "rounded-xl border bg-card/70 p-3 text-sm shadow-sm",
+                role === "pa" && hasMonitorNote
+                  ? `${theme.accentBorder} ${theme.accentSurface}`
+                  : "border-border/70"
+              )}
+            >
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-base">{member.instrument || "Part"}</span>
+                  {member.isMc ? (
+                    <Badge
+                      variant="outline"
+                      className={cn("h-5 text-[10px]", theme.chip)}
+                    >
+                      MC
+                    </Badge>
+                  ) : null}
+                </div>
+                <span className="text-xs text-muted-foreground">{member.name}</span>
+              </div>
+
+              {role === "pa" ? (
+                <div className="grid gap-2 border-t border-border/50 pt-3 text-xs">
+                  <div className="grid grid-cols-[64px,1fr] gap-2">
+                    <span className="text-muted-foreground">返し要望</span>
+                    <span className="whitespace-pre-wrap font-medium text-foreground">
+                      {member.monitorRequest?.trim() || "-"}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-[64px,1fr] gap-2">
+                    <span className="text-muted-foreground">備考</span>
+                    <span className="whitespace-pre-wrap text-foreground">
+                      {member.monitorNote?.trim() || "-"}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid gap-2 border-t border-border/50 pt-3 text-xs">
+                  <div className="grid grid-cols-[64px,1fr] gap-2">
+                    <span className="text-muted-foreground">演者名</span>
+                    <span className="text-foreground">{member.name}</span>
+                  </div>
+                  <div className="grid grid-cols-[64px,1fr] gap-2">
+                    <span className="text-muted-foreground">照明視点</span>
+                    <span className="text-foreground">
+                      {member.isMc ? "MC導線あり" : "通常パート"}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="hidden rounded-xl border border-border/70 bg-card/50 md:block">
+        <div
+          className={cn(
+            "grid gap-3 border-b border-border/60 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground",
+            role === "pa"
+              ? "grid-cols-[88px_minmax(0,140px)_40px_minmax(0,1fr)_minmax(0,1fr)]"
+              : "grid-cols-[88px_minmax(0,1fr)_40px_108px]"
+          )}
+        >
+          <span>パート</span>
+          <span>名前</span>
+          <span className="text-center">MC</span>
+          {role === "pa" ? (
+            <>
+              <span className={theme.accentText}>返し要望</span>
+              <span className={theme.accentText}>備考</span>
+            </>
+          ) : (
+            <span className={theme.accentText}>照明視点</span>
+          )}
+        </div>
+
+        <div className="divide-y divide-border/60">
+          {members.map((member) => {
+            const hasMonitorNote = hasText(member.monitorRequest) || hasText(member.monitorNote);
+
+            return (
+              <div
+                key={member.id}
+                className={cn(
+                  "px-3 py-2.5",
+                  role === "pa" && hasMonitorNote
+                    ? theme.accentSurface
+                    : role === "lighting" && member.isMc
+                      ? theme.accentSurface
+                      : "bg-card/30"
+                )}
+              >
+                <div
+                  className={cn(
+                    "grid gap-3",
+                    role === "pa"
+                      ? "grid-cols-[88px_minmax(0,140px)_40px_minmax(0,1fr)_minmax(0,1fr)]"
+                      : "grid-cols-[88px_minmax(0,1fr)_40px_108px]"
+                  )}
+                >
+                  <div className="text-sm font-semibold text-foreground">
+                    {member.instrument || "Part"}
+                  </div>
+                  <div className="min-w-0 text-sm text-foreground">{member.name}</div>
+                  <div className="flex items-start justify-center">
+                    {member.isMc ? (
+                      <Badge variant="outline" className={cn("h-5 px-1.5 text-[10px]", theme.chip)}>
+                        MC
+                      </Badge>
+                    ) : (
+                      <span className="pt-0.5 text-xs text-muted-foreground">-</span>
+                    )}
+                  </div>
+
+                  {role === "pa" ? (
+                    <>
+                      <div className="whitespace-pre-wrap break-words text-sm text-foreground">
+                        {member.monitorRequest?.trim() || "-"}
+                      </div>
+                      <div className="whitespace-pre-wrap break-words text-sm text-muted-foreground">
+                        {member.monitorNote?.trim() || "-"}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-sm text-foreground">
+                      {member.isMc ? "MC導線あり" : "通常"}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
 }

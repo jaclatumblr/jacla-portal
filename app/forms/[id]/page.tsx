@@ -41,7 +41,7 @@ export default function FormDetailPage() {
     return typeof raw === "string" ? raw : raw?.[0] ?? null;
   }, [params]);
   const { session } = useAuth();
-  const { isAdmin, loading: roleLoading } = useRoleFlags();
+  const { isAdmin } = useRoleFlags();
 
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<FormRow | null>(null);

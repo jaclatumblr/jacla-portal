@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "./StatusBadge";
-import type { MaintenanceStatus, BaseMaintenanceLog, ProfileInfo } from "./types";
+import type { MaintenanceStatus, BaseMaintenanceLog } from "./types";
 import { statusOptions, formatDateTime } from "./types";
 
 type CategoryOption<T extends string> = {

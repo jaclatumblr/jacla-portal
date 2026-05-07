@@ -22,10 +22,9 @@ export function useCanManageUpdates(): UpdateAccessResult {
     if (!userId) return;
     let cancelled = false;
 
-    setLoading(true);
-    setError(null);
-
     (async () => {
+      setLoading(true);
+      setError(null);
       const { data: leadersData, error: leadersError } = await supabase
         .from("profile_leaders")
         .select("leader")

@@ -10,13 +10,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/lib/toast";
-import { normalizeVoxSetlistLayout } from "@/lib/voxSetlistLayout";
 import {
     EventRow,
     statusOptions,
     eventTypeOptions,
-    statusLabel,
-    statusBadge,
 } from "../types";
 
 type EventEditFormProps = {
@@ -41,6 +38,15 @@ const fromDateTimeLocal = (value: string | null | undefined) => {
     return date.toISOString();
 };
 
+const omitKey = <T extends Record<string, unknown>, K extends keyof T>(
+    value: T,
+    key: K
+): Omit<T, K> => {
+    const { [key]: removed, ...next } = value;
+    void removed;
+    return next;
+};
+
 export function EventEditForm({ event, onRefresh }: EventEditFormProps) {
     const router = useRouter();
     const [formData, setFormData] = useState<EventRow>(event);
@@ -55,7 +61,7 @@ export function EventEditForm({ event, onRefresh }: EventEditFormProps) {
         setFormData(event);
     }, [event]);
 
-    const handleChange = (key: keyof EventRow, value: any) => {
+    const handleChange = (key: keyof EventRow, value: EventRow[keyof EventRow]) => {
         setFormData((prev) => ({ ...prev, [key]: value }));
     };
 
@@ -92,18 +98,9 @@ export function EventEditForm({ event, onRefresh }: EventEditFormProps) {
         let { error } = await supabase.from("events").update(payload).eq("id", event.id);
         if (error?.code == "42703") {
             const candidates = [
-                (() => {
-                    const { end_time, ...next } = payload;
-                    return next;
-                })(),
-                (() => {
-                    const { rehearsal_start_time, ...next } = payload;
-                    return next;
-                })(),
-                (() => {
-                    const { rehearsal_start_time, end_time, ...next } = payload;
-                    return next;
-                })(),
+                omitKey(payload, "end_time"),
+                omitKey(payload, "rehearsal_start_time"),
+                omitKey(omitKey(payload, "rehearsal_start_time"), "end_time"),
             ];
             for (const candidate of candidates) {
                 const retry = await supabase.from("events").update(candidate).eq("id", event.id);

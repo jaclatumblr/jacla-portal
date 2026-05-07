@@ -13,7 +13,8 @@ import { useIsAdministrator } from "@/lib/useIsAdministrator";
 import { useAdminEventData } from "./hooks/useAdminEventData";
 import { EventEditForm } from "./components/EventEditForm";
 import { TimetableWithRepertoire } from "./components/TimetableWithRepertoire";
-import { StaffAssignmentManager } from "./components/StaffAssignmentManager";
+import Link from "next/link";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { statusBadge, statusLabel } from "./types";
 
 export default function AdminEventDetailPage() {
@@ -28,14 +29,10 @@ export default function AdminEventDetailPage() {
     event,
     bands,
     members,
-    profiles,
     slots,
-    eventStaff,
-    staffAssignments,
     songs,
     refreshData,
     setSlots,
-    setStaffAssignments,
   } = useAdminEventData(eventId, isAdmin, isAdministrator);
   const [activeTab, setActiveTab] = useState("basic");
 
@@ -99,7 +96,7 @@ export default function AdminEventDetailPage() {
                 <TabsList className="grid w-full grid-cols-3 lg:w-[400px]">
                   <TabsTrigger value="basic">基本情報</TabsTrigger>
                   <TabsTrigger value="timetable">TT・レパ表</TabsTrigger>
-                  <TabsTrigger value="staff">スタッフ配置</TabsTrigger>
+                  <TabsTrigger value="staff">シフト作成</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="basic">
@@ -120,15 +117,28 @@ export default function AdminEventDetailPage() {
                 </TabsContent>
 
                 <TabsContent value="staff">
-                  <StaffAssignmentManager
-                    eventId={eventId}
-                    slots={slots}
-                    eventStaff={eventStaff}
-                    staffAssignments={staffAssignments}
-                    profiles={profiles}
-                    bands={bands}
-                    setStaffAssignments={setStaffAssignments}
-                  />
+                  <Card className="bg-card/60 border-border">
+                    <CardHeader>
+                      <CardTitle className="text-lg">シフト作成ページ</CardTitle>
+                      <CardDescription>
+                        PA と照明は専用ページで管理します。現在の仕様では、バンド単位でリハと本番を同じ担当に揃えて編集します。
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex flex-wrap gap-2">
+                      <Link
+                        href={`/admin/events/${eventId}/shift`}
+                        className="inline-flex items-center justify-center rounded-md border border-border px-4 py-2 text-sm text-foreground transition-colors hover:border-primary/60 hover:text-primary"
+                      >
+                        シフト作成
+                      </Link>
+                      <Link
+                        href={`/admin/events/${eventId}/tt/staff`}
+                        className="inline-flex items-center justify-center rounded-md border border-border px-4 py-2 text-sm text-muted-foreground transition-colors hover:border-primary/60 hover:text-primary"
+                      >
+                        導線ページを見る
+                      </Link>
+                    </CardContent>
+                  </Card>
                 </TabsContent>
               </Tabs>
             </div>

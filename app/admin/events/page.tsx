@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { useIsAdmin } from "@/lib/useIsAdmin";
+import { groupItemsByFiscalYear } from "@/lib/fiscalYear";
 import { toast } from "@/lib/toast";
 import { formatTimeText } from "@/lib/time";
 
@@ -44,6 +45,23 @@ type EventRow = {
   note: string | null;
   default_changeover_min: number;
   bands?: BandInfo[];
+};
+
+type SongRow = {
+  id: string;
+  band_id: string | null;
+  title: string | null;
+  artist: string | null;
+  duration_sec: number | null;
+  order_index: number | null;
+};
+
+type BandRow = {
+  id: string;
+  name: string;
+  event_id: string | null;
+  repertoire_status: string | null;
+  band_members?: { id: string }[] | null;
 };
 
 const statusOptions = [
@@ -96,6 +114,7 @@ export default function AdminEventsPage() {
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
 
   const userId = session?.user.id;
+  const fiscalYearSections = useMemo(() => groupItemsByFiscalYear(events), [events]);
 
   const canSubmit = useMemo(() => {
     return form.name.trim().length > 0 && form.date.trim().length > 0 && !saving;
@@ -103,14 +122,18 @@ export default function AdminEventsPage() {
 
   useEffect(() => {
     if (!error) return;
-    toast.error(error);
-    setError(null);
+    queueMicrotask(() => {
+      toast.error(error);
+      setError(null);
+    });
   }, [error]);
 
   useEffect(() => {
     if (!deleteError) return;
-    toast.error(deleteError);
-    setDeleteError(null);
+    queueMicrotask(() => {
+      toast.error(deleteError);
+      setDeleteError(null);
+    });
   }, [deleteError]);
 
   useEffect(() => {
@@ -143,7 +166,7 @@ export default function AdminEventsPage() {
       } else {
         // Build songs map by band_id
         const songsMap = new Map<string, SongInfo[]>();
-        (songsRes.data ?? []).forEach((s: any) => {
+        ((songsRes.data ?? []) as SongRow[]).forEach((s) => {
           if (!s.band_id) return;
           const song: SongInfo = {
             id: s.id,
@@ -158,7 +181,7 @@ export default function AdminEventsPage() {
         });
 
         const bandsMap = new Map<string, BandInfo[]>();
-        (bandsRes.data ?? []).forEach((b: any) => {
+        ((bandsRes.data ?? []) as BandRow[]).forEach((b) => {
           if (!b.event_id) return;
           const info: BandInfo = {
             id: b.id,
@@ -171,7 +194,7 @@ export default function AdminEventsPage() {
           existing.push(info);
           bandsMap.set(b.event_id, existing);
         });
-        const eventsWithBands = (eventsRes.data ?? []).map((e: any) => ({
+        const eventsWithBands = ((eventsRes.data ?? []) as EventRow[]).map((e) => ({
           ...e,
           bands: bandsMap.get(e.id) ?? [],
         })) as EventRow[];
@@ -441,201 +464,208 @@ export default function AdminEventsPage() {
                   <Badge variant="secondary">{events.length}</Badge>
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-5">
                   {loading ? (
                     <div className="text-sm text-muted-foreground">読み込み中...</div>
                   ) : events.length === 0 ? (
                     <div className="text-sm text-muted-foreground">イベントがありません。</div>
                   ) : (
-                    events.map((event) => {
-                      const openText = formatTimeText(event.open_time) ?? event.open_time;
-                      const startText = formatTimeText(event.start_time) ?? event.start_time;
-                      const timeRange =
-                        openText && startText
-                          ? `${openText} - ${startText}`
-                          : "\u6642\u9593\u672a\u5b9a";
-                      const isDeleteTarget = deleteTargetId === event.id;
-                      const confirmMatches =
-                        isDeleteTarget && deleteConfirmText.trim() === event.name.trim();
-                      const isDeletingTarget = deleting && isDeleteTarget;
-                      return (
-                        <div
-                          key={event.id}
-                          className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 p-4 bg-card/50 border border-border rounded-lg"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <Badge variant={statusVariant(event.status)} className="capitalize">
-                                {event.status}
-                              </Badge>
-                              <p className="font-semibold truncate">{event.name}</p>
-                            </div>
-                            <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2 text-xs text-muted-foreground">
-                              <span className="flex items-center gap-1">
-                                <Calendar className="w-4 h-4 text-primary" />
-                                {event.date}
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <Clock className="w-4 h-4 text-primary" />
-                                {timeRange}
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <MapPin className="w-4 h-4 text-primary" />
-                                {event.venue ?? "未設定"}
-                              </span>
-                              {(event.bands?.length ?? 0) > 0 && (
-                                <button
-                                  type="button"
-                                  onClick={() => setExpandedEventId(expandedEventId === event.id ? null : event.id)}
-                                  className="flex items-center gap-1 hover:text-primary transition-colors"
-                                >
-                                  <Music className="w-4 h-4 text-primary" />
-                                  {event.bands?.length}バンド
-                                  {expandedEventId === event.id ? (
-                                    <ChevronUp className="w-3 h-3" />
-                                  ) : (
-                                    <ChevronDown className="w-3 h-3" />
-                                  )}
-                                </button>
-                              )}
-                            </div>
-                            {/* Expanded Band List */}
-                            {expandedEventId === event.id && event.bands && event.bands.length > 0 && (
-                              <div className="mt-3 p-3 rounded-lg bg-muted/50 border border-border space-y-2">
-                                <p className="text-xs font-medium text-muted-foreground">登録バンド</p>
-                                <div className="space-y-1.5">
-                                  {event.bands.map((band) => (
-                                    <div
-                                      key={band.id}
-                                      className="text-xs bg-background/60 rounded px-3 py-2 space-y-2"
-                                    >
-                                      <div className="flex items-center justify-between">
-                                        <span className="font-semibold">{band.name}</span>
-                                        <div className="flex items-center gap-2">
-                                          <span className="flex items-center gap-1 text-muted-foreground">
-                                            <Users className="w-3 h-3" />
-                                            {band.member_count}名
-                                          </span>
-                                          <Badge
-                                            variant={band.repertoire_status === "submitted" ? "default" : "outline"}
-                                            className="text-[10px] px-1.5 py-0"
+                    fiscalYearSections.map((section) => (
+                      <div key={section.fiscalYear} className="space-y-3">
+                        <div className="flex items-center gap-3 border-b border-border/70 pb-2">
+                          <h3 className="text-base font-semibold text-foreground">{section.label}</h3>
+                          <Badge variant="secondary">{section.items.length}</Badge>
+                        </div>
+
+                        <div className="space-y-3">
+                          {section.items.map((event) => {
+                            const openText = formatTimeText(event.open_time) ?? event.open_time;
+                            const startText = formatTimeText(event.start_time) ?? event.start_time;
+                            const timeRange =
+                              openText && startText ? `${openText} - ${startText}` : "時間未定";
+                            const isDeleteTarget = deleteTargetId === event.id;
+                            const confirmMatches =
+                              isDeleteTarget && deleteConfirmText.trim() === event.name.trim();
+                            const isDeletingTarget = deleting && isDeleteTarget;
+                            return (
+                              <div
+                                key={event.id}
+                                className="flex flex-col gap-3 rounded-lg border border-border bg-card/50 p-4 sm:flex-row sm:flex-wrap sm:items-center"
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <Badge variant={statusVariant(event.status)} className="capitalize">
+                                      {event.status}
+                                    </Badge>
+                                    <p className="truncate font-semibold">{event.name}</p>
+                                  </div>
+                                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground md:grid-cols-3">
+                                    <span className="flex items-center gap-1">
+                                      <Calendar className="h-4 w-4 text-primary" />
+                                      {event.date}
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                      <Clock className="h-4 w-4 text-primary" />
+                                      {timeRange}
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                      <MapPin className="h-4 w-4 text-primary" />
+                                      {event.venue ?? "未設定"}
+                                    </span>
+                                    {(event.bands?.length ?? 0) > 0 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setExpandedEventId(expandedEventId === event.id ? null : event.id)}
+                                        className="flex items-center gap-1 transition-colors hover:text-primary"
+                                      >
+                                        <Music className="h-4 w-4 text-primary" />
+                                        {event.bands?.length}バンド
+                                        {expandedEventId === event.id ? (
+                                          <ChevronUp className="h-3 w-3" />
+                                        ) : (
+                                          <ChevronDown className="h-3 w-3" />
+                                        )}
+                                      </button>
+                                    )}
+                                  </div>
+                                  {expandedEventId === event.id && event.bands && event.bands.length > 0 && (
+                                    <div className="mt-3 space-y-2 rounded-lg border border-border bg-muted/50 p-3">
+                                      <p className="text-xs font-medium text-muted-foreground">登録バンド</p>
+                                      <div className="space-y-1.5">
+                                        {event.bands.map((band) => (
+                                          <div
+                                            key={band.id}
+                                            className="space-y-2 rounded bg-background/60 px-3 py-2 text-xs"
                                           >
-                                            {band.repertoire_status === "submitted" ? "提出済" : "未提出"}
-                                          </Badge>
-                                        </div>
-                                      </div>
-                                      <div className="flex flex-wrap items-center gap-2 text-[11px]">
-                                        <Link
-                                          href={`/admin/events/${event.id}/repertoire?bandId=${band.id}`}
-                                          className="inline-flex items-center gap-1 text-primary hover:text-primary/80"
-                                        >
-                                          レパ表を見る
-                                          <ArrowRight className="h-3 w-3" />
-                                        </Link>
-                                      </div>
-                                      {/* Setlist */}
-                                      {band.songs.length > 0 && (
-                                        <div className="pl-2 border-l-2 border-primary/30 space-y-0.5">
-                                          {band.songs.map((song, idx) => {
-                                            const minutes = song.duration_sec ? Math.floor(song.duration_sec / 60) : 0;
-                                            const seconds = song.duration_sec ? song.duration_sec % 60 : 0;
-                                            const duration = song.duration_sec ? `${minutes}:${String(seconds).padStart(2, "0")}` : "";
-                                            return (
-                                              <div key={song.id} className="flex items-center gap-2 text-[11px]">
-                                                <span className="text-muted-foreground w-4">{idx + 1}.</span>
-                                                <span className="font-medium">{song.title || "（無題）"}</span>
-                                                {song.artist && (
-                                                  <span className="text-muted-foreground">- {song.artist}</span>
-                                                )}
-                                                {duration && (
-                                                  <span className="text-muted-foreground ml-auto">{duration}</span>
-                                                )}
+                                            <div className="flex items-center justify-between">
+                                              <span className="font-semibold">{band.name}</span>
+                                              <div className="flex items-center gap-2">
+                                                <span className="flex items-center gap-1 text-muted-foreground">
+                                                  <Users className="h-3 w-3" />
+                                                  {band.member_count}名
+                                                </span>
+                                                <Badge
+                                                  variant={band.repertoire_status === "submitted" ? "default" : "outline"}
+                                                  className="px-1.5 py-0 text-[10px]"
+                                                >
+                                                  {band.repertoire_status === "submitted" ? "提出済" : "未提出"}
+                                                </Badge>
                                               </div>
-                                            );
-                                          })}
-                                        </div>
-                                      )}
+                                            </div>
+                                            <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                                              <Link
+                                                href={`/admin/events/${event.id}/repertoire?bandId=${band.id}`}
+                                                className="inline-flex items-center gap-1 text-primary hover:text-primary/80"
+                                              >
+                                                レパ表を見る
+                                                <ArrowRight className="h-3 w-3" />
+                                              </Link>
+                                            </div>
+                                            {band.songs.length > 0 && (
+                                              <div className="space-y-0.5 border-l-2 border-primary/30 pl-2">
+                                                {band.songs.map((song, idx) => {
+                                                  const minutes = song.duration_sec ? Math.floor(song.duration_sec / 60) : 0;
+                                                  const seconds = song.duration_sec ? song.duration_sec % 60 : 0;
+                                                  const duration = song.duration_sec ? `${minutes}:${String(seconds).padStart(2, "0")}` : "";
+                                                  return (
+                                                    <div key={song.id} className="flex items-center gap-2 text-[11px]">
+                                                      <span className="w-4 text-muted-foreground">{idx + 1}.</span>
+                                                      <span className="font-medium">{song.title || "（無題）"}</span>
+                                                      {song.artist && (
+                                                        <span className="text-muted-foreground">- {song.artist}</span>
+                                                      )}
+                                                      {duration && (
+                                                        <span className="ml-auto text-muted-foreground">{duration}</span>
+                                                      )}
+                                                    </div>
+                                                  );
+                                                })}
+                                              </div>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
                                     </div>
-                                  ))}
+                                  )}
                                 </div>
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex gap-2 shrink-0">
-                            <Link
-                              href={`/admin/events/${event.id}`}
-                              className={cn(
-                                "inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:border-primary/50 hover:text-primary transition-colors"
-                              )}
-                            >
-                              編集
-                              <ArrowRight className="w-4 h-4" />
-                            </Link>
-                            <Link
-                              href={`/events/${event.id}`}
-                              className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors"
-                            >
-                              詳細
-                              <ArrowRight className="w-4 h-4" />
-                            </Link>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteRequest(event.id)}
-                              disabled={isDeletingTarget}
-                              className={cn(
-                                "inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors",
-                                isDeleteTarget
-                                  ? "border-destructive/60 text-destructive"
-                                  : "border-border text-destructive/80 hover:border-destructive/60 hover:text-destructive",
-                                isDeletingTarget && "opacity-70 pointer-events-none"
-                              )}
-                            >
-                              {isDeletingTarget ? (
-                                <RefreshCw className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="w-4 h-4" />
-                              )}
-                              削除
-                            </button>
-                          </div>
-                          {isDeleteTarget && (
-                            <div className="w-full sm:basis-full rounded-lg border border-destructive/40 bg-destructive/5 p-3">
-                              <p className="text-xs text-muted-foreground">
-                                削除するにはイベント名「{event.name}」を入力してください。
-                              </p>
-                              <div className="mt-2 flex flex-col sm:flex-row gap-2">
-                                <Input
-                                  value={deleteConfirmText}
-                                  onChange={(e) => {
-                                    setDeleteConfirmText(e.target.value);
-                                    if (deleteError) setDeleteError(null);
-                                  }}
-                                  placeholder={event.name}
-                                />
-                                <div className="flex gap-2">
-                                  <Button
+                                <div className="flex gap-2 shrink-0">
+                                  <Link
+                                    href={`/admin/events/${event.id}`}
+                                    className={cn(
+                                      "inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm transition-colors hover:border-primary/50 hover:text-primary"
+                                    )}
+                                  >
+                                    編集
+                                    <ArrowRight className="h-4 w-4" />
+                                  </Link>
+                                  <Link
+                                    href={`/events/${event.id}`}
+                                    className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+                                  >
+                                    詳細
+                                    <ArrowRight className="h-4 w-4" />
+                                  </Link>
+                                  <button
                                     type="button"
-                                    variant="destructive"
-                                    disabled={!confirmMatches || isDeletingTarget}
-                                    onClick={() => handleDeleteEvent(event)}
+                                    onClick={() => handleDeleteRequest(event.id)}
+                                    disabled={isDeletingTarget}
+                                    className={cn(
+                                      "inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors",
+                                      isDeleteTarget
+                                        ? "border-destructive/60 text-destructive"
+                                        : "border-border text-destructive/80 hover:border-destructive/60 hover:text-destructive",
+                                      isDeletingTarget && "pointer-events-none opacity-70"
+                                    )}
                                   >
                                     {isDeletingTarget ? (
-                                      <RefreshCw className="w-4 h-4 animate-spin" />
+                                      <RefreshCw className="h-4 w-4 animate-spin" />
                                     ) : (
-                                      <Trash2 className="w-4 h-4" />
+                                      <Trash2 className="h-4 w-4" />
                                     )}
-                                    削除する
-                                  </Button>
-                                  <Button type="button" variant="outline" onClick={handleDeleteCancel}>
-                                    キャンセル
-                                  </Button>
+                                    削除
+                                  </button>
                                 </div>
+                                {isDeleteTarget && (
+                                  <div className="w-full rounded-lg border border-destructive/40 bg-destructive/5 p-3 sm:basis-full">
+                                    <p className="text-xs text-muted-foreground">
+                                      削除するにはイベント名「{event.name}」を入力してください。
+                                    </p>
+                                    <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                                      <Input
+                                        value={deleteConfirmText}
+                                        onChange={(e) => {
+                                          setDeleteConfirmText(e.target.value);
+                                          if (deleteError) setDeleteError(null);
+                                        }}
+                                        placeholder={event.name}
+                                      />
+                                      <div className="flex gap-2">
+                                        <Button
+                                          type="button"
+                                          variant="destructive"
+                                          disabled={!confirmMatches || isDeletingTarget}
+                                          onClick={() => handleDeleteEvent(event)}
+                                        >
+                                          {isDeletingTarget ? (
+                                            <RefreshCw className="h-4 w-4 animate-spin" />
+                                          ) : (
+                                            <Trash2 className="h-4 w-4" />
+                                          )}
+                                          削除する
+                                        </Button>
+                                        <Button type="button" variant="outline" onClick={handleDeleteCancel}>
+                                          キャンセル
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
-                            </div>
-                          )}
+                            );
+                          })}
                         </div>
-                      );
-                    })
+                      </div>
+                    ))
                   )}
                 </div>
               </div>

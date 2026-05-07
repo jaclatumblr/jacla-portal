@@ -149,12 +149,16 @@ export function useFixedBands(): UseFixedBandsResult {
 
     // 初期読み込み
     useEffect(() => {
-        refreshFixedBands();
+        void (async () => {
+            await refreshFixedBands();
+        })();
     }, [refreshFixedBands]);
 
     // バンド選択時にメンバー取得
     useEffect(() => {
-        refreshMembers();
+        void (async () => {
+            await refreshMembers();
+        })();
     }, [refreshMembers]);
 
     return {

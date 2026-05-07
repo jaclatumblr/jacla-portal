@@ -4,20 +4,46 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/lib/toast";
 import {
+  applyStagePlotAssignments,
+  extractStagePlotMemberPositions,
+  createDefaultStagePlots,
+  normalizeStagePlotsWithTemplateIds,
+  readStagePlotData,
+} from "@/lib/stagePlot";
+import {
   BandRow,
   EventRow,
   ProfileOption,
   RepertoireDraft,
   SongEntry,
   StageItem,
+  StagePlot,
   StageMember,
   getStageCategory,
   normalizeSongs,
   orderEntries,
   stageSlots,
+  createTempId,
 } from "../types";
 
 const clampPercent = (value: number) => Math.min(95, Math.max(5, value));
+
+const ensurePlotMemberPositions = (plots: StagePlot[], members: StageMember[]) => {
+  const fallbackMemberPositions = extractStagePlotMemberPositions(members);
+  return plots.map((plot) =>
+    plot.memberPositions && Object.keys(plot.memberPositions).length > 0
+      ? plot
+      : {
+          ...plot,
+          memberPositions: Object.fromEntries(
+            Object.entries(fallbackMemberPositions).map(([memberId, position]) => [
+              memberId,
+              { ...position },
+            ])
+          ),
+        }
+  );
+};
 
 type UseRepertoireDataResult = {
   loading: boolean;
@@ -28,7 +54,8 @@ type UseRepertoireDataResult = {
   selectedBandId: string | null;
   songs: SongEntry[];
   stageMembers: StageMember[];
-  stageItems: StageItem[];
+  stagePlots: StagePlot[];
+  activeStagePlotId: string | null;
   profiles: ProfileOption[];
   myProfileId: string | null;
   repertoireStatus: "draft" | "submitted";
@@ -36,7 +63,8 @@ type UseRepertoireDataResult = {
 
   setSongs: (songs: SongEntry[] | ((prev: SongEntry[]) => SongEntry[])) => void;
   setStageMembers: (members: StageMember[] | ((prev: StageMember[]) => StageMember[])) => void;
-  setStageItems: (items: StageItem[] | ((prev: StageItem[]) => StageItem[])) => void;
+  setStagePlots: (plots: StagePlot[] | ((prev: StagePlot[]) => StagePlot[])) => void;
+  setActiveStagePlotId: (plotId: string | null) => void;
   setBand: (band: BandRow | null | ((prev: BandRow | null) => BandRow | null)) => void;
   setSelectedBandId: (bandId: string | null) => void;
 
@@ -65,6 +93,7 @@ const normalizeDraftSongs = (draftSongs: SongEntry[]) =>
     lightingMoving: entry.lightingMoving ?? "",
     lightingColor: typeof entry.lightingColor === "string" ? entry.lightingColor : "",
     memo: typeof entry.memo === "string" ? entry.memo : "",
+    stagePlotId: typeof entry.stagePlotId === "string" ? entry.stagePlotId : null,
     order_index: entry.order_index ?? index + 1,
   }));
 
@@ -84,7 +113,8 @@ export function useRepertoireData(
   const [selectedBandId, setSelectedBandId] = useState<string | null>(null);
   const [songs, setSongs] = useState<SongEntry[]>([]);
   const [stageMembers, setStageMembers] = useState<StageMember[]>([]);
-  const [stageItems, setStageItems] = useState<StageItem[]>([]);
+  const [stagePlots, setStagePlots] = useState<StagePlot[]>([]);
+  const [activeStagePlotId, setActiveStagePlotId] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<ProfileOption[]>([]);
   const [myProfileId, setMyProfileId] = useState<string | null>(null);
   const [repertoireStatus, setRepertoireStatus] = useState<"draft" | "submitted">("draft");
@@ -160,7 +190,8 @@ export function useRepertoireData(
         setBand(null);
         setSongs([]);
         setStageMembers([]);
-        setStageItems([]);
+        setStagePlots([]);
+        setActiveStagePlotId(null);
         setRepertoireStatus("draft");
         setLoading(false);
         return;
@@ -192,7 +223,19 @@ export function useRepertoireData(
       if (songsRes.error) console.error(songsRes.error);
       if (membersRes.error) console.error(membersRes.error);
 
-      setSongs(orderEntries(normalizeSongs(songsRes.data || [])));
+      const plotData = readStagePlotData<StageItem>(foundBand.stage_plot_data ?? null);
+      const resolvedStagePlots =
+        plotData.plots.length > 0
+          ? normalizeStagePlotsWithTemplateIds(plotData.plots, createTempId)
+          : createDefaultStagePlots<StageItem>(createTempId);
+
+      const normalizedSongsWithPlots = applyStagePlotAssignments(
+        orderEntries(normalizeSongs(songsRes.data || [])),
+        resolvedStagePlots,
+        plotData.songPlotAssignments
+      );
+
+      setSongs(normalizedSongsWithPlots);
 
       type ProfileResponse = { id: string; display_name: string | null; real_name: string | null; part: string | null; leader: string | null };
       const pOptions = (allProfilesRes.data ?? []).map((p: ProfileResponse) => ({
@@ -248,18 +291,19 @@ export function useRepertoireData(
         };
       }) as StageMember[];
 
+      const stagePlotsWithMembers = ensurePlotMemberPositions(resolvedStagePlots, bMembers);
+
       setStageMembers(bMembers);
+      setStagePlots(stagePlotsWithMembers);
+      setActiveStagePlotId((prev) =>
+        prev && stagePlotsWithMembers.some((plot) => plot.id === prev)
+          ? prev
+          : stagePlotsWithMembers[0]?.id ?? null
+      );
 
-      type StagePlotData = { items?: StageItem[]; updatedAt?: string } | null;
-      const plotData = foundBand.stage_plot_data as StagePlotData;
-      if (plotData?.items && Array.isArray(plotData.items)) {
-        setStageItems(plotData.items);
-      } else {
-        setStageItems([]);
-      }
-
-      if (plotData?.updatedAt) {
-        setLastSavedAt(new Date(plotData.updatedAt).toLocaleString());
+      const updatedAt = (foundBand.stage_plot_data as { updatedAt?: string | number } | null)?.updatedAt;
+      if (updatedAt) {
+        setLastSavedAt(new Date(updatedAt).toLocaleString());
       }
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : "データ読み込みエラー";
@@ -290,8 +334,34 @@ export function useRepertoireData(
         : null
     );
 
-    setSongs(orderEntries(normalizeDraftSongs(draft.songs)));
-    setStageItems(draft.stageItems);
+    const restoredStagePlots =
+      draft.stagePlots.length > 0
+        ? normalizeStagePlotsWithTemplateIds(draft.stagePlots, createTempId)
+        : (readStagePlotData<StageItem>(
+            Array.isArray(draft.stageItems)
+              ? { items: draft.stageItems, allowEmpty: true }
+              : null
+          ).plots as StagePlot[]);
+    const restoredActiveStagePlotId =
+      draft.activeStagePlotId && restoredStagePlots.some((plot) => plot.id === draft.activeStagePlotId)
+        ? draft.activeStagePlotId
+        : restoredStagePlots[0]?.id ?? null;
+
+    setSongs(
+      orderEntries(normalizeDraftSongs(draft.songs)).map((entry) => ({
+        ...entry,
+        stagePlotId:
+          entry.stagePlotId && restoredStagePlots.some((plot) => plot.id === entry.stagePlotId)
+            ? entry.stagePlotId
+            : restoredActiveStagePlotId,
+      }))
+    );
+    const restoredStagePlotsWithMembers = ensurePlotMemberPositions(
+      restoredStagePlots,
+      draft.bandMembers
+    );
+    setStagePlots(restoredStagePlotsWithMembers);
+    setActiveStagePlotId(restoredActiveStagePlotId);
     setStageMembers(draft.bandMembers);
 
     toast.success("一時保存を復元しました。");
@@ -310,14 +380,16 @@ export function useRepertoireData(
     selectedBandId,
     songs,
     stageMembers,
-    stageItems,
+    stagePlots,
+    activeStagePlotId,
     profiles,
     myProfileId,
     repertoireStatus,
     lastSavedAt,
     setSongs,
     setStageMembers,
-    setStageItems,
+    setStagePlots,
+    setActiveStagePlotId,
     setBand,
     setSelectedBandId,
     refreshData,

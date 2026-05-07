@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { StatusBadge } from "./StatusBadge";
-import type { MaintenanceStatus, SortKey, BaseMaintenanceItem } from "./types";
+import type { SortKey, BaseMaintenanceItem } from "./types";
 import { sortOptions, formatDateTime } from "./types";
 
 type CategoryOption<T extends string> = {

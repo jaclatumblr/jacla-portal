@@ -23,9 +23,15 @@ async function run() {
   const l = defaultVoxSetlistLayout;
 
   // Render dummy data to all field positions listed in the layout
-  const drawOptions = { size: 10, font, color: rgb(1, 0, 0) };
+  type LayoutField = {
+    x: number;
+    y: number;
+    maxWidth: number;
+    size?: number;
+    align?: "left" | "center" | "right";
+  };
 
-  const draw = (field: any, text: string) => {
+  const draw = (field: LayoutField, text: string) => {
     let drawX = field.x;
     font.encodeText(text);
     const textWidth = font.widthOfTextAtSize(text, field.size ?? 10);

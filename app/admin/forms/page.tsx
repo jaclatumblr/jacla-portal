@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Plus, RefreshCw, Trash2 } from "@/lib/icons";
 import { SideNav } from "@/components/SideNav";
@@ -74,7 +74,7 @@ export default function AdminFormsPage() {
     [forms, selectedId]
   );
 
-  const loadForms = async () => {
+  const loadForms = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from("forms")
@@ -93,9 +93,9 @@ export default function AdminFormsPage() {
       setSelectedId(rows[0].id);
     }
     setLoading(false);
-  };
+  }, [selectedId]);
 
-  const loadFields = async (formId: string) => {
+  const loadFields = useCallback(async (formId: string) => {
     const { data, error } = await supabase
       .from("form_fields")
       .select("id, form_id, label, field_type, is_required, options, placeholder, order_index")
@@ -108,25 +108,30 @@ export default function AdminFormsPage() {
       return;
     }
     setFields((data ?? []) as FieldRow[]);
-  };
+  }, []);
 
   useEffect(() => {
     if (roleLoading || !isAdmin) return;
-    void loadForms();
-  }, [roleLoading, isAdmin]);
+    void (async () => {
+      await loadForms();
+    })();
+  }, [isAdmin, loadForms, roleLoading]);
 
   useEffect(() => {
     if (!selectedForm) {
-      setFields([]);
       return;
     }
-    setFormDraft({
-      title: selectedForm.title,
-      description: selectedForm.description ?? "",
-      is_published: selectedForm.is_published,
+    queueMicrotask(() => {
+      setFormDraft({
+        title: selectedForm.title,
+        description: selectedForm.description ?? "",
+        is_published: selectedForm.is_published,
+      });
     });
-    void loadFields(selectedForm.id);
-  }, [selectedForm?.id]);
+    void (async () => {
+      await loadFields(selectedForm.id);
+    })();
+  }, [loadFields, selectedForm]);
 
   const handleCreateForm = async () => {
     if (!newTitle.trim()) return;

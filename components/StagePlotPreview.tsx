@@ -3,6 +3,11 @@
 import { useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { StagePlotDrumKit } from "@/components/StagePlotDrumKit";
+import {
+  STATIC_STAGE_MARKERS,
+  splitStageItemLabel,
+  type StageItemVariant,
+} from "@/lib/stagePlot";
 
 type StageItem = {
   id: string;
@@ -10,6 +15,8 @@ type StageItem = {
   dashed?: boolean;
   x: number;
   y: number;
+  variant?: StageItemVariant;
+  templateId?: import("@/lib/stagePlot").DefaultStageItemTemplateId;
 };
 
 type StageMember = {
@@ -24,28 +31,43 @@ type StageMember = {
 const GRID_STEP = 2.5;
 const clampPercent = (value: number) => Math.min(95, Math.max(5, value));
 
+function StagePlotItemContent({ label, variant }: { label: string; variant?: StageItemVariant }) {
+  if (variant === "split-backline") {
+    const parts = splitStageItemLabel(label);
+    if (parts.length >= 2) {
+      return (
+        <div className="flex h-full w-full items-stretch">
+          <span className="flex flex-1 items-center justify-center px-1 text-center leading-none">
+            {parts[0]}
+          </span>
+          <span className="w-px bg-slate-500/80" />
+          <span className="flex flex-1 items-center justify-center px-1 text-center leading-none">
+            {parts.slice(1).join(" / ")}
+          </span>
+        </div>
+      );
+    }
+  }
+
+  return <span className="px-1 text-center leading-none">{label}</span>;
+}
+
 export function StagePlotPreview({
   items,
   members,
   className,
+  compact = false,
 }: {
   items: StageItem[];
   members: StageMember[];
   className?: string;
+  compact?: boolean;
 }) {
   const fixedItems = useMemo(() => {
-    const next: StageItem[] = [
-      { id: "fixed-main-l", label: "MAIN L", dashed: true, x: 21, y: 81 },
-      { id: "fixed-main-r", label: "MAIN R", dashed: true, x: 79, y: 81 },
-      { id: "fixed-mon-1", label: "MON1", dashed: true, x: 14, y: 62 },
-      { id: "fixed-mon-2", label: "MON2", dashed: true, x: 62, y: 13 },
-      { id: "fixed-mon-3", label: "MON3", dashed: true, x: 50, y: 87 },
-      { id: "fixed-mon-4", label: "MON4", dashed: true, x: 86, y: 62 },
-    ];
-
+    const next = [...STATIC_STAGE_MARKERS];
     const mcCount = members.filter((member) => member.isMc).length;
     if (mcCount > 0) {
-      next.push({ id: "fixed-mc", label: "MCエリア", dashed: false, x: 50, y: 75 });
+      next.push({ id: "mc-area", label: "MC", x: 50, y: 75, kind: "monitor" as const });
     }
     return next;
   }, [members]);
@@ -53,7 +75,8 @@ export function StagePlotPreview({
   return (
     <div
       className={cn(
-        "relative w-full aspect-[2/1] rounded-xl border border-border/80 bg-zinc-900/95 overflow-hidden shadow-inner",
+        "relative w-full border border-border/80 bg-zinc-900/95 overflow-hidden shadow-inner",
+        compact ? "aspect-[2.35/1] rounded-lg xl:aspect-[2.6/1]" : "aspect-[2/1] rounded-xl",
         className
       )}
     >
@@ -66,16 +89,36 @@ export function StagePlotPreview({
         }}
       />
 
-      <div className="absolute top-2 left-4 rounded bg-zinc-900/70 px-2 py-0.5 text-xs font-semibold text-zinc-300 pointer-events-none select-none">
+      <div
+        className={cn(
+          "absolute rounded bg-zinc-900/70 font-semibold text-zinc-300 pointer-events-none select-none",
+          compact ? "left-3 top-1.5 px-1.5 py-0.5 text-[10px]" : "left-4 top-2 px-2 py-0.5 text-xs"
+        )}
+      >
         舞台奥 (Stage Back)
       </div>
-      <div className="absolute bottom-2 left-4 rounded bg-zinc-900/70 px-2 py-0.5 text-xs font-semibold text-zinc-300 pointer-events-none select-none">
+      <div
+        className={cn(
+          "absolute rounded bg-zinc-900/70 font-semibold text-zinc-300 pointer-events-none select-none",
+          compact ? "bottom-1.5 left-3 px-1.5 py-0.5 text-[10px]" : "bottom-2 left-4 px-2 py-0.5 text-xs"
+        )}
+      >
         下手 (Shimote)
       </div>
-      <div className="absolute bottom-2 right-4 rounded bg-zinc-900/70 px-2 py-0.5 text-xs font-semibold text-zinc-300 pointer-events-none select-none">
+      <div
+        className={cn(
+          "absolute rounded bg-zinc-900/70 font-semibold text-zinc-300 pointer-events-none select-none",
+          compact ? "bottom-1.5 right-3 px-1.5 py-0.5 text-[10px]" : "bottom-2 right-4 px-2 py-0.5 text-xs"
+        )}
+      >
         上手 (Kamite)
       </div>
-      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded bg-zinc-900/70 px-2 py-0.5 text-xs font-semibold text-zinc-300 pointer-events-none select-none">
+      <div
+        className={cn(
+          "absolute left-1/2 -translate-x-1/2 rounded bg-zinc-900/70 font-semibold text-zinc-300 pointer-events-none select-none",
+          compact ? "bottom-1.5 px-1.5 py-0.5 text-[10px]" : "bottom-2 px-2 py-0.5 text-xs"
+        )}
+      >
         客席 (Audience)
       </div>
 
@@ -87,19 +130,22 @@ export function StagePlotPreview({
       </div>
 
       {fixedItems.map((item) => {
-        const isMain = item.label.startsWith("MAIN");
+        const isMain = item.kind === "main";
         return (
           <div
             key={item.id}
             className={cn(
-              "absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center text-[11px] font-bold text-zinc-200 bg-zinc-800/90 border border-zinc-500 rounded-md select-none pointer-events-none shadow",
-              !isMain && "border-dashed"
+              "absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center border select-none pointer-events-none shadow",
+              isMain
+                ? "bg-zinc-800/90 border-zinc-500 font-bold text-zinc-200 rounded-md"
+                : "bg-zinc-700/80 border-zinc-500/80 font-semibold text-zinc-100 rounded-sm border-dashed",
+              compact ? "px-1 text-[9px]" : "text-[11px]"
             )}
             style={{
               left: `${item.x}%`,
               top: `${item.y}%`,
-              width: isMain ? "13%" : "8.5%",
-              height: isMain ? "8%" : "8%",
+              width: compact ? (isMain ? "11.5%" : "7.5%") : isMain ? "13%" : "8.5%",
+              height: compact ? "7%" : "8%",
             }}
           >
             <span className="px-1 text-center leading-none">{item.label}</span>
@@ -107,39 +153,83 @@ export function StagePlotPreview({
         );
       })}
 
-      {items.map((item) => (
-        <div
-          key={item.id}
-          className={cn(
-            "absolute -translate-x-1/2 -translate-y-1/2 flex h-11 w-11 flex-col items-center justify-center rounded-full border border-muted-foreground/90 bg-background/95 text-[11px] font-semibold leading-none text-muted-foreground shadow-sm z-10",
-            item.dashed ? "border-dashed" : "border-solid"
-          )}
-          style={{
-            left: `${clampPercent(item.x)}%`,
-            top: `${clampPercent(item.y)}%`,
-          }}
-        >
-          <span className="max-w-[52px] overflow-hidden text-ellipsis px-1 text-center leading-tight">
-            {item.label}
-          </span>
-        </div>
-      ))}
+      {items.map((item) => {
+        const isBackline = item.variant === "backline" || item.variant === "split-backline";
+        return (
+          <div
+            key={item.id}
+            className={cn(
+              "absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center shadow-sm z-10",
+              isBackline
+                ? "border border-slate-400 bg-slate-200/95 text-slate-900 font-semibold"
+                : "rounded-full border border-muted-foreground/90 bg-background/95 text-muted-foreground font-semibold",
+              item.dashed ? "border-dashed" : "border-solid",
+              isBackline
+                ? compact
+                  ? "rounded px-1 text-[8px]"
+                  : "rounded-md text-[9px]"
+                : compact
+                  ? "h-9 w-9 text-[9px]"
+                  : "h-11 w-11 text-[11px]"
+            )}
+            title={item.label}
+            style={{
+              left: `${clampPercent(item.x)}%`,
+              top: `${clampPercent(item.y)}%`,
+              width: isBackline
+                ? compact
+                  ? item.variant === "split-backline"
+                    ? "16%"
+                    : "9%"
+                  : item.variant === "split-backline"
+                    ? "18%"
+                    : "10%"
+                : undefined,
+              height: isBackline ? (compact ? "7%" : "8%") : undefined,
+            }}
+          >
+            {isBackline ? (
+              <StagePlotItemContent label={item.label} variant={item.variant} />
+            ) : (
+              <span
+                className={cn(
+                  "overflow-hidden text-ellipsis px-1 text-center leading-tight",
+                  compact ? "max-w-[40px]" : "max-w-[52px]"
+                )}
+              >
+                {item.label}
+              </span>
+            )}
+          </div>
+        );
+      })}
 
       {members.map((member) => (
         <div
           key={member.id}
-          className="absolute -translate-x-1/2 -translate-y-1/2 flex h-11 w-11 flex-col items-center justify-center rounded-full border border-primary bg-background/95 text-foreground text-[10px] font-bold leading-none shadow-sm z-20"
+          className={cn(
+            "absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center rounded-full border border-primary bg-background/95 text-foreground font-bold leading-none shadow-sm z-20",
+            compact ? "h-9 w-9 text-[9px]" : "h-11 w-11 text-[10px]"
+          )}
+          title={`${member.instrument ?? "Part"} ${member.name}`}
           style={{
             left: `${clampPercent(member.x)}%`,
             top: `${clampPercent(member.y)}%`,
           }}
         >
-          <span className="max-w-[48px] overflow-hidden text-ellipsis px-1 text-center leading-tight">
+          <span
+            className={cn(
+              "overflow-hidden text-ellipsis px-1 text-center leading-tight",
+              compact ? "max-w-[38px]" : "max-w-[48px]"
+            )}
+          >
             {member.instrument ?? "Part"}
           </span>
-          <span className="max-w-[48px] overflow-hidden text-ellipsis px-1 text-center text-[8px] leading-tight text-muted-foreground">
-            {member.name}
-          </span>
+          {!compact ? (
+            <span className="max-w-[48px] overflow-hidden text-ellipsis px-1 text-center text-[8px] leading-tight text-muted-foreground">
+              {member.name}
+            </span>
+          ) : null}
         </div>
       ))}
     </div>

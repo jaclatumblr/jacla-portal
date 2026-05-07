@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, ArrowRight, Shield, User } from "@/lib/icons";
 import { AdministratorModeToggle } from "@/components/AdministratorModeToggle";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { useAdminMode } from "@/contexts/AdminModeContext";
 import { cn } from "@/lib/utils";
 
@@ -17,11 +16,15 @@ export function AdministratorModeDock() {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined") return undefined;
 
-    const saved = window.localStorage.getItem(STORAGE_KEY);
-    setIsOpen(saved !== "0");
-    setHydrated(true);
+    const frame = window.requestAnimationFrame(() => {
+      const saved = window.localStorage.getItem(STORAGE_KEY);
+      setIsOpen(saved !== "0");
+      setHydrated(true);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
   }, []);
 
   useEffect(() => {

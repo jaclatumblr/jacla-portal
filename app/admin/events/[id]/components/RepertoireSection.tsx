@@ -9,18 +9,17 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { StagePlotPreview } from "@/components/StagePlotPreview";
 import { useRepertoireData } from "@/app/events/[id]/repertoire/submit/hooks/useRepertoireData";
 import { useRepertoireSave } from "@/app/events/[id]/repertoire/submit/hooks/useRepertoireSave";
 import { useMetadata } from "@/app/events/[id]/repertoire/submit/hooks/useMetadata";
 import { BandInfoForm } from "@/app/events/[id]/repertoire/submit/components/BandInfoForm";
 import { MemberManager } from "@/app/events/[id]/repertoire/submit/components/MemberManager";
 import { SetlistEditor } from "@/app/events/[id]/repertoire/submit/components/SetlistEditor";
-import { StagePlotEditor } from "@/app/events/[id]/repertoire/submit/components/StagePlotEditor";
+import { StagePlotManager } from "@/app/events/[id]/repertoire/submit/components/StagePlotManager";
+import { StagePlotPreviewTabs } from "@/app/events/[id]/repertoire/submit/components/StagePlotPreviewTabs";
 import { cn } from "@/lib/utils";
 import {
   BandRow,
-  EntryType,
   SongEntry,
   formatDuration,
   formatLightingChoice,
@@ -74,14 +73,16 @@ export function RepertoireSection({
     selectedBandId,
     songs,
     stageMembers,
-    stageItems,
+    stagePlots,
+    activeStagePlotId,
     profiles,
     myProfileId,
     repertoireStatus,
     lastSavedAt,
     setSongs,
     setStageMembers,
-    setStageItems,
+    setStagePlots,
+    setActiveStagePlotId,
     setBand,
     setSelectedBandId,
     refreshData,
@@ -91,11 +92,10 @@ export function RepertoireSection({
   });
 
   const { saving, saveRepertoire } = useRepertoireSave({
-    eventId,
     band,
     songs,
     stageMembers,
-    stageItems,
+    stagePlots,
     setBand,
     setSongs,
     refreshData,
@@ -122,6 +122,11 @@ export function RepertoireSection({
   }, [externalBandId, selectedBandId, setSelectedBandId]);
 
   const orderedSongs = useMemo(() => orderEntries(songs), [songs]);
+  const stagePlotOptions = useMemo(
+    () => stagePlots.map((plot) => ({ value: plot.id, label: plot.name })),
+    [stagePlots]
+  );
+  const defaultStagePlotId = stagePlots[0]?.id ?? null;
 
   const memberDetails = useMemo(() => {
     return [...stageMembers]
@@ -137,7 +142,7 @@ export function RepertoireSection({
       .sort((a, b) => (a.orderIndex ?? Infinity) - (b.orderIndex ?? Infinity));
   }, [stageMembers]);
 
-  const handleMetadataSchedule = (id: string, url: string, _entryType: EntryType) => {
+  const handleMetadataSchedule = (id: string, url: string) => {
     fetchMetadata(id, url, (targetId, updates) => {
       setSongs((prev) =>
         prev.map((song) => {
@@ -231,10 +236,13 @@ export function RepertoireSection({
     <div className="space-y-3">
       <div className="grid gap-3 lg:grid-cols-[1.65fr_1fr]">
         <div className="rounded-xl border border-border/80 bg-card/70 p-2 shadow-sm">
-          <StagePlotPreview
-            items={stageItems}
+          <StagePlotPreviewTabs
+            plots={stagePlots}
+            songs={songs}
             members={stageMembers}
-            className="aspect-[1.35/1] sm:aspect-[1.45/1] lg:aspect-[1.55/1]"
+            activePlotId={activeStagePlotId}
+            setActivePlotId={setActiveStagePlotId}
+            previewClassName="aspect-[1.35/1] sm:aspect-[1.45/1] lg:aspect-[1.55/1]"
           />
         </div>
 
@@ -506,15 +514,25 @@ export function RepertoireSection({
               </TabsContent>
 
               <TabsContent value="setlist">
-                <SetlistEditor songs={songs} setSongs={setSongs} onScheduleMetadata={handleMetadataSchedule} />
+                <SetlistEditor
+                  songs={songs}
+                  setSongs={setSongs}
+                  onScheduleMetadata={handleMetadataSchedule}
+                  stagePlotOptions={stagePlotOptions}
+                  defaultStagePlotId={defaultStagePlotId}
+                />
               </TabsContent>
 
               <TabsContent value="stageplot">
-                <StagePlotEditor
+                <StagePlotManager
                   members={stageMembers}
-                  items={stageItems}
                   setMembers={setStageMembers}
-                  setItems={setStageItems}
+                  plots={stagePlots}
+                  setPlots={setStagePlots}
+                  activePlotId={activeStagePlotId}
+                  setActivePlotId={setActiveStagePlotId}
+                  songs={songs}
+                  setSongs={setSongs}
                 />
               </TabsContent>
             </Tabs>

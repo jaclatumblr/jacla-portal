@@ -1,272 +1,317 @@
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
 import { SongRow } from "@/app/types/instructions";
 import { Badge } from "@/components/ui/badge";
-import { Music, Lightbulb, Link as LinkIcon, ExternalLink } from "@/lib/icons";
+import { ExternalLink, Link as LinkIcon, Lightbulb, Music } from "@/lib/icons";
+import { cn } from "@/lib/utils";
+import { instructionTheme, InstructionRole } from "@/components/instructions/theme";
 
 type InstructionSetlistTableProps = {
-    songs: SongRow[];
-    role: "pa" | "lighting";
+  songs: SongRow[];
+  role: InstructionRole;
 };
 
 const formatDuration = (durationSec: number | null) => {
-    if (durationSec == null) return "-";
-    const minutes = Math.floor(durationSec / 60);
-    const seconds = durationSec % 60;
-    return `${minutes}:${String(seconds).padStart(2, "0")}`;
+  if (durationSec == null) return "-";
+  const minutes = Math.floor(durationSec / 60);
+  const seconds = durationSec % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
 };
 
 const formatLightingChoice = (value: string | null) => {
-    if (!value) return "-";
-    if (value === "o") return "○";
-    if (value === "x") return "×";
-    if (value === "auto") return "おまかせ";
-    return value;
+  if (!value) return "-";
+  if (value === "o") return "あり";
+  if (value === "x") return "なし";
+  if (value === "auto") return "おまかせ";
+  return value;
 };
 
+const hasLightingCue = (song: SongRow) =>
+  Boolean(
+    song.lighting_spot || song.lighting_strobe || song.lighting_moving || song.lighting_color
+  );
+
+function LightingCueBadge({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | null;
+}) {
+  const text = formatLightingChoice(value);
+  const active = value === "o";
+  const auto = value === "auto";
+
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        "h-6 border text-[10px]",
+        active
+          ? "border-amber-300/40 bg-amber-500/10 text-amber-700 dark:text-amber-100"
+          : auto
+            ? "border-amber-300/30 bg-amber-500/5 text-amber-700 dark:text-amber-200"
+            : "border-border/60 bg-background/60 text-muted-foreground"
+      )}
+    >
+      {label}: {text}
+    </Badge>
+  );
+}
+
 export function InstructionSetlistTable({
-    songs,
-    role,
+  songs,
+  role,
 }: InstructionSetlistTableProps) {
-    if (songs.length === 0) {
-        return (
-            <p className="text-sm text-muted-foreground p-3 border rounded-md border-border/50 bg-muted/20">
-                セットリストは未入力です。
-            </p>
-        );
-    }
-
+  if (songs.length === 0) {
     return (
-        <div className="space-y-3">
-            {/* Mobile / Card View */}
-            <div className="space-y-2 md:hidden">
-                {songs.map((song, index) => {
-                    const isSong = song.entry_type !== "mc";
-                    const title = song.title?.trim()
-                        ? song.title
-                        : song.entry_type === "mc"
-                            ? "MC"
-                            : "-";
-                    const artist = isSong ? song.artist?.trim() : null;
-
-                    return (
-                        <div
-                            key={song.id}
-                            className="rounded-md border border-border bg-card/50 p-3"
-                        >
-                            <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-                                <span className="font-mono">
-                                    #{String(index + 1).padStart(2, "0")}
-                                </span>
-                                <span className="font-mono">
-                                    {formatDuration(song.duration_sec)}
-                                </span>
-                            </div>
-                            <div className="flex items-start gap-2 mb-2">
-                                {song.entry_type === "mc" ? (
-                                    <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
-                                        MC
-                                    </Badge>
-                                ) : (
-                                    <Music className="w-3 h-3 mt-0.5 text-muted-foreground" />
-                                )}
-                                <div className="text-sm font-semibold leading-tight">
-                                    {artist ? (
-                                        <>
-                                            <span>{title}</span>
-                                            <span className="text-muted-foreground text-xs block mt-0.5">
-                                                {artist}
-                                            </span>
-                                        </>
-                                    ) : (
-                                        title
-                                    )}
-                                </div>
-                            </div>
-
-                            {song.url && (
-                                <a
-                                    href={song.url}
-                                    className="flex items-center gap-1 text-xs text-primary hover:underline break-all mb-2 ml-5"
-                                    target="_blank"
-                                    rel="noreferrer"
-                                >
-                                    <ExternalLink className="w-3 h-3" />
-                                    参考URL
-                                </a>
-                            )}
-
-                            <div className="grid gap-2 text-xs border-t border-border/50 pt-2">
-                                {/* 共通項目: アレンジ */}
-                                <div className="grid grid-cols-[80px,1fr] gap-2">
-                                    <span className="text-muted-foreground">アレンジ/備考</span>
-                                    <span className="whitespace-pre-wrap">
-                                        {isSong ? song.arrangement_note || "-" : "-"}
-                                    </span>
-                                </div>
-
-                                {role === "pa" && (
-                                    <div className="grid grid-cols-[80px,1fr] gap-2">
-                                        <span className="text-blue-400 font-semibold">PAメモ</span>
-                                        <span className="whitespace-pre-wrap text-foreground font-medium">
-                                            {song.memo || "-"}
-                                        </span>
-                                    </div>
-                                )}
-
-                                {role === "lighting" && isSong && (
-                                    <>
-                                        <div className="grid grid-cols-[80px,1fr] gap-2">
-                                            <span className="text-purple-400 font-semibold">照明</span>
-                                            <div className="space-y-1">
-                                                <div>
-                                                    <span className="text-muted-foreground mr-1">
-                                                        スポット:
-                                                    </span>
-                                                    {formatLightingChoice(song.lighting_spot)}
-                                                </div>
-                                                <div>
-                                                    <span className="text-muted-foreground mr-1">
-                                                        ストロボ:
-                                                    </span>
-                                                    {formatLightingChoice(song.lighting_strobe)}
-                                                </div>
-                                                <div>
-                                                    <span className="text-muted-foreground mr-1">
-                                                        ムービング:
-                                                    </span>
-                                                    {formatLightingChoice(song.lighting_moving)}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="grid grid-cols-[80px,1fr] gap-2">
-                                            <span className="text-purple-400 font-semibold">色イメージ</span>
-                                            <span className="whitespace-pre-wrap">
-                                                {song.lighting_color || "-"}
-                                            </span>
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-
-            {/* Desktop / Table View */}
-            <div className="hidden md:block overflow-x-auto rounded-md border border-border bg-card/40">
-                <Table className="min-w-[900px]">
-                    <TableHeader>
-                        <TableRow className="hover:bg-transparent">
-                            <TableHead className="w-[50px]">#</TableHead>
-                            <TableHead className="min-w-[200px]">タイトル / アーティスト</TableHead>
-                            <TableHead className="w-[80px]">時間</TableHead>
-                            <TableHead className="w-[200px]">アレンジ/備考</TableHead>
-                            {role === "pa" && (
-                                <TableHead className="w-[250px] text-blue-400">PAメモ</TableHead>
-                            )}
-                            {role === "lighting" && (
-                                <>
-                                    <TableHead className="w-[200px] text-purple-400">
-                                        照明指定
-                                    </TableHead>
-                                    <TableHead className="w-[150px] text-purple-400">
-                                        色イメージ
-                                    </TableHead>
-                                </>
-                            )}
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {songs.map((song, index) => {
-                            const isSong = song.entry_type !== "mc";
-                            return (
-                                <TableRow key={song.id} className="hover:bg-muted/30">
-                                    <TableCell className="font-mono text-muted-foreground">
-                                        {String(index + 1).padStart(2, "0")}
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex flex-col">
-                                            <div className="flex items-center gap-2">
-                                                {song.entry_type === "mc" && (
-                                                    <Badge
-                                                        variant="outline"
-                                                        className="text-[10px] px-1 py-0 h-4"
-                                                    >
-                                                        MC
-                                                    </Badge>
-                                                )}
-                                                <span className="font-medium">
-                                                    {song.title?.trim() || (song.entry_type === "mc" ? "MC" : "-")}
-                                                </span>
-                                            </div>
-                                            {isSong && song.artist && (
-                                                <span className="text-xs text-muted-foreground">
-                                                    {song.artist}
-                                                </span>
-                                            )}
-                                            {song.url && (
-                                                <a
-                                                    href={song.url}
-                                                    target="_blank"
-                                                    rel="noreferrer"
-                                                    className="text-xs text-primary underline flex items-center gap-1 mt-0.5"
-                                                >
-                                                    <LinkIcon className="w-3 h-3" /> URL
-                                                </a>
-                                            )}
-                                        </div>
-                                    </TableCell>
-                                    <TableCell className="font-mono text-xs">
-                                        {formatDuration(song.duration_sec)}
-                                    </TableCell>
-                                    <TableCell className="text-sm whitespace-pre-wrap">
-                                        {isSong ? song.arrangement_note || "-" : "-"}
-                                    </TableCell>
-
-                                    {/* PA Columns */}
-                                    {role === "pa" && (
-                                        <TableCell className="text-sm whitespace-pre-wrap font-medium">
-                                            {song.memo || <span className="text-muted-foreground">-</span>}
-                                        </TableCell>
-                                    )}
-
-                                    {/* Lighting Columns */}
-                                    {role === "lighting" && (
-                                        <>
-                                            <TableCell className="text-xs">
-                                                {isSong ? (
-                                                    <div className="grid grid-cols-[auto,1fr] gap-x-2 gap-y-1">
-                                                        <span className="text-muted-foreground">Spot:</span>
-                                                        <span>{formatLightingChoice(song.lighting_spot)}</span>
-                                                        <span className="text-muted-foreground">Str:</span>
-                                                        <span>{formatLightingChoice(song.lighting_strobe)}</span>
-                                                        <span className="text-muted-foreground">Mov:</span>
-                                                        <span>
-                                                            {formatLightingChoice(song.lighting_moving)}
-                                                        </span>
-                                                    </div>
-                                                ) : (
-                                                    "-"
-                                                )}
-                                            </TableCell>
-                                            <TableCell className="text-xs whitespace-pre-wrap">
-                                                {isSong ? song.lighting_color || "-" : "-"}
-                                            </TableCell>
-                                        </>
-                                    )}
-                                </TableRow>
-                            );
-                        })}
-                    </TableBody>
-                </Table>
-            </div>
-        </div>
+      <p className="rounded-xl border border-border/50 bg-muted/20 p-3 text-sm text-muted-foreground">
+        セットリストは未入力です。
+      </p>
     );
+  }
+
+  const theme = instructionTheme[role];
+  const songEntries = songs.filter((song) => song.entry_type !== "mc");
+  const mcEntries = songs.length - songEntries.length;
+  const paMemoCount = songs.filter((song) => Boolean(song.memo?.trim())).length;
+  const lightingCueCount = songEntries.filter(hasLightingCue).length;
+
+  return (
+    <div className="space-y-3">
+      <div
+        className={cn(
+          "rounded-xl border px-3 py-2 text-xs",
+          theme.accentBorder,
+          theme.accentSurfaceStrong,
+          theme.accentStrongText
+        )}
+      >
+        {role === "pa"
+          ? `楽曲 ${songEntries.length} 曲 / MC ${mcEntries} 件 / PAメモ ${paMemoCount} 件`
+          : `楽曲 ${songEntries.length} 曲 / MC ${mcEntries} 件 / 照明キュー入力 ${lightingCueCount} 曲`}
+      </div>
+
+      <div className="space-y-2 md:hidden">
+        {songs.map((song, index) => {
+          const isSong = song.entry_type !== "mc";
+          const title = song.title?.trim()
+            ? song.title
+            : song.entry_type === "mc"
+              ? "MC"
+              : "-";
+          const artist = isSong ? song.artist?.trim() : null;
+
+          return (
+            <article
+              key={song.id}
+              className={cn(
+                "rounded-xl border bg-card/70 p-3 shadow-sm",
+                role === "lighting" && hasLightingCue(song)
+                  ? `${theme.accentBorder} ${theme.accentSurface}`
+                  : "border-border/70"
+              )}
+            >
+              <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
+                <span className="font-mono">#{String(index + 1).padStart(2, "0")}</span>
+                <span className="font-mono">{formatDuration(song.duration_sec)}</span>
+              </div>
+
+              <div className="mb-3 flex items-start gap-2">
+                {song.entry_type === "mc" ? (
+                  <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+                    MC
+                  </Badge>
+                ) : role === "pa" ? (
+                  <Music className="mt-0.5 h-3.5 w-3.5 text-blue-700 dark:text-blue-300" />
+                ) : (
+                  <Lightbulb className="mt-0.5 h-3.5 w-3.5 text-amber-700 dark:text-amber-300" />
+                )}
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold leading-tight text-foreground">
+                    {title}
+                  </div>
+                  {artist ? (
+                    <div className="mt-0.5 text-xs text-muted-foreground">{artist}</div>
+                  ) : null}
+                </div>
+              </div>
+
+              {song.url ? (
+                <a
+                  href={song.url}
+                  className="mb-3 ml-5 flex items-center gap-1 break-all text-xs text-primary hover:underline"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  参考URL
+                </a>
+              ) : null}
+
+              <div className="grid gap-2 border-t border-border/50 pt-3 text-xs">
+                <div className="grid grid-cols-[84px,1fr] gap-2">
+                  <span className="text-muted-foreground">アレンジ/備考</span>
+                  <span className="whitespace-pre-wrap text-foreground">
+                    {isSong ? song.arrangement_note || "-" : "-"}
+                  </span>
+                </div>
+
+                {role === "pa" ? (
+                  <div className="grid grid-cols-[84px,1fr] gap-2">
+                    <span className="font-semibold text-blue-700 dark:text-blue-300">PAメモ</span>
+                    <span className="whitespace-pre-wrap font-medium text-foreground">
+                      {song.memo || "-"}
+                    </span>
+                  </div>
+                ) : isSong ? (
+                  <>
+                    <div className="grid grid-cols-[84px,1fr] gap-2">
+                      <span className="font-semibold text-amber-700 dark:text-amber-300">
+                        照明キュー
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        <LightingCueBadge label="Spot" value={song.lighting_spot} />
+                        <LightingCueBadge label="Strobe" value={song.lighting_strobe} />
+                        <LightingCueBadge label="Moving" value={song.lighting_moving} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-[84px,1fr] gap-2">
+                      <span className="font-semibold text-amber-700 dark:text-amber-300">
+                        色イメージ
+                      </span>
+                      <span className="whitespace-pre-wrap text-foreground">
+                        {song.lighting_color || "-"}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="grid grid-cols-[84px,1fr] gap-2">
+                    <span className="font-semibold text-amber-700 dark:text-amber-300">
+                      照明視点
+                    </span>
+                    <span className="text-foreground">MC導線と転換を確認</span>
+                  </div>
+                )}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+
+      <div className="hidden rounded-xl border border-border/70 bg-card/50 md:block">
+        <div
+          className={cn(
+            "grid gap-3 border-b border-border/60 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground",
+            role === "pa"
+              ? "grid-cols-[40px_minmax(0,1.4fr)_72px_minmax(0,1fr)]"
+              : "grid-cols-[40px_minmax(0,1.25fr)_72px_minmax(0,1.05fr)]"
+          )}
+        >
+          <span>#</span>
+          <span>曲 / メモ</span>
+          <span>時間</span>
+          <span className={theme.accentText}>{role === "pa" ? "PAメモ" : "照明キュー"}</span>
+        </div>
+
+        <div className="divide-y divide-border/60">
+          {songs.map((song, index) => {
+            const isSong = song.entry_type !== "mc";
+            const title = song.title?.trim() || (song.entry_type === "mc" ? "MC" : "-");
+
+            return (
+              <div
+                key={song.id}
+                className={cn(
+                  "px-3 py-2.5",
+                  role === "pa" && song.memo?.trim()
+                    ? theme.accentSurface
+                    : role === "lighting" && hasLightingCue(song)
+                      ? theme.accentSurface
+                      : "bg-card/30"
+                )}
+              >
+                <div
+                  className={cn(
+                    "grid gap-3",
+                    role === "pa"
+                      ? "grid-cols-[40px_minmax(0,1.4fr)_72px_minmax(0,1fr)]"
+                      : "grid-cols-[40px_minmax(0,1.25fr)_72px_minmax(0,1.05fr)]"
+                  )}
+                >
+                  <div className="pt-0.5 font-mono text-xs text-muted-foreground">
+                    {String(index + 1).padStart(2, "0")}
+                  </div>
+
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {song.entry_type === "mc" ? (
+                        <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+                          MC
+                        </Badge>
+                      ) : role === "pa" ? (
+                        <Music className="h-3.5 w-3.5 text-blue-700 dark:text-blue-300" />
+                      ) : (
+                        <Lightbulb className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300" />
+                      )}
+                      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
+                        {title}
+                      </span>
+                    </div>
+
+                    {isSong && song.artist ? (
+                      <div className="mt-0.5 text-xs text-muted-foreground">{song.artist}</div>
+                    ) : null}
+
+                    {song.arrangement_note?.trim() ? (
+                      <div className="mt-1 whitespace-pre-wrap break-words text-xs text-muted-foreground">
+                        {song.arrangement_note}
+                      </div>
+                    ) : null}
+
+                    {song.url ? (
+                      <a
+                        href={song.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-1 inline-flex items-center gap-1 text-xs text-primary underline"
+                      >
+                        <LinkIcon className="h-3 w-3" />
+                        URL
+                      </a>
+                    ) : null}
+                  </div>
+
+                  <div className="pt-0.5 font-mono text-xs text-muted-foreground">
+                    {formatDuration(song.duration_sec)}
+                  </div>
+
+                  {role === "pa" ? (
+                    <div className="whitespace-pre-wrap break-words text-sm text-foreground">
+                      {song.memo?.trim() || <span className="text-muted-foreground">-</span>}
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {isSong ? (
+                        <>
+                          <div className="flex flex-wrap gap-1.5">
+                            <LightingCueBadge label="Spot" value={song.lighting_spot} />
+                            <LightingCueBadge label="Strobe" value={song.lighting_strobe} />
+                            <LightingCueBadge label="Moving" value={song.lighting_moving} />
+                          </div>
+                          <div className="whitespace-pre-wrap break-words text-xs text-foreground">
+                            {song.lighting_color?.trim() || "-"}
+                          </div>
+                        </>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">MC導線を確認</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
 }

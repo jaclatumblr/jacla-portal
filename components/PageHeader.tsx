@@ -4,7 +4,7 @@ import { ArrowLeft } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 
 type PageHeaderTone = "primary" | "secondary" | "accent" | "muted" | "white";
-type PageHeaderSize = "default" | "lg";
+type PageHeaderSize = "sm" | "default" | "lg";
 
 type PageHeaderProps = {
   kicker?: string;
@@ -41,9 +41,22 @@ const toneMap: Record<PageHeaderTone, { badge: string; band: string }> = {
   },
 };
 
-const sizeMap: Record<PageHeaderSize, string> = {
-  default: "py-8 md:py-10",
-  lg: "py-10 md:py-14",
+const sizeMap: Record<PageHeaderSize, { section: string; content: string; title: string }> = {
+  sm: {
+    section: "py-4 md:py-5",
+    content: "mt-3",
+    title: "text-2xl font-semibold tracking-tight sm:text-[2rem] md:text-[2.2rem]",
+  },
+  default: {
+    section: "py-8 md:py-10",
+    content: "mt-5",
+    title: "text-3xl font-semibold tracking-tight sm:text-4xl md:text-[2.6rem]",
+  },
+  lg: {
+    section: "py-10 md:py-14",
+    content: "mt-5",
+    title: "text-3xl font-semibold tracking-tight sm:text-4xl md:text-[2.6rem]",
+  },
 };
 
 export function PageHeader({
@@ -58,8 +71,9 @@ export function PageHeader({
   actions,
 }: PageHeaderProps) {
   const toneStyle = toneMap[tone];
+  const sizeStyle = sizeMap[size];
   return (
-    <section className={cn("relative overflow-hidden border-b border-border/80 bg-background", sizeMap[size])}>
+    <section className={cn("relative overflow-hidden border-b border-border/80 bg-background", sizeStyle.section)}>
       <div className={cn("absolute inset-x-0 top-0 h-24 bg-gradient-to-b to-transparent", toneStyle.band)} />
       <div className="relative z-10 container mx-auto px-4 sm:px-6">
         {backHref && (
@@ -72,7 +86,7 @@ export function PageHeader({
           </Link>
         )}
 
-        <div className="mt-5 max-w-5xl pt-[calc(var(--mobile-topbar-height,0px)/4)] md:pt-0">
+        <div className={cn(sizeStyle.content, "max-w-5xl pt-[calc(var(--mobile-topbar-height,0px)/4)] md:pt-0")}>
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div className="space-y-3">
               {kicker && (
@@ -85,9 +99,7 @@ export function PageHeader({
                   {kicker}
                 </span>
               )}
-              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl md:text-[2.6rem]">
-                {title}
-              </h1>
+              <h1 className={sizeStyle.title}>{title}</h1>
               {description && (
                 <p className="max-w-2xl text-sm text-muted-foreground md:text-base">
                   {description}

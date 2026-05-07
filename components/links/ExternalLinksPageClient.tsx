@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { LucideIcon } from "@/lib/icons";
 import {
   ArrowLeft,
@@ -46,10 +46,8 @@ import {
   normalizeExternalLinkPageContent,
   prepareExternalLinkPageContentForSave,
   type ExternalLinkBadgeVariant,
-  type ExternalLinkGroup,
   type ExternalLinkItem,
   type ExternalLinkPageContent,
-  type ExternalLinkSection,
   type ExternalLinkSectionIcon,
   type ExternalLinkSectionLayout,
   validateExternalLinkPageContent,
@@ -337,7 +335,10 @@ export function ExternalLinksPageClient({
   const { isAdmin, isPaLeader, isLightingLeader, loading: roleLoading } = useRoleFlags();
   const canEditContent = isAdmin || isPaLeader || isLightingLeader;
 
-  const createDefaultContent = () => cloneExternalLinkPageContent(defaultContent);
+  const createDefaultContent = useCallback(
+    () => cloneExternalLinkPageContent(defaultContent),
+    [defaultContent]
+  );
 
   const [content, setContent] = useState<ExternalLinkPageContent>(() => createDefaultContent());
   const [draft, setDraft] = useState<ExternalLinkPageContent>(() => createDefaultContent());
@@ -396,7 +397,7 @@ export function ExternalLinksPageClient({
     return () => {
       cancelled = true;
     };
-  }, [defaultContent, pageId]);
+  }, [createDefaultContent, defaultContent, pageId]);
 
   const visibleContent = useMemo(() => {
     if (editorMode) return draft;
@@ -414,15 +415,19 @@ export function ExternalLinksPageClient({
 
     if (groupKeys.length === 0) {
       if (openDisplayGroupKey !== null) {
-        setOpenDisplayGroupKey(null);
+        queueMicrotask(() => {
+          setOpenDisplayGroupKey(null);
+        });
       }
       return;
     }
 
     if (openDisplayGroupKey && !groupKeys.includes(openDisplayGroupKey)) {
-      setOpenDisplayGroupKey(groupKeys[0]);
+      queueMicrotask(() => {
+        setOpenDisplayGroupKey(groupKeys[0]);
+      });
     }
-  }, [editorMode, openDisplayGroupKey, visibleContent]);
+  }, [createDefaultContent, editorMode, openDisplayGroupKey, visibleContent]);
 
   const activeOpenSectionId =
     editorMode && draft.sections.some((section) => section.id === openSectionId)

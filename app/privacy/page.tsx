@@ -10,12 +10,12 @@ export default function PrivacyPage() {
           <h1 className="text-2xl font-bold">プライバシーポリシー</h1>
           <div className="text-xs text-muted-foreground">
             <p>施行日: 2026-01-26</p>
-            <p>最終改定日: 2026-01-26</p>
+            <p>最終改定日: 2026-04-09</p>
           </div>
           <p className="text-sm text-muted-foreground">
             本ポリシーは、東京工科大学 総合音楽部 Jacla（以下「運営」）
             および矢内康太朗（以下「製作者」）が提供する
-            「Jacla Portal」（以下「本サービス」）における個人情報の取扱いを定めるものです。
+            「Jacla Portal」（以下「本サービス」）における個人情報および利用者情報の取扱いを定めるものです。
           </p>
           <p className="text-sm text-muted-foreground">
             本サービスは部活動内の運用を目的としたシステムであり、取得した情報は部内運営のために利用されます。
@@ -26,10 +26,11 @@ export default function PrivacyPage() {
           <section className="space-y-2">
             <h2 className="text-lg font-semibold">1. 取得する情報</h2>
             <ul className="list-disc space-y-1 pl-6">
-              <li>アカウント情報（メールアドレス、認証プロバイダ情報）</li>
-              <li>プロフィール情報（氏名、楽器、役職、学籍番号等）</li>
-              <li>活動・運用情報（イベント、レパ表、備品管理、フィードバック内容等）</li>
-              <li>利用ログ（アクセス履歴、操作履歴など）</li>
+              <li>アカウント情報（メールアドレス、認証プロバイダ情報、ユーザーID）</li>
+              <li>プロフィール情報（氏名、楽器、役職、学籍番号、入学年度等）</li>
+              <li>活動・運用情報（イベント、レパ表、備品管理、外部リンク編集、フィードバック内容等）</li>
+              <li>利用ログ（アクセス履歴、操作履歴、更新履歴など）</li>
+              <li>端末保存情報（テーマ設定、PWAインストール関連状態、オフラインキャッシュ等のブラウザ保存情報）</li>
             </ul>
           </section>
 
@@ -40,6 +41,7 @@ export default function PrivacyPage() {
               <li>イベント運営や部活動に必要な情報の管理・共有</li>
               <li>部内運営に必要な範囲での関係者間の情報共有</li>
               <li>問い合わせ対応、通知、重要なお知らせの配信</li>
+              <li>PWA提供、表示高速化、オフラインフォールバック、テーマ保持</li>
               <li>不正利用防止、品質改善、保守・運用</li>
             </ul>
           </section>
@@ -71,7 +73,19 @@ export default function PrivacyPage() {
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-lg font-semibold">4. 第三者提供</h2>
+            <h2 className="text-lg font-semibold">4. 端末上の保存</h2>
+            <p>
+              本サービスは PWA 機能のため、利用者のブラウザに Service Worker、Cache Storage、Local
+              Storage 等を用いて一部のリソースや設定情報を保存する場合があります。これらの保存情報は、
+              オフライン表示、表示高速化、テーマ保持、インストール状態の管理等に利用されます。
+            </p>
+            <p>
+              共有端末で利用する場合は、ログアウトに加えて必要に応じてブラウザの保存データを削除してください。
+            </p>
+          </section>
+
+          <section className="space-y-2">
+            <h2 className="text-lg font-semibold">5. 第三者提供</h2>
             <p>
               法令に基づく場合、または本サービスの提供に必要な委託先への提供を除き、
               個人情報を第三者に提供することはありません。
@@ -79,21 +93,26 @@ export default function PrivacyPage() {
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-lg font-semibold">5. 保管期間</h2>
+            <h2 className="text-lg font-semibold">6. 保管期間</h2>
             <p>
               取得した情報は、本サービスの運営に必要な期間に限り保管し、不要となった場合は適切に削除します。
+            </p>
+            <p>
+              ただし、認証に利用していた大学アカウントが失効した場合や、退部・卒業等によりログインできなくなった場合でも、
+              イベント記録、提出物、変更履歴その他の運営上必要なデータは、引き継ぎ・監査・履歴保持のため継続保管することがあります。
+              現時点では、大学アカウントから個人メール等への自動移行機能は提供していません。
             </p>
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-lg font-semibold">6. 安全管理</h2>
+            <h2 className="text-lg font-semibold">7. 安全管理</h2>
             <p>
               個人情報の漏えい、滅失、毀損等を防止するため、必要かつ適切な安全管理措置を講じます。
             </p>
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-lg font-semibold">7. 開示・訂正・削除</h2>
+            <h2 className="text-lg font-semibold">8. 開示・訂正・削除</h2>
             <p>
               利用者は、自己の情報について開示・訂正・削除を求めることができます。
               手続きは本サービス内のフィードバック機能からご連絡ください。
@@ -101,7 +120,7 @@ export default function PrivacyPage() {
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-lg font-semibold">8. ポリシーの変更</h2>
+            <h2 className="text-lg font-semibold">9. ポリシーの変更</h2>
             <p>
               本ポリシーは、必要に応じて改定されることがあります。改定後は本サービス上で通知します。
             </p>

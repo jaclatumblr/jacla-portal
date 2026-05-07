@@ -14,6 +14,11 @@ import { toast } from "@/lib/toast";
 import { useRoleFlags } from "@/lib/useRoleFlags";
 import { cn } from "@/lib/utils";
 import { downloadExcelWorkbook } from "@/lib/exportExcel";
+import {
+  getTimetableTone,
+  TIMETABLE_LEGEND_ITEMS,
+  TIMETABLE_TONE_STYLES,
+} from "@/lib/timetableTone";
 import { RepertoireSection } from "@/app/admin/events/[id]/components/RepertoireSection";
 
 type EventRow = {
@@ -112,18 +117,6 @@ const slotPhaseLabel = (slot: SlotRow) => {
   if (slot.slot_phase === "rehearsal_normal") return "\u901A\u5E38\u30EA\u30CF";
   if (slot.slot_phase === "rehearsal_pre") return "\u524D\u65E5\u30EA\u30CF";
   return "\u672C\u756A";
-};
-
-const slotToneClass = (slot: SlotRow) => {
-  const note = normalizeNote(slot.note);
-  if (note === PREP_NOTE || note === CLEANUP_NOTE || note === CLEANUP_NOTE_ALT || note === REST_NOTE) {
-    return "before:bg-amber-400/80";
-  }
-  if (slot.slot_type === "break" || note.includes("\u8EE2\u63DB")) return "before:bg-amber-400/80";
-  if (slot.slot_phase === "rehearsal_normal" || slot.slot_phase === "rehearsal_pre") {
-    return "before:bg-sky-400/80";
-  }
-  return "before:bg-fuchsia-400/80";
 };
 
 export default function EventTimeTableViewPage() {
@@ -389,10 +382,10 @@ export default function EventTimeTableViewPage() {
                     <Card className="border-border bg-card/60">
                       <CardContent className="p-4">
                         <p className="text-[11px] text-muted-foreground">{"\u30EA\u30CF / \u672C\u756A"}</p>
-                        <p className="mt-1 text-2xl font-semibold text-foreground">
-                          {summary.rehearsal}
+                        <p className="mt-1 text-2xl font-semibold">
+                          <span className={TIMETABLE_TONE_STYLES.rehearsal.textClass}>{summary.rehearsal}</span>
                           <span className="mx-1 text-muted-foreground">/</span>
-                          {summary.show}
+                          <span className={TIMETABLE_TONE_STYLES.show.textClass}>{summary.show}</span>
                         </p>
                       </CardContent>
                     </Card>
@@ -425,25 +418,50 @@ export default function EventTimeTableViewPage() {
                               ? `${slotLabel(selectedBandSlot)} / ${timeLabel(selectedBandSlot.start_time, selectedBandSlot.end_time)}`
                               : "\u30D0\u30F3\u30C9\u67A0\u3092\u9078\u629E\u3059\u308B\u3068\u30EC\u30D1\u8868\u304C\u9023\u52D5\u3057\u307E\u3059"}
                           </p>
+                          <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                            {TIMETABLE_LEGEND_ITEMS.map((item) => (
+                              <span
+                                key={item.key}
+                                className={cn(
+                                  "inline-flex items-center gap-1 rounded-full border px-2 py-0.5",
+                                  TIMETABLE_TONE_STYLES[item.key].chipClass
+                                )}
+                              >
+                                <span
+                                  className={cn(
+                                    "h-1.5 w-1.5 rounded-full",
+                                    TIMETABLE_TONE_STYLES[item.key].barClass
+                                  )}
+                                />
+                                {item.label}
+                              </span>
+                            ))}
+                          </div>
                         </CardHeader>
                         <CardContent className="max-h-[70vh] space-y-2 overflow-y-auto pr-1">
                           {orderedSlots.map((slot, index) => {
                             const isSelected = slot.slot_type === "band" && slot.band_id === effectiveBandId;
+                            const tone = getTimetableTone({
+                              slotType: slot.slot_type,
+                              slotPhase: slot.slot_phase,
+                              note: normalizeNote(slot.note),
+                            });
                             return (
                               <button
                                 key={slot.id}
                                 type="button"
                                 onClick={() => handleSlotClick(slot)}
                                 className={cn(
-                                  "relative w-full rounded-lg border bg-card/70 px-3 py-2 pl-5 text-left transition-colors",
+                                  "relative w-full rounded-lg px-3 py-2 pl-5 text-left transition-colors",
                                   "before:absolute before:bottom-2 before:left-2 before:top-2 before:w-1 before:rounded-full before:content-['']",
-                                  slotToneClass(slot),
-                                  isSelected ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
+                                  tone.railClass,
+                                  tone.cardClass,
+                                  isSelected ? "border-primary ring-2 ring-primary/20" : ""
                                 )}
                               >
                                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                   <span>#{String(index + 1).padStart(2, "0")}</span>
-                                  <Badge variant="secondary" className="text-[10px]">
+                                  <Badge variant="outline" className={cn("text-[10px]", tone.badgeClass)}>
                                     {slotPhaseLabel(slot)}
                                   </Badge>
                                   <Badge variant="outline" className="text-[10px]">

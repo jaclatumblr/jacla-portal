@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/lib/toast";
-import { normalizeVoxSetlistLayout } from "@/lib/voxSetlistLayout";
 import { SlotManager } from "./SlotManager";
 import { RepertoireSection } from "./RepertoireSection";
 import type { Band, BandMember, EventRow, EventSlot, Song } from "../types";

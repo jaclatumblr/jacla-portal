@@ -3,6 +3,23 @@ import { NextRequest, NextResponse } from "next/server";
 const VERCEL_TOKEN = process.env.VERCEL_TOKEN;
 const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID;
 
+type VercelEventPayload = {
+    text?: string;
+    requestId?: string;
+    statusCode?: number;
+    path?: string;
+    method?: string;
+    duration?: number;
+};
+
+type VercelEvent = {
+    id?: string;
+    type?: "stdout" | "stderr" | "request" | string;
+    text?: string;
+    date?: number;
+    payload?: VercelEventPayload;
+};
+
 export async function GET(request: NextRequest) {
     if (!VERCEL_TOKEN || !VERCEL_PROJECT_ID) {
         return NextResponse.json(
@@ -43,12 +60,12 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        const events = await response.json();
+        const events = (await response.json()) as VercelEvent[];
 
         // Filter and format runtime logs
         const logs = (events ?? [])
-            .filter((e: any) => e.type === "stdout" || e.type === "stderr" || e.type === "request")
-            .map((e: any) => ({
+            .filter((e) => e.type === "stdout" || e.type === "stderr" || e.type === "request")
+            .map((e) => ({
                 id: e.id ?? `${e.date}-${Math.random()}`,
                 type: e.type,
                 text: e.text ?? e.payload?.text ?? formatRequestEvent(e),
@@ -68,7 +85,7 @@ export async function GET(request: NextRequest) {
     }
 }
 
-function formatRequestEvent(event: any): string {
+function formatRequestEvent(event: VercelEvent): string {
     if (event.type === "request" && event.payload) {
         const { method, path, statusCode, duration } = event.payload;
         return `${method ?? "GET"} ${path ?? "/"} → ${statusCode ?? "?"} (${duration ?? "?"}ms)`;

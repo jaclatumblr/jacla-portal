@@ -1,6 +1,5 @@
 "use client";
 
-import { Loader2 } from "@/lib/icons";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { SideNav } from "@/components/SideNav";
 import { PageHeader } from "@/components/PageHeader";
@@ -40,7 +39,7 @@ export default function BandBuilderPage() {
     refreshMembers: refreshFixedMembers,
   } = useFixedBands();
 
-  const { profiles, subPartsByProfileId, selfPart, loading: profilesLoading, getFilteredProfiles } =
+  const { subPartsByProfileId, selfPart, getFilteredProfiles } =
     useProfiles();
 
   const handleFixedBandCreated = async (newBandId: string) => {
@@ -130,7 +129,6 @@ export default function BandBuilderPage() {
                       band={selectedBand}
                       members={fixedMembers}
                       membersLoading={fixedMembersLoading}
-                      profiles={profiles}
                       subPartsByProfileId={subPartsByProfileId}
                       getFilteredProfiles={getFilteredProfiles}
                       onRefreshBands={refreshFixedBands}

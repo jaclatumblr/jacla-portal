@@ -49,6 +49,22 @@ type PageViewEntry = {
     event_name: string | null;
 };
 
+type LoginHistoryRow = {
+    id: string;
+    email: string;
+    created_at: string;
+    user_agent: string | null;
+    profiles?: { display_name?: string | null } | { display_name?: string | null }[] | null;
+};
+
+type PageViewRow = {
+    id: string;
+    path: string;
+    created_at: string;
+    profiles?: { display_name?: string | null } | { display_name?: string | null }[] | null;
+    events?: { name?: string | null } | { name?: string | null }[] | null;
+};
+
 const LOG_COLORS: Record<string, string> = {
     stdout: "text-green-400",
     stderr: "text-red-400",
@@ -86,8 +102,8 @@ export default function AdminLogsPage() {
                 const data = await res.json();
                 if (cancelled) return;
                 setDeployments(data.deployments ?? []);
-                if (data.deployments?.length > 0 && !selectedDeploymentId) {
-                    setSelectedDeploymentId(data.deployments[0].id);
+                if (data.deployments?.length > 0) {
+                    setSelectedDeploymentId((current) => current ?? data.deployments[0].id);
                 }
             } catch (error) {
                 console.error(error);
@@ -154,21 +170,27 @@ export default function AdminLogsPage() {
             if (loginRes.error) console.error(loginRes.error);
             if (pageViewRes.error) console.error(pageViewRes.error);
 
-            const logins = (loginRes.data ?? []).map((row: any) => ({
+            const logins = ((loginRes.data ?? []) as LoginHistoryRow[]).map((row) => ({
                 id: row.id,
                 email: row.email,
-                display_name: row.profiles?.display_name ?? null,
+                display_name: Array.isArray(row.profiles)
+                    ? (row.profiles[0]?.display_name ?? null)
+                    : (row.profiles?.display_name ?? null),
                 created_at: row.created_at,
                 user_agent: row.user_agent,
             }));
             setLoginLogs(logins);
 
-            const pageViews = (pageViewRes.data ?? []).map((row: any) => ({
+            const pageViews = ((pageViewRes.data ?? []) as PageViewRow[]).map((row) => ({
                 id: row.id,
                 path: row.path,
-                display_name: row.profiles?.display_name ?? null,
+                display_name: Array.isArray(row.profiles)
+                    ? (row.profiles[0]?.display_name ?? null)
+                    : (row.profiles?.display_name ?? null),
                 created_at: row.created_at,
-                event_name: row.events?.name ?? null,
+                event_name: Array.isArray(row.events)
+                    ? (row.events[0]?.name ?? null)
+                    : (row.events?.name ?? null),
             }));
             setPageViewLogs(pageViews);
         } catch (error) {
@@ -186,11 +208,10 @@ export default function AdminLogsPage() {
 
     // Initial load and deployment change
     useEffect(() => {
-        if (selectedDeploymentId) {
-            setLogs([]);
-            fetchLogs(false);
-        }
-    }, [selectedDeploymentId]);
+        if (!selectedDeploymentId) return;
+        setLogs([]);
+        void fetchLogs(false);
+    }, [fetchLogs, selectedDeploymentId]);
 
     // Auto-refresh for Vercel logs
     useEffect(() => {

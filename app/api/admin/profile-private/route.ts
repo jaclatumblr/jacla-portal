@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { formatPhoneNumber } from "@/lib/phone";
+import { normalizeProfileGender } from "@/lib/profileGender";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -44,6 +45,7 @@ export async function POST(request: Request) {
     enrollmentYear?: number | null;
     birthDate?: string | null;
     phoneNumber?: string | null;
+    gender?: string | null;
   };
 
   const profileId = (body.profileId ?? "").trim();
@@ -92,10 +94,23 @@ export async function POST(request: Request) {
       : null;
   const birthDateValue = (body.birthDate ?? "").toString().trim();
   const phoneNumberValue = formatPhoneNumber((body.phoneNumber ?? "").toString());
+  const genderValue = normalizeProfileGender(body.gender ?? null);
 
-  const { error: upsertError } = await adminClient
+  const payload = {
+    profile_id: profileId,
+    student_id: studentIdValue,
+    enrollment_year: enrollmentYear,
+    birth_date: birthDateValue || null,
+    phone_number: phoneNumberValue || null,
+    gender: genderValue,
+  };
+
+  let { error: upsertError } = await adminClient
     .from("profile_private")
-    .upsert(
+    .upsert(payload, { onConflict: "profile_id" });
+
+  if (upsertError?.code === "42703") {
+    ({ error: upsertError } = await adminClient.from("profile_private").upsert(
       {
         profile_id: profileId,
         student_id: studentIdValue,
@@ -104,7 +119,8 @@ export async function POST(request: Request) {
         phone_number: phoneNumberValue || null,
       },
       { onConflict: "profile_id" }
-    );
+    ));
+  }
 
   if (upsertError) {
     console.error(upsertError);

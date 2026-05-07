@@ -110,41 +110,19 @@ function Tooltip({
         };
     }, []);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const childProps = children.props as Record<string, unknown>;
-
-    const childElement = React.cloneElement(children, {
-        ref: triggerRef,
-        onMouseEnter: (e: React.MouseEvent) => {
-            showTooltip();
-            if (typeof childProps.onMouseEnter === "function") {
-                (childProps.onMouseEnter as (e: React.MouseEvent) => void)(e);
-            }
-        },
-        onMouseLeave: (e: React.MouseEvent) => {
-            hideTooltip();
-            if (typeof childProps.onMouseLeave === "function") {
-                (childProps.onMouseLeave as (e: React.MouseEvent) => void)(e);
-            }
-        },
-        onFocus: (e: React.FocusEvent) => {
-            showTooltip();
-            if (typeof childProps.onFocus === "function") {
-                (childProps.onFocus as (e: React.FocusEvent) => void)(e);
-            }
-        },
-        onBlur: (e: React.FocusEvent) => {
-            hideTooltip();
-            if (typeof childProps.onBlur === "function") {
-                (childProps.onBlur as (e: React.FocusEvent) => void)(e);
-            }
-        },
-        "aria-describedby": isVisible ? "tooltip" : undefined,
-    } as React.HTMLAttributes<HTMLElement>);
-
     return (
         <>
-            {childElement}
+            <span
+                ref={triggerRef as React.RefObject<HTMLSpanElement>}
+                onMouseEnter={showTooltip}
+                onMouseLeave={hideTooltip}
+                onFocus={showTooltip}
+                onBlur={hideTooltip}
+                aria-describedby={isVisible ? "tooltip" : undefined}
+                className="inline-flex"
+            >
+                {children}
+            </span>
             {isVisible && (
                 <div
                     ref={tooltipRef}

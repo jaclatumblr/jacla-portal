@@ -45,6 +45,8 @@ declare
   part_expected   text[] := array[
     'none',
     'Gt.',
+    'A.Gt.',
+    'C.Gt.',
     'Ba.',
     'Dr.',
     'Key.',
@@ -63,13 +65,11 @@ declare
     'Cl.',
     'B.Cl.',
     'Ob.',
-    'Fg.'
     'Fl.',
     'Vn.',
+    'Va.',
     'Vc.',
     'Per.',
-    'Ukl.',
-    'Mand.',
     'etc'
   ];
 
@@ -234,7 +234,15 @@ create table if not exists public.profile_private (
 alter table public.profile_private
   add column if not exists enrollment_year integer,
   add column if not exists birth_date date,
-  add column if not exists phone_number text;
+  add column if not exists phone_number text,
+  add column if not exists gender text;
+
+alter table public.profile_private
+  drop constraint if exists profile_private_gender_check;
+
+alter table public.profile_private
+  add constraint profile_private_gender_check
+  check (gender is null or gender in ('male', 'female', 'other'));
 
 create or replace function public.profile_private_set_updated_at()
 returns trigger

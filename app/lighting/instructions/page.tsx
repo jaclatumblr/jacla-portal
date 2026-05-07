@@ -1,84 +1,45 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import { SideNav } from "@/components/SideNav";
-import { AuthGuard } from "@/lib/AuthGuard";
-import { PageHeader } from "@/components/PageHeader";
-import { useEventInstructions } from "@/app/hooks/useEventInstructions";
-import { InstructionCard } from "@/components/instructions/InstructionCard";
-import { InstructionSetlistTable } from "@/components/instructions/InstructionSetlistTable";
-import { InstructionStagePlot } from "@/components/instructions/InstructionStagePlot";
-import { InstructionMemberTable } from "@/components/instructions/InstructionMemberTable";
-import { EventSlotRow } from "@/app/types/instructions";
-import { Info, Lightbulb } from "@/lib/icons";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatTimeText } from "@/lib/time";
+import { SideNav } from "@/components/SideNav";
+import { PageHeader } from "@/components/PageHeader";
+import { AuthGuard } from "@/lib/AuthGuard";
+import { useEventInstructions } from "@/app/hooks/useEventInstructions";
+import { InstructionMetric } from "@/components/instructions/InstructionMetric";
+import {
+  LIGHTING_SHIFT_ROLES,
+  LightingBandInstructionCard,
+} from "@/components/instructions/LightingBandInstructionCard";
+import {
+  countAssignedRoles,
+  dateLabel,
+  formatCoverage,
+} from "@/components/instructions/helpers";
+import { instructionTheme } from "@/components/instructions/theme";
+import { cn } from "@/lib/utils";
 
-const LIGHTING_SHIFT_ROLES = [
-  { value: "light_op1", label: "卓操作①" },
-  { value: "light_op2", label: "卓操作②" },
-  { value: "light_spot", label: "スポット" },
-  { value: "light_assist", label: "補助" },
+const LIGHTING_WORKFLOW = [
+  {
+    title: "卓割を先に確認",
+    detail: "通常リハ、直前リハ、本番の担当を最初に確定します。",
+  },
+  {
+    title: "照明メモを確認",
+    detail: "バンド全体の照明要望と共通メモで演出方針を揃えます。",
+  },
+  {
+    title: "キューと立ち位置",
+    detail: "曲ごとの指定、色イメージ、MC導線を確認して本番動線を詰めます。",
+  },
 ] as const;
-
-const dateLabel = (value: string | null) => (value ? value.slice(0, 10) : "");
-
-const parseTimeValue = (value: string | null) => {
-  if (!value) return null;
-  const [h, m] = value.split(":").map((part) => Number(part));
-  if (Number.isNaN(h) || Number.isNaN(m)) return null;
-  return h * 60 + m;
-};
-
-const slotDurationLabel = (slot: EventSlotRow) => {
-  const start = parseTimeValue(slot.start_time ?? null);
-  const end = parseTimeValue(slot.end_time ?? null);
-  if (start == null || end == null) return "";
-  let duration = end - start;
-  if (duration < 0) duration += 24 * 60;
-  if (duration <= 0) return "";
-  return `(${duration})`;
-};
-
-const slotTimeLabel = (slot: EventSlotRow) => {
-  const startText = formatTimeText(slot.start_time);
-  const endText = formatTimeText(slot.end_time);
-  if (!startText && !endText) return "?????";
-  if (startText && endText) {
-    return `${startText}-${endText}${slotDurationLabel(slot)}`;
-  }
-  return startText ?? endText ?? "?????";
-};
-
-const phaseLabel = (phase: EventSlotRow["slot_phase"]) => {
-  if (phase === "rehearsal_normal") return "通常リハ";
-  if (phase === "rehearsal_pre") return "直前リハ";
-  return "本番";
-};
-
-const slotLabel = (slot: EventSlotRow, bandNameMap: Map<string, string>) => {
-  if (slot.slot_type === "band") {
-    return bandNameMap.get(slot.band_id ?? "") ?? "バンド未設定";
-  }
-  const note = slot.note?.trim() ?? "";
-  if (slot.slot_type === "break" || note.includes("転換")) return "転換";
-  if (slot.slot_type === "mc") return "付帯作業";
-  return note || "付帯作業";
-};
-
-const slotTypeLabel = (slot: EventSlotRow) => {
-  if (slot.slot_type === "band") return "バンド";
-  const note = slot.note?.trim() ?? "";
-  if (slot.slot_type === "break" || note.includes("転換")) return "転換";
-  return "付帯作業";
-};
 
 export default function LightingInstructionsPage() {
   const {
     loading,
     error,
     groupedEvents,
-    stageItemsByBand,
+    stagePlotsByBand,
     bandMembersByBand,
     bandMemberDetailsByBand,
     songsByBand,
@@ -90,11 +51,6 @@ export default function LightingInstructionsPage() {
   } = useEventInstructions();
 
   const roleKeys: Set<string> = new Set(LIGHTING_SHIFT_ROLES.map((role) => role.value));
-  const displayProfileName = (profileId?: string | null) => {
-    if (!profileId) return "未割り当て";
-    const profile = profilesById[profileId];
-    return profile?.real_name ?? profile?.display_name ?? "未登録";
-  };
 
   return (
     <AuthGuard>
@@ -104,7 +60,7 @@ export default function LightingInstructionsPage() {
           <PageHeader
             kicker="Lighting"
             title="照明指示"
-            description="各イベントのレパ表から、共通メモ・立ち位置・照明メモを確認できます。"
+            description="卓割、照明メモ、キュー、立ち位置を照明卓向けの順番で確認できます。"
             backHref="/lighting"
             backLabel="照明ダッシュボードへ戻る"
             tone="accent"
@@ -112,7 +68,44 @@ export default function LightingInstructionsPage() {
           />
 
           <section className="py-8 md:py-12">
-            <div className="container mx-auto px-4 sm:px-6 space-y-6 max-w-5xl">
+            <div className="container mx-auto max-w-6xl space-y-6 px-4 sm:px-6">
+              <section
+                className={cn(
+                  "rounded-2xl border p-4 shadow-sm",
+                  instructionTheme.lighting.accentBorder,
+                  instructionTheme.lighting.accentSurfaceStrong
+                )}
+              >
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-700 dark:text-amber-200">
+                    Lighting Workflow
+                  </p>
+                  <h2 className="text-lg font-semibold text-amber-800 dark:text-amber-50">
+                    照明卓で先に見る順番
+                  </h2>
+                  <p className="text-sm leading-relaxed text-amber-700/80 dark:text-amber-100/80">
+                    担当、照明メモ、曲ごとのキュー、立ち位置を一連で追えるように整理しています。
+                  </p>
+                </div>
+
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  {LIGHTING_WORKFLOW.map((step, index) => (
+                    <div
+                      key={step.title}
+                      className="rounded-xl border border-amber-300/20 bg-background/70 p-3"
+                    >
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-200">
+                        Step {index + 1}
+                      </div>
+                      <div className="mt-1 text-sm font-semibold text-foreground">{step.title}</div>
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                        {step.detail}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
               {loading ? (
                 <div className="rounded-lg border border-border bg-card/60 px-4 py-6 text-sm text-muted-foreground">
                   指示を読み込んでいます...
@@ -127,154 +120,92 @@ export default function LightingInstructionsPage() {
                 </div>
               ) : (
                 groupedEvents.map((event) => {
-                  const bandNameMap = new Map(event.bands.map((band) => [band.id, band.name]));
                   const slots = slotsByEvent[event.id] ?? [];
+                  const bandSlotsInEvent = slots.filter((slot) => slot.slot_type === "band");
+                  const bandCountInEvent =
+                    new Set(
+                      bandSlotsInEvent
+                        .filter((slot) => Boolean(slot.band_id))
+                        .map((slot) => slot.band_id as string)
+                    ).size || event.bands.length;
+                  const eventAssignedCount = countAssignedRoles(
+                    bandSlotsInEvent,
+                    assignmentsBySlot,
+                    roleKeys
+                  );
+                  const eventTotalAssignments =
+                    bandSlotsInEvent.length * LIGHTING_SHIFT_ROLES.length;
 
                   return (
-                    <Card key={event.id} className="bg-card/60 border-border">
-                      <CardHeader className="space-y-1">
-                        <CardTitle className="text-xl flex flex-wrap items-center gap-3">
-                          {event.name}
-                          {event.date && (
-                            <span className="text-xs text-muted-foreground font-normal">
-                              {dateLabel(event.date)}
-                            </span>
-                          )}
-                        </CardTitle>
-                        <p className="text-xs text-muted-foreground">{event.bands.length} バンド</p>
+                    <Card key={event.id} className="border-border/70 bg-card/60 shadow-sm">
+                      <CardHeader className="space-y-4">
+                        <div className="flex flex-wrap items-start justify-between gap-4">
+                          <div className="space-y-1">
+                            <CardTitle className="flex flex-wrap items-center gap-3 text-xl">
+                              {event.name}
+                              {event.date ? (
+                                <span className="text-xs font-normal text-muted-foreground">
+                                  {dateLabel(event.date)}
+                                </span>
+                              ) : null}
+                            </CardTitle>
+                            <p className="text-xs text-muted-foreground">
+                              照明指示対象 {event.bands.length} バンド
+                            </p>
+                          </div>
+
+                          <Badge
+                            variant="outline"
+                            className={cn("h-6 text-[10px]", instructionTheme.lighting.chip)}
+                          >
+                            照明卓
+                          </Badge>
+                        </div>
+
+                        <div className="grid gap-2 sm:grid-cols-3">
+                          <InstructionMetric
+                            label="バンド"
+                            value={`${event.bands.length}件`}
+                            role="lighting"
+                          />
+                          <InstructionMetric
+                            label="対象バンド"
+                            value={`${bandCountInEvent}バンド`}
+                            role="lighting"
+                            tone="muted"
+                          />
+                          <InstructionMetric
+                            label="卓割"
+                            value={formatCoverage(eventAssignedCount, eventTotalAssignments)}
+                            role="lighting"
+                          />
+                        </div>
                       </CardHeader>
+
                       <CardContent className="space-y-4">
                         {event.bands.length === 0 ? (
                           <div className="text-sm text-muted-foreground">
                             バンド情報がありません。
                           </div>
                         ) : (
-                          event.bands.map((band) => {
-                            const stageItems = stageItemsByBand[band.id] ?? [];
-                            const stageMembers = bandMembersByBand[band.id] ?? [];
-                            const memberDetails = bandMemberDetailsByBand[band.id] ?? [];
-                            const bandSongs = songsByBand[band.id] ?? [];
-                            const isExpanded = expandedBands[band.id] ?? false;
-                            const bandSlots = slots.filter(
-                              (slot) => slot.slot_type === "band" && slot.band_id === band.id
-                            );
-
-                            return (
-                              <InstructionCard
-                                key={band.id}
-                                band={band}
-                                isExpanded={isExpanded}
-                                onToggle={() => toggleBand(band.id)}
-                                role="lighting"
-                              >
-                                <div className="rounded-md border border-purple-200/20 bg-purple-500/5 p-3 space-y-3">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <span className="text-xs font-semibold text-primary">照明シフト</span>
-                                    <span className="text-xs text-muted-foreground">
-                                      イベント: {event.name}
-                                      {event.date ? ` (${dateLabel(event.date)})` : ""}
-                                    </span>
-                                  </div>
-                                  {bandSlots.length === 0 ? (
-                                    <p className="text-sm text-muted-foreground">
-                                      このバンドの枠がまだありません。
-                                    </p>
-                                  ) : (
-                                    <div className="space-y-3">
-                                      {bandSlots.map((slot) => {
-                                        const slotAssignments = (
-                                          assignmentsBySlot[slot.id] ?? []
-                                        ).filter((assignment) => roleKeys.has(assignment.role));
-
-                                        return (
-                                          <div
-                                            key={slot.id}
-                                            className="rounded-md border border-border/60 bg-background/50 p-3 space-y-2"
-                                          >
-                                            <div className="flex flex-wrap items-center justify-between gap-2">
-                                              <div className="text-sm font-medium">
-                                                {phaseLabel(slot.slot_phase)}
-                                              </div>
-                                              <div className="text-xs text-muted-foreground">
-                                                {slotTimeLabel(slot)}
-                                              </div>
-                                            </div>
-                                            <div className="flex flex-wrap items-center gap-2">
-                                              <Badge variant="outline" className="text-[10px]">
-                                                {phaseLabel(slot.slot_phase)}
-                                              </Badge>
-                                              <Badge variant="secondary" className="text-[10px]">
-                                                {slotTypeLabel(slot)}
-                                              </Badge>
-                                            </div>
-                                            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                                              {LIGHTING_SHIFT_ROLES.map((role) => {
-                                                const assignment = slotAssignments.find(
-                                                  (item) => item.role === role.value
-                                                );
-                                                return (
-                                                  <div
-                                                    key={`${slot.id}-${role.value}`}
-                                                    className="rounded-md border border-border/60 bg-card/60 px-2 py-1 text-xs"
-                                                  >
-                                                    <div className="text-[10px] text-muted-foreground">
-                                                      {role.label}
-                                                    </div>
-                                                    <div className="font-medium">
-                                                      {displayProfileName(assignment?.profile_id)}
-                                                    </div>
-                                                  </div>
-                                                );
-                                              })}
-                                            </div>
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  )}
-                                </div>
-
-                                <div className="rounded-md border border-purple-200/20 bg-purple-500/5 p-3 space-y-2">
-                                  <div className="flex items-center gap-2 text-xs font-bold text-purple-400">
-                                    <Lightbulb className="w-3 h-3" />
-                                    照明メモ
-                                  </div>
-                                  <p className="text-sm text-foreground whitespace-pre-wrap">
-                                    {band.lighting_note?.trim() || "未入力"}
-                                  </p>
-                                </div>
-
-                                <div className="rounded-md border border-border/60 bg-card/60 p-3 space-y-2">
-                                  <div className="flex items-center gap-2 text-xs font-semibold text-primary">
-                                    <Info className="w-3 h-3" />
-                                    共通メモ
-                                  </div>
-                                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                                    {band.general_note?.trim() || "未入力"}
-                                  </p>
-                                </div>
-
-                                <div className="rounded-md border border-border/60 bg-card/60 p-3 space-y-2">
-                                  <div className="text-xs font-semibold text-primary">立ち位置</div>
-                                  <InstructionStagePlot items={stageItems} members={stageMembers} />
-                                </div>
-
-                                <div className="rounded-md border border-border/60 bg-card/60 p-3 space-y-2">
-                                  <div className="text-xs font-semibold text-primary">
-                                    メンバー情報
-                                  </div>
-                                  <InstructionMemberTable members={memberDetails} role="lighting" />
-                                </div>
-
-                                <div className="rounded-md border border-border/60 bg-card/60 p-3 space-y-2">
-                                  <div className="text-xs font-semibold text-primary">
-                                    セットリスト / 照明要望
-                                  </div>
-                                  <InstructionSetlistTable songs={bandSongs} role="lighting" />
-                                </div>
-                              </InstructionCard>
-                            );
-                          })
+                          event.bands.map((band) => (
+                            <LightingBandInstructionCard
+                              key={band.id}
+                              band={band}
+                              stagePlots={stagePlotsByBand[band.id] ?? []}
+                              stageMembers={bandMembersByBand[band.id] ?? []}
+                              memberDetails={bandMemberDetailsByBand[band.id] ?? []}
+                              bandSongs={songsByBand[band.id] ?? []}
+                              bandSlots={slots.filter(
+                                (slot) => slot.slot_type === "band" && slot.band_id === band.id
+                              )}
+                              assignmentsBySlot={assignmentsBySlot}
+                              profilesById={profilesById}
+                              roleKeys={roleKeys}
+                              isExpanded={expandedBands[band.id] ?? false}
+                              onToggle={() => toggleBand(band.id)}
+                            />
+                          ))
                         )}
                       </CardContent>
                     </Card>

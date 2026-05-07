@@ -1,14 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Loader2, Save, Trash2, Plus } from "@/lib/icons";
+import { Loader2, Trash2, Plus } from "@/lib/icons";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/lib/toast";
-import { cn } from "@/lib/utils";
 import { formatTimeText } from "@/lib/time";
 import type {
     EventSlot,
@@ -31,7 +29,6 @@ type StaffAssignmentManagerProps = {
 };
 
 export function StaffAssignmentManager({
-    eventId,
     slots,
     eventStaff,
     staffAssignments,
@@ -134,7 +131,12 @@ export function StaffAssignmentManager({
         if (saving) return;
         setSaving(true);
 
-        const addAssignments: any[] = [];
+        const addAssignments: Array<{
+            event_slot_id: string;
+            profile_id: string;
+            role: "pa" | "light";
+            is_fixed: boolean;
+        }> = [];
 
         (["pa", "light"] as const).forEach((role) => {
             const eligible = eventStaff

@@ -3,6 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/lib/toast";
 import { formatPhoneNumber } from "@/lib/phone";
+import { normalizeProfileGender, type ProfileGender } from "@/lib/profileGender";
 
 export const crewOptions = ["User", "PA", "Lighting"];
 export const partOptions = [
@@ -56,6 +57,7 @@ type ProfilePrivateRow = {
   enrollment_year: number | null;
   birth_date: string | null;
   phone_number?: string | null;
+  gender?: ProfileGender | null;
 };
 
 const normalizeNameWhitespace = (value: string) =>
@@ -97,6 +99,7 @@ export function useProfileData() {
   const [enrollmentYear, setEnrollmentYear] = useState("");
   const [birthDate, setBirthDate] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [gender, setGender] = useState<ProfileGender | "">("");
 
   // Role & Music Info
   const [crew, setCrew] = useState("User");
@@ -154,7 +157,8 @@ export function useProfileData() {
         profile = inserted as ProfileRow;
       }
 
-      const privateColumns = "student_id, enrollment_year, birth_date, phone_number";
+      const privateColumns = "student_id, enrollment_year, birth_date, phone_number, gender";
+      const legacyPrivateColumnsWithPhone = "student_id, enrollment_year, birth_date, phone_number";
       const legacyPrivateColumns = "student_id, enrollment_year, birth_date";
       const [partsRes, leadersRes, privateResWithPhone] = await Promise.all([
         supabase
@@ -174,6 +178,15 @@ export function useProfileData() {
 
       let privateData = privateResWithPhone.data as ProfilePrivateRow | null;
       let privateError = privateResWithPhone.error;
+      if (privateError?.code === "42703") {
+        const legacyPrivateResWithPhone = await supabase
+          .from("profile_private")
+          .select(legacyPrivateColumnsWithPhone)
+          .eq("profile_id", session.user.id)
+          .maybeSingle();
+        privateData = legacyPrivateResWithPhone.data as ProfilePrivateRow | null;
+        privateError = legacyPrivateResWithPhone.error;
+      }
       if (privateError?.code === "42703") {
         const legacyPrivateRes = await supabase
           .from("profile_private")
@@ -219,6 +232,7 @@ export function useProfileData() {
       setEnrollmentYear(privateData?.enrollment_year?.toString() ?? "");
       setBirthDate(privateData?.birth_date ?? "");
       setPhoneNumber(formatPhoneNumber(privateData?.phone_number ?? ""));
+      setGender(normalizeProfileGender(privateData?.gender) ?? "");
 
       setDiscordInitialId(profile.discord_id ?? null);
       setDiscordInitialUsername(profile.discord_username ?? null);
@@ -257,6 +271,8 @@ export function useProfileData() {
     setBirthDate,
     phoneNumber,
     setPhoneNumber,
+    gender,
+    setGender,
     crew,
     setCrew,
     part,

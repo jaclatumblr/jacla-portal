@@ -74,6 +74,7 @@ export default function EquipmentMaintenancePage() {
     () => items.find((item) => item.id === selectedId) ?? null,
     [items, selectedId]
   );
+  const visibleLogs = useMemo(() => (selectedId ? logs : []), [logs, selectedId]);
 
   // ソート済みアイテム
   const sortedItems = useMemo(() => {
@@ -163,11 +164,10 @@ export default function EquipmentMaintenancePage() {
 
   // 選択時にログ取得
   useEffect(() => {
-    if (!selectedId) {
-      setLogs([]);
-      return;
-    }
-    void fetchLogs(selectedId);
+    if (!selectedId) return;
+    void (async () => {
+      await fetchLogs(selectedId);
+    })();
   }, [fetchLogs, selectedId]);
 
   // 選択時にスクロール
@@ -346,7 +346,7 @@ export default function EquipmentMaintenancePage() {
                     saving={saving}
                     roleLoading={roleLoading}
                     onSave={handleSave}
-                    logs={logs}
+                    logs={visibleLogs}
                     logsLoading={logsLoading}
                   />
                 </div>

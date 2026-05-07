@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -15,14 +15,14 @@ export function PageTransition({ children }: { children: ReactNode }) {
   const overlayDurationMs = 400;
   const pageFadeMs = 480;
 
-  const startTransition = (href: string) => {
+  const startTransition = useCallback((href: string) => {
     if (transitioningRef.current) return;
     transitioningRef.current = true;
     setOverlayVisible(true);
     window.setTimeout(() => {
       router.push(href);
     }, overlayDurationMs);
-  };
+  }, [router]);
 
   useEffect(() => {
     const handleClick = (event: MouseEvent) => {
@@ -55,15 +55,18 @@ export function PageTransition({ children }: { children: ReactNode }) {
 
     document.addEventListener("click", handleClick, true);
     return () => document.removeEventListener("click", handleClick, true);
-  }, [router]);
+  }, [startTransition]);
 
   useEffect(() => {
     if (isFirst.current) {
       isFirst.current = false;
       return;
     }
-    setOverlayVisible(false);
-    transitioningRef.current = false;
+    const frame = window.requestAnimationFrame(() => {
+      setOverlayVisible(false);
+      transitioningRef.current = false;
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [pathname]);
 
   return (

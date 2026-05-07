@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import { useParams } from "next/navigation";
 import { Calendar, Link as LinkIcon, Pin, User } from "@/lib/icons";
 import { Badge } from "@/components/ui/badge";
@@ -123,11 +123,15 @@ export default function AnnouncementDetailPage() {
               <div className="container mx-auto px-4 sm:px-6">
                 <div className="max-w-3xl mx-auto space-y-6">
                   {announcement.image_url && (
-                    <img
-                      src={announcement.image_url}
-                      alt={announcement.title}
-                      className="w-full max-h-[360px] object-cover rounded-lg border border-border"
-                    />
+                    <div className="relative h-[360px] w-full overflow-hidden rounded-lg border border-border">
+                      <Image
+                        src={announcement.image_url}
+                        alt={announcement.title}
+                        fill
+                        unoptimized
+                        className="object-cover"
+                      />
+                    </div>
                   )}
                   <div className="p-6 md:p-8 bg-card/50 border border-border rounded-lg">
                     <div className="text-sm md:text-base text-muted-foreground whitespace-pre-wrap leading-relaxed">

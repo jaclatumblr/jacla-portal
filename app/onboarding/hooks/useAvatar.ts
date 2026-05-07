@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "@/lib/toast";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -80,26 +80,31 @@ const compressAvatarImage = async (file: File): Promise<File> => {
 export function useAvatar(initialUrl: string | null = null) {
     const [avatarUrl, setAvatarUrl] = useState<string | null>(initialUrl);
     const [avatarFile, setAvatarFile] = useState<File | null>(null);
-    const [avatarPreview, setAvatarPreview] = useState<string | null>(initialUrl);
     const [avatarUploading, setAvatarUploading] = useState(false);
+
+    const avatarPreview = useMemo(() => {
+        if (avatarFile) {
+            return URL.createObjectURL(avatarFile);
+        }
+        return avatarUrl;
+    }, [avatarFile, avatarUrl]);
 
     // Update preview when initialUrl changes (e.g. data loaded)
     useEffect(() => {
-        if (initialUrl) {
+        const frame = window.requestAnimationFrame(() => {
             setAvatarUrl(initialUrl);
-            setAvatarPreview(initialUrl);
-        }
+        });
+        return () => {
+            window.cancelAnimationFrame(frame);
+        };
     }, [initialUrl]);
 
-    // Create/revoke object URL for preview
     useEffect(() => {
-        if (!avatarFile) return;
-        const url = URL.createObjectURL(avatarFile);
-        setAvatarPreview(url);
+        if (!avatarFile || !avatarPreview) return;
         return () => {
-            URL.revokeObjectURL(url);
+            URL.revokeObjectURL(avatarPreview);
         };
-    }, [avatarFile]);
+    }, [avatarFile, avatarPreview]);
 
     const handleAvatarChange = async (file: File | null) => {
         if (!file) {
@@ -149,7 +154,6 @@ export function useAvatar(initialUrl: string | null = null) {
             const newUrl = publicUrl.publicUrl;
 
             setAvatarUrl(newUrl);
-            setAvatarPreview(newUrl);
             setAvatarFile(null);
             setAvatarUploading(false);
 

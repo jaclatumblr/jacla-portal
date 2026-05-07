@@ -61,7 +61,7 @@ export default function AdminEventStaffPage() {
           <PageHeader
             kicker="Shift"
             title="シフト作成"
-            description="PAと照明のシフトは専用ページに移動しました。"
+            description="PA と照明のシフトは専用ページで、バンド単位かつリハ/本番共通の担当として管理します。"
             backHref={`/admin/events/${eventId}`}
             backLabel="イベント編集"
           />
@@ -71,20 +71,16 @@ export default function AdminEventStaffPage() {
               <Card className="bg-card/60 border-border">
                 <CardHeader>
                   <CardTitle className="text-lg">シフト作成ページ</CardTitle>
-                  <CardDescription>PAと照明でページを分けて管理します。</CardDescription>
+                  <CardDescription>
+                    PA と照明でページを分けて管理します。各バンドの通常リハ、直前リハ、本番をまとめて編集できます。
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-wrap gap-2">
                   <Link
-                    href={`/admin/events/${eventId}/shift/pa`}
+                    href={`/admin/events/${eventId}/shift`}
                     className="inline-flex items-center justify-center rounded-md border border-border px-4 py-2 text-sm text-foreground hover:border-primary/60 hover:text-primary transition-colors"
                   >
-                    PAシフト作成
-                  </Link>
-                  <Link
-                    href={`/admin/events/${eventId}/shift/lighting`}
-                    className="inline-flex items-center justify-center rounded-md border border-border px-4 py-2 text-sm text-foreground hover:border-primary/60 hover:text-primary transition-colors"
-                  >
-                    照明シフト作成
+                    シフト作成
                   </Link>
                 </CardContent>
               </Card>

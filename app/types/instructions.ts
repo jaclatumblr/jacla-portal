@@ -23,6 +23,7 @@ export type SongRow = {
     entry_type: "song" | "mc" | null;
     url: string | null;
     order_index: number | null;
+    stagePlotId?: string | null;
     duration_sec: number | null;
     arrangement_note: string | null;
     lighting_spot: string | null;
@@ -55,6 +56,15 @@ export type StageItem = {
     dashed?: boolean;
     x: number;
     y: number;
+    variant?: import("@/lib/stagePlot").StageItemVariant;
+    templateId?: import("@/lib/stagePlot").DefaultStageItemTemplateId;
+};
+
+export type StagePlot = {
+    id: string;
+    name: string;
+    items: StageItem[];
+    memberPositions?: import("@/lib/stagePlot").StagePlotMemberPositionMap;
 };
 
 export type StageMember = {

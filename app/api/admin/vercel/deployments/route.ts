@@ -3,6 +3,17 @@ import { NextResponse } from "next/server";
 const VERCEL_TOKEN = process.env.VERCEL_TOKEN;
 const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID;
 
+type VercelDeploymentResponse = {
+    deployments?: Array<{
+        uid?: string;
+        name?: string;
+        url?: string;
+        state?: string;
+        target?: string;
+        createdAt?: number;
+    }>;
+};
+
 export async function GET() {
     if (!VERCEL_TOKEN || !VERCEL_PROJECT_ID) {
         return NextResponse.json(
@@ -30,9 +41,9 @@ export async function GET() {
             );
         }
 
-        const data = await response.json();
+        const data = (await response.json()) as VercelDeploymentResponse;
 
-        const deployments = (data.deployments ?? []).map((d: any) => ({
+        const deployments = (data.deployments ?? []).map((d) => ({
             id: d.uid,
             name: d.name,
             url: d.url,

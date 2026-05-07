@@ -7,6 +7,7 @@ import {
     PointerSensor,
     useSensor,
     useSensors,
+    type CollisionDetection,
     DragEndEvent,
     DraggableAttributes,
     DraggableSyntheticListeners,
@@ -25,6 +26,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/lib/toast";
+import {
+    getTimetableTone,
+    TIMETABLE_LEGEND_ITEMS,
+    TIMETABLE_TONE_STYLES,
+} from "@/lib/timetableTone";
 import {
     EventRow,
     EventSlot,
@@ -54,14 +60,16 @@ type SortableItemRenderProps = {
     listeners: DraggableSyntheticListeners;
     setActivatorNodeRef: (node: HTMLElement | null) => void;
     isDragging: boolean;
+    disabled: boolean;
 };
 
 type SortableItemProps = {
     id: string;
+    disabled?: boolean;
     children: (props: SortableItemRenderProps) => React.ReactNode;
 };
 
-function SortableItem({ id, children }: SortableItemProps) {
+function SortableItem({ id, disabled = false, children }: SortableItemProps) {
     const {
         attributes,
         listeners,
@@ -70,7 +78,7 @@ function SortableItem({ id, children }: SortableItemProps) {
         transform,
         transition,
         isDragging,
-    } = useSortable({ id });
+    } = useSortable({ id, disabled });
 
     const style = {
         transform: CSS.Transform.toString(transform),
@@ -79,7 +87,7 @@ function SortableItem({ id, children }: SortableItemProps) {
 
     return (
         <div ref={setNodeRef} style={style} className={cn(isDragging && "opacity-80 z-50")}>
-            {children({ attributes, listeners, setActivatorNodeRef, isDragging })}
+            {children({ attributes, listeners, setActivatorNodeRef, isDragging, disabled })}
         </div>
     );
 }
@@ -427,22 +435,16 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
         return slot.slot_phase ?? "show";
     };
 
-    const slotToneClass = (slot: EventSlot) => {
+    const slotTone = (slot: EventSlot) =>
+        getTimetableTone({
+            slotType: slot.slot_type,
+            slotPhase: slot.slot_phase,
+            note: slot.note,
+        });
+
+    const isFixedChangeoverSlot = (slot: EventSlot) => {
         const note = slot.note?.trim() ?? "";
-        if (note === PREP_NOTE || note === CLEANUP_NOTE || note === CLEANUP_NOTE_ALT || note === REST_NOTE) {
-            return "before:bg-amber-400/80";
-        }
-        if (slot.slot_type === "break" || note.includes("\u8EE2\u63DB")) {
-            return "before:bg-amber-400/80";
-        }
-        const phase = slotPhaseKey(slot);
-        if (phase === "rehearsal_normal" || phase === "rehearsal_pre") {
-            return "before:bg-sky-400/80";
-        }
-        if (phase === "show") {
-            return "before:bg-fuchsia-400/80";
-        }
-        return "before:bg-muted";
+        return note.includes("転換");
     };
 
     useEffect(() => {
@@ -494,25 +496,146 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
         setSlots(next);
     };
 
+    const collisionDetection: CollisionDetection = (args) => {
+        const activeId = String(args.active.id);
+        const activeSlot = orderedSlots.find((slot) => slot.id === activeId);
+        if (!activeSlot || activeSlot.slot_type !== "band") {
+            return closestCenter(args);
+        }
+
+        const bandContainers = args.droppableContainers.filter((container) => {
+            const slot = orderedSlots.find((candidate) => candidate.id === String(container.id));
+            return slot?.slot_type === "band" && slotPhaseKey(slot) === slotPhaseKey(activeSlot);
+        });
+
+        if (bandContainers.length === 0) {
+            return closestCenter(args);
+        }
+
+        return closestCenter({
+            ...args,
+            droppableContainers: bandContainers,
+        });
+    };
+
+    const retimeSequentialSlots = (source: EventSlot[], anchorStartMin: number | null) => {
+        let cursor = anchorStartMin;
+
+        return source.map((slot) => {
+            const duration = getSlotDurationMin(slot);
+            if (cursor != null && duration != null && duration > 0) {
+                const nextStart = normalizeDayMinutes(cursor);
+                const nextEnd = normalizeDayMinutes(cursor + duration);
+                cursor = nextEnd;
+                return {
+                    ...slot,
+                    start_time: formatTime(nextStart),
+                    end_time: formatTime(nextEnd),
+                };
+            }
+
+            const start = parseTime(slot.start_time ?? null);
+            if (start != null && duration != null && duration > 0) {
+                cursor = normalizeDayMinutes(start + duration);
+                return {
+                    ...slot,
+                    end_time: formatTime(cursor),
+                };
+            }
+
+            const end = parseTime(slot.end_time ?? null);
+            if (end != null && duration != null && duration > 0) {
+                const nextStart = normalizeDayMinutes(end - duration);
+                cursor = normalizeDayMinutes(end);
+                return {
+                    ...slot,
+                    start_time: formatTime(nextStart),
+                    end_time: formatTime(cursor),
+                };
+            }
+
+            cursor = null;
+            return slot;
+        });
+    };
+
+    const reorderBandSlotsOnly = (
+        source: EventSlot[],
+        activeId: string,
+        overId: string
+    ) => {
+        const sorted = sortSlotsByOrder(source);
+        const activeSlot = sorted.find((slot) => slot.id === activeId);
+        if (!activeSlot || activeSlot.slot_type !== "band") {
+            return sorted.map((slot, index) => ({ ...slot, order_in_event: index + 1 }));
+        }
+
+        const activePhase = slotPhaseKey(activeSlot);
+        const overSlot = sorted.find((slot) => slot.id === overId);
+        if (!overSlot || overSlot.slot_type !== "band" || slotPhaseKey(overSlot) !== activePhase) {
+            return source;
+        }
+
+        const phaseEntries = sorted
+            .map((slot, index) => ({ slot, index }))
+            .filter((entry) => slotPhaseKey(entry.slot) === activePhase);
+        const bandEntries = phaseEntries.filter((entry) => entry.slot.slot_type === "band");
+        const oldBandIndex = bandEntries.findIndex((entry) => entry.slot.id === activeId);
+        const newBandIndex = bandEntries.findIndex((entry) => entry.slot.id === overId);
+        if (oldBandIndex < 0 || newBandIndex < 0) {
+            return source;
+        }
+
+        const reorderedBands = arrayMove(
+            bandEntries.map((entry) => entry.slot),
+            oldBandIndex,
+            newBandIndex
+        );
+
+        const next = [...sorted];
+        bandEntries.forEach((entry, index) => {
+            next[entry.index] = reorderedBands[index];
+        });
+
+        const phaseSlots = phaseEntries.map((entry) => next[entry.index]);
+        const phaseStartMin =
+            phaseEntries
+                .map((entry) => parseTime(entry.slot.start_time ?? null))
+                .find((value): value is number => value != null) ?? null;
+        const retimedPhaseSlots = retimeSequentialSlots(phaseSlots, phaseStartMin);
+
+        phaseEntries.forEach((entry, index) => {
+            next[entry.index] = retimedPhaseSlots[index];
+        });
+
+        return next.map((slot, index) => ({
+            ...slot,
+            order_in_event: index + 1,
+        }));
+    };
+
     const handleDragEnd = (event: DragEndEvent) => {
         const { active, over } = event;
         if (!over || active.id === over.id) return;
         const activeId = String(active.id);
         const overId = String(over.id);
+        const activeSlot = orderedSlots.find((slot) => slot.id === activeId);
+        if (!activeSlot || isFixedChangeoverSlot(activeSlot)) return;
+
+        if (activeSlot.slot_type === "band") {
+            applySlotsUpdate((prev) => reorderBandSlotsOnly(prev, activeId, overId));
+            return;
+        }
+
         const oldIndex = orderedSlots.findIndex((slot) => slot.id === activeId);
         const newIndex = orderedSlots.findIndex((slot) => slot.id === overId);
         if (oldIndex < 0 || newIndex < 0) return;
 
         const moved = arrayMove(orderedSlots, oldIndex, newIndex);
-        const reordered = moved.map((slot, index) => {
-            const positionSource = orderedSlots[index];
-            return {
-                ...slot,
-                order_in_event: index + 1,
-                start_time: positionSource?.start_time ?? null,
-                end_time: positionSource?.end_time ?? null,
-            };
-        });
+        const reordered = moved.map((slot, index) => ({
+            ...slot,
+            order_in_event: index + 1,
+        }));
         applySlotsUpdate(reordered);
     };
 
@@ -1667,9 +1790,28 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                 </div>
             </CardHeader>
             <CardContent>
+                <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                    {TIMETABLE_LEGEND_ITEMS.map((item) => (
+                        <span
+                            key={item.key}
+                            className={cn(
+                                "inline-flex items-center gap-1 rounded-full border px-2 py-0.5",
+                                TIMETABLE_TONE_STYLES[item.key].chipClass
+                            )}
+                        >
+                            <span
+                                className={cn(
+                                    "h-1.5 w-1.5 rounded-full",
+                                    TIMETABLE_TONE_STYLES[item.key].barClass
+                                )}
+                            />
+                            {item.label}
+                        </span>
+                    ))}
+                </div>
                 <DndContext
                     sensors={sensors}
-                    collisionDetection={closestCenter}
+                    collisionDetection={collisionDetection}
                     onDragEnd={handleDragEnd}
                 >
                     <SortableContext
@@ -1679,17 +1821,19 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                         <div className="max-h-[68vh] overflow-y-auto overflow-x-hidden pr-1">
                             <div className="space-y-2">
                             {orderedSlots.map((slot) => (
-                                <SortableItem key={slot.id} id={slot.id}>
-                                    {({ attributes, listeners, setActivatorNodeRef, isDragging }) => {
+                                <SortableItem key={slot.id} id={slot.id} disabled={isFixedChangeoverSlot(slot)}>
+                                    {({ attributes, listeners, setActivatorNodeRef, isDragging, disabled }) => {
                                         const isSelected = slot.slot_type === "band" && slot.band_id === selectedBandId;
+                                        const tone = slotTone(slot);
                                         return (
                                             <div
                                                 className={cn(
-                                                    "relative rounded-lg border bg-card px-2 py-2 pl-4 shadow-sm cursor-pointer transition-colors overflow-hidden",
+                                                    "relative rounded-lg px-2 py-2 pl-4 shadow-sm cursor-pointer transition-colors overflow-hidden",
                                                     "before:absolute before:left-2 before:top-2 before:bottom-2 before:w-1 before:rounded-full before:content-['']",
-                                                    slotToneClass(slot),
+                                                    tone.railClass,
+                                                    tone.cardClass,
                                                     isDragging && "shadow-lg bg-accent/50",
-                                                    isSelected ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
+                                                    isSelected ? "border-primary ring-2 ring-primary/20" : ""
                                                 )}
                                                 onClick={() => {
                                                     if (slot.slot_type === "band" && slot.band_id) {
@@ -1700,10 +1844,17 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                                                 <div className="flex flex-wrap items-center gap-2">
                                                     <button
                                                         type="button"
-                                                        className="touch-none bg-muted/40 p-1 rounded cursor-grab active:cursor-grabbing shrink-0"
+                                                        className={cn(
+                                                            "touch-none bg-muted/40 p-1 rounded shrink-0",
+                                                            disabled
+                                                                ? "cursor-not-allowed opacity-40"
+                                                                : "cursor-grab active:cursor-grabbing"
+                                                        )}
                                                         ref={setActivatorNodeRef}
-                                                        {...listeners}
-                                                        {...attributes}
+                                                        {...(disabled ? {} : listeners)}
+                                                        {...(disabled ? {} : attributes)}
+                                                        disabled={disabled}
+                                                        title={disabled ? "転換は固定しています" : undefined}
                                                     >
                                                         <GripVertical className="h-3 w-3 text-muted-foreground" />
                                                     </button>
@@ -1732,7 +1883,10 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                                                             handleSlotChange(slot.id, "slot_phase", e.target.value as EventSlot["slot_phase"])
                                                         }
                                                         onClick={(e) => e.stopPropagation()}
-                                                        className="h-7 w-[72px] rounded border border-input bg-background px-1 text-[10px] shrink-0"
+                                                        className={cn(
+                                                            "h-7 w-[72px] rounded border px-1 text-[10px] shrink-0",
+                                                            tone.badgeClass
+                                                        )}
                                                     >
                                                         {slotPhaseOptions.map((opt) => (
                                                             <option key={opt.value} value={opt.value}>

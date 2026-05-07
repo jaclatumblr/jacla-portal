@@ -83,6 +83,7 @@ export default function InstrumentMaintenancePage() {
     () => items.find((item) => item.id === selectedId) ?? null,
     [items, selectedId]
   );
+  const visibleLogs = useMemo(() => (selectedId ? logs : []), [logs, selectedId]);
 
   // ソート済みアイテム
   const sortedItems = useMemo(() => {
@@ -172,11 +173,10 @@ export default function InstrumentMaintenancePage() {
 
   // 選択時にログ取得
   useEffect(() => {
-    if (!selectedId) {
-      setLogs([]);
-      return;
-    }
-    void fetchLogs(selectedId);
+    if (!selectedId) return;
+    void (async () => {
+      await fetchLogs(selectedId);
+    })();
   }, [fetchLogs, selectedId]);
 
   // 選択時にスクロール
@@ -358,7 +358,7 @@ export default function InstrumentMaintenancePage() {
                     saving={saving}
                     roleLoading={roleLoading}
                     onSave={handleSave}
-                    logs={logs}
+                    logs={visibleLogs}
                     logsLoading={logsLoading}
                   />
                 </div>

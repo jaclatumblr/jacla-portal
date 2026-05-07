@@ -24,7 +24,6 @@ type FixedBandDetailProps = {
     band: FixedBandSummary | null;
     members: FixedMember[];
     membersLoading: boolean;
-    profiles: ProfileRow[];
     subPartsByProfileId: Record<string, string[]>;
     getFilteredProfiles: (existingUserIds: string[], query: string) => ProfileRow[];
     onRefreshBands: () => Promise<void>;
@@ -35,7 +34,6 @@ export function FixedBandDetail({
     band,
     members,
     membersLoading,
-    profiles,
     subPartsByProfileId,
     getFilteredProfiles,
     onRefreshBands,

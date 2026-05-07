@@ -62,7 +62,6 @@ import {
   PiPlusBold,
   PiPowerBold,
   PiPushPinBold,
-  PiQuestionBold,
   PiSelectionAllBold,
   PiShieldBold,
   PiShieldWarningBold,

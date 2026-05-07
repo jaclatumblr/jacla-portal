@@ -14,7 +14,6 @@ import fontkit from "@pdf-lib/fontkit";
 import {
   defaultVoxSetlistLayout,
   normalizeVoxSetlistLayout,
-  type CustomLayer,
   type VoxSetlistLayout,
 } from "@/lib/voxSetlistLayout";
 

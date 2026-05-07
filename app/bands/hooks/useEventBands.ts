@@ -134,11 +134,15 @@ export function useEventBands(): UseEventBandsResult {
 
     // 選択イベント変更時にバンド取得
     useEffect(() => {
-        if (selectedEventId) {
-            refreshEventBands();
-        } else {
-            setEventBands([]);
+        if (!selectedEventId) {
+            queueMicrotask(() => {
+                setEventBands([]);
+            });
+            return;
         }
+        void (async () => {
+            await refreshEventBands();
+        })();
     }, [selectedEventId, refreshEventBands]);
 
     return {

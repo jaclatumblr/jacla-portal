@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { Loader2 } from "@/lib/icons";
 import { AuthGuard } from "@/lib/AuthGuard";
@@ -17,9 +17,9 @@ import { EventHeader } from "./components/EventHeader";
 import { BandInfoForm } from "./components/BandInfoForm";
 import { MemberManager } from "./components/MemberManager";
 import { SetlistEditor } from "./components/SetlistEditor";
-import { StagePlotEditor } from "./components/StagePlotEditor";
-import { StagePlotPreview } from "@/components/StagePlotPreview";
-import { EntryType, SongEntry, toDurationInputs, BandRow } from "./types";
+import { StagePlotManager } from "./components/StagePlotManager";
+import { StagePlotPreviewTabs } from "./components/StagePlotPreviewTabs";
+import { BandRow, toDurationInputs } from "./types";
 
 export default function RepertoireSubmitPage() {
   const params = useParams();
@@ -38,27 +38,26 @@ export default function RepertoireSubmitPage() {
     selectedBandId,
     songs,
     stageMembers,
-    stageItems,
+    stagePlots,
+    activeStagePlotId,
     profiles,
     myProfileId,
     repertoireStatus,
     lastSavedAt,
     setSongs,
     setStageMembers,
-    setStageItems,
+    setStagePlots,
+    setActiveStagePlotId,
     setBand,
     setSelectedBandId,
     refreshData,
-    restoreFromDraft,
-    clearDraft,
   } = useRepertoireData(eventId, userId, { initialBandId });
 
   const { saving, saveRepertoire } = useRepertoireSave({
-    eventId,
     band,
     songs,
     stageMembers,
-    stageItems,
+    stagePlots,
     setBand,
     setSongs,
     refreshData,
@@ -66,38 +65,53 @@ export default function RepertoireSubmitPage() {
     submitClosed: Boolean(event?.repertoire_is_closed),
   });
 
-  const { fetchingMeta, fetchMetadata } = useMetadata();
+  const { fetchMetadata } = useMetadata();
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
   const isSubmitted = repertoireStatus === "submitted";
+  const stagePlotOptions = stagePlots.map((plot) => ({ value: plot.id, label: plot.name }));
+  const defaultStagePlotId = stagePlots[0]?.id ?? null;
+
   const isManualClosed = Boolean(event?.repertoire_is_closed);
   const deadlineDate = event?.repertoire_deadline ? new Date(event.repertoire_deadline) : null;
   const validDeadline = deadlineDate && !Number.isNaN(deadlineDate.getTime()) ? deadlineDate : null;
   const deadlineLabel = validDeadline
     ? validDeadline.toLocaleString("ja-JP", { dateStyle: "medium", timeStyle: "short" })
     : null;
-  const isDeadlinePassed = validDeadline ? Date.now() > validDeadline.getTime() : false;
+  const isDeadlinePassed = validDeadline ? currentTime > validDeadline.getTime() : false;
   const canEditBandNameAfterDeadline = isSubmitted && (isManualClosed || isDeadlinePassed);
   const submitDisabledReason = isManualClosed
-    ? "提出受付は管理側で停止されています。"
+    ? "現在、このイベントの提出は締め切られています。"
     : isDeadlinePassed
       ? "提出期限を過ぎたため提出できません。"
       : null;
   const showDeadlineInfo = Boolean(deadlineLabel) || isManualClosed;
 
-  const handleMetadataSchedule = (id: string, url: string, type: EntryType) => {
+  useEffect(() => {
+    if (!validDeadline || isDeadlinePassed) return;
+
+    const timeoutId = window.setTimeout(() => {
+      setCurrentTime(Date.now());
+    }, Math.max(0, validDeadline.getTime() - Date.now()) + 500);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isDeadlinePassed, validDeadline]);
+
+  const handleMetadataSchedule = (id: string, url: string) => {
     fetchMetadata(id, url, (targetId, updates) => {
       setSongs((prev) =>
-        prev.map((s) => {
-          if (s.id !== targetId) return s;
+        prev.map((song) => {
+          if (song.id !== targetId) return song;
 
-          const next = { ...s };
+          const next = { ...song };
           if (updates.title) next.title = updates.title;
           if (updates.artist) next.artist = updates.artist;
 
-          if (typeof updates.duration_sec === 'number') {
+          if (typeof updates.duration_sec === "number") {
             const { durationMin, durationSec } = toDurationInputs(updates.duration_sec);
             next.durationMin = durationMin;
             next.durationSec = durationSec;
           }
+
           return next;
         })
       );
@@ -148,36 +162,40 @@ export default function RepertoireSubmitPage() {
             saving={saving}
             onSave={saveRepertoire}
             onReset={() => refreshData()}
-            showReset={true}
+            showReset
             submitDisabled={isManualClosed || isDeadlinePassed}
             submitDisabledReason={submitDisabledReason}
           />
 
           <section className="pb-12 md:pb-16">
-            <div className="container mx-auto px-4 sm:px-6 space-y-6">
-              {showDeadlineInfo && (
+            <div className="container mx-auto space-y-6 px-4 sm:px-6">
+              {showDeadlineInfo ? (
                 <div className="rounded-2xl border border-border/60 bg-card/60 p-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-medium text-foreground">提出期限</span>
                     <span className="text-sm text-muted-foreground">{deadlineLabel ?? "未設定"}</span>
                   </div>
-                  {isManualClosed && (
-                    <p className="mt-2 text-xs text-destructive">現在、提出受付は停止されています。</p>
-                  )}
-                  {isDeadlinePassed && (
-                    <p className="mt-1 text-xs text-destructive">提出期限を過ぎています。下書き保存のみ可能です。</p>
-                  )}
+                  {isManualClosed ? (
+                    <p className="mt-2 text-xs text-destructive">
+                      現在、運営側でこのイベントの提出は締め切られています。
+                    </p>
+                  ) : null}
+                  {isDeadlinePassed ? (
+                    <p className="mt-1 text-xs text-destructive">
+                      提出期限を過ぎています。新規提出はできませんが、下書きの見直しと保存は続けられます。
+                    </p>
+                  ) : null}
                 </div>
-              )}
+              ) : null}
 
-              {canEditBandNameAfterDeadline && (
+              {canEditBandNameAfterDeadline ? (
                 <div className="rounded-2xl border border-border/60 bg-card/60 p-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                     <div className="w-full max-w-xl space-y-2">
                       <label className="text-sm font-medium text-foreground">バンド名</label>
                       <Input
                         value={band.name}
-                        onChange={(e) => handleBandChange("name", e.target.value)}
+                        onChange={(event) => handleBandChange("name", event.target.value)}
                         placeholder="バンド名"
                       />
                       <p className="text-xs text-muted-foreground">
@@ -189,8 +207,9 @@ export default function RepertoireSubmitPage() {
                     </Button>
                   </div>
                 </div>
-              )}
-              {availableBands.length > 1 && (
+              ) : null}
+
+              {availableBands.length > 1 ? (
                 <div className="rounded-2xl border border-border/60 bg-card/60 p-4">
                   <div className="text-sm font-medium text-foreground">提出するバンド</div>
                   <div className="mt-2 max-w-sm">
@@ -206,13 +225,13 @@ export default function RepertoireSubmitPage() {
                     />
                   </div>
                   <p className="mt-2 text-xs text-muted-foreground">
-                    掛け持ちの場合はバンドを切り替えて入力してください。
+                    複数バンドに参加している場合は、対象のバンドを選んで入力してください。
                   </p>
                 </div>
-              )}
+              ) : null}
 
               <Tabs defaultValue="info" className="space-y-6">
-                <TabsList className="grid w-full grid-cols-4 lg:w-[600px]">
+                <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 lg:w-[600px]">
                   <TabsTrigger value="info">基本情報</TabsTrigger>
                   <TabsTrigger value="members">メンバー</TabsTrigger>
                   <TabsTrigger value="setlist">セットリスト</TabsTrigger>
@@ -238,19 +257,31 @@ export default function RepertoireSubmitPage() {
                     songs={songs}
                     setSongs={setSongs}
                     onScheduleMetadata={handleMetadataSchedule}
+                    stagePlotOptions={stagePlotOptions}
+                    defaultStagePlotId={defaultStagePlotId}
                     readOnly={isSubmitted}
                   />
                 </TabsContent>
 
                 <TabsContent value="stageplot">
                   {isSubmitted ? (
-                    <StagePlotPreview members={stageMembers} items={stageItems} />
-                  ) : (
-                    <StagePlotEditor
+                    <StagePlotPreviewTabs
+                      plots={stagePlots}
+                      songs={songs}
                       members={stageMembers}
-                      items={stageItems}
+                      activePlotId={activeStagePlotId}
+                      setActivePlotId={setActiveStagePlotId}
+                    />
+                  ) : (
+                    <StagePlotManager
+                      members={stageMembers}
                       setMembers={setStageMembers}
-                      setItems={setStageItems}
+                      plots={stagePlots}
+                      setPlots={setStagePlots}
+                      activePlotId={activeStagePlotId}
+                      setActivePlotId={setActiveStagePlotId}
+                      songs={songs}
+                      setSongs={setSongs}
                     />
                   )}
                 </TabsContent>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { Image as ImageIcon, Loader2, Save, Trash2 } from "@/lib/icons";
 import { AuthGuard } from "@/lib/AuthGuard";
@@ -87,7 +88,6 @@ export default function AdminAnnouncementsPage() {
   const [attachmentUrl, setAttachmentUrl] = useState("");
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageRemove, setImageRemove] = useState(false);
 
   const selectedAnnouncement = useMemo(
@@ -107,6 +107,16 @@ export default function AdminAnnouncementsPage() {
       );
     });
   }, [announcements, search, statusFilter]);
+
+  const imagePreview = useMemo(() => {
+    if (imageFile) {
+      return URL.createObjectURL(imageFile);
+    }
+    if (imageRemove) {
+      return null;
+    }
+    return imageUrl;
+  }, [imageFile, imageRemove, imageUrl]);
 
   useEffect(() => {
     if (roleLoading || !canAccessAdmin) return;
@@ -137,13 +147,11 @@ export default function AdminAnnouncementsPage() {
   }, [roleLoading, canAccessAdmin]);
 
   useEffect(() => {
-    if (!imageFile) return;
-    const url = URL.createObjectURL(imageFile);
-    setImagePreview(url);
+    if (!imageFile || !imagePreview) return;
     return () => {
-      URL.revokeObjectURL(url);
+      URL.revokeObjectURL(imagePreview);
     };
-  }, [imageFile]);
+  }, [imageFile, imagePreview]);
 
   const resetForm = () => {
     setSelectedId(null);
@@ -154,7 +162,6 @@ export default function AdminAnnouncementsPage() {
     setIsPinned(false);
     setAttachmentUrl("");
     setImageUrl(null);
-    setImagePreview(null);
     setImageFile(null);
     setImageRemove(false);
   };
@@ -168,7 +175,6 @@ export default function AdminAnnouncementsPage() {
     setIsPinned(row.is_pinned);
     setAttachmentUrl(row.attachment_url ?? "");
     setImageUrl(row.image_url ?? null);
-    setImagePreview(row.image_url ?? null);
     setImageFile(null);
     setImageRemove(false);
   };
@@ -292,7 +298,6 @@ export default function AdminAnnouncementsPage() {
         return;
       }
       setImageUrl(nextImageUrl);
-      setImagePreview(nextImageUrl);
       setImageFile(null);
       setImageRemove(false);
     }
@@ -569,7 +574,6 @@ export default function AdminAnnouncementsPage() {
                             onClick={() => {
                               setImageRemove(true);
                               setImageFile(null);
-                              setImagePreview(null);
                               setImageUrl(null);
                             }}
                             className="h-8 px-2 text-xs text-muted-foreground"
@@ -596,11 +600,15 @@ export default function AdminAnnouncementsPage() {
                         )}
                       </div>
                       {imagePreview && (
-                        <img
-                          src={imagePreview}
-                          alt="announcement preview"
-                          className="w-full max-h-48 object-cover rounded-md border border-border"
-                        />
+                        <div className="relative h-48 w-full overflow-hidden rounded-md border border-border">
+                          <Image
+                            src={imagePreview}
+                            alt="announcement preview"
+                            fill
+                            unoptimized
+                            className="object-cover"
+                          />
+                        </div>
                       )}
                     </div>
 

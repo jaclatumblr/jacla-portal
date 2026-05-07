@@ -15,6 +15,7 @@ import { formatTimeText } from "@/lib/time";
 type AssignmentEventSlot = {
   id: string;
   event_id: string;
+  band_id: string | null;
   slot_type: "band" | "break" | "mc" | "other";
   order_in_event: number | null;
   start_time: string | null;
@@ -41,6 +42,10 @@ type AssignmentRow = {
   is_fixed: boolean;
   note: string | null;
   event_slots: AssignmentEventSlot | AssignmentEventSlot[] | null;
+};
+
+type BandMembershipRow = {
+  band_id: string;
 };
 
 const roleLabel = (role: AssignmentRole) => {
@@ -116,21 +121,40 @@ export default function MyTasksPage() {
       setLoading(true);
       setError(null);
 
-      const { data, error } = await supabase
-        .from("slot_staff_assignments")
-        .select(
-          "id, role, is_fixed, note, event_slots(id, event_id, slot_type, order_in_event, start_time, end_time, note, bands(name), events(name, date))"
-        )
-        .eq("profile_id", userId);
+      const [assignmentRes, membershipRes] = await Promise.all([
+        supabase
+          .from("slot_staff_assignments")
+          .select(
+            "id, role, is_fixed, note, event_slots(id, event_id, band_id, slot_type, order_in_event, start_time, end_time, note, bands(name), events(name, date))"
+          )
+          .eq("profile_id", userId),
+        supabase.from("band_members").select("band_id").eq("user_id", userId),
+      ]);
 
       if (cancelled) return;
 
-      if (error) {
-        console.error(error);
+      if (assignmentRes.error) {
+        console.error(assignmentRes.error);
         setError("シフトの取得に失敗しました。");
         setAssignments([]);
       } else {
-        setAssignments((data ?? []) as AssignmentRow[]);
+        if (membershipRes.error) {
+          console.error(membershipRes.error);
+          setError("所属バンドの取得に失敗しました。");
+          setAssignments([]);
+        } else {
+          const memberBandIds = new Set(
+            ((membershipRes.data ?? []) as BandMembershipRow[]).map((row) => row.band_id)
+          );
+          const filteredAssignments = ((assignmentRes.data ?? []) as AssignmentRow[]).filter(
+            (assignment) => {
+              const slot = resolveSlot(assignment.event_slots);
+              if (!slot || slot.slot_type !== "band" || !slot.band_id) return true;
+              return !memberBandIds.has(slot.band_id);
+            }
+          );
+          setAssignments(filteredAssignments);
+        }
       }
       setLoading(false);
     })();
@@ -142,8 +166,10 @@ export default function MyTasksPage() {
 
   useEffect(() => {
     if (!error) return;
-    toast.error(error);
-    setError(null);
+    queueMicrotask(() => {
+      toast.error(error);
+      setError(null);
+    });
   }, [error]);
 
   const groupedAssignments = useMemo(() => {

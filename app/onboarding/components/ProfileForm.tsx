@@ -13,6 +13,7 @@ import { useAvatar } from "../hooks/useAvatar";
 import { useDiscord } from "../hooks/useDiscord";
 import { partOptions, useProfileData } from "../hooks/useProfileData";
 import { formatPhoneNumber } from "@/lib/phone";
+import { profileGenderOptions } from "@/lib/profileGender";
 
 type ProfileFormProps = {
   isEdit: boolean;
@@ -113,7 +114,7 @@ export function ProfileForm({ isEdit, nextUrl }: ProfileFormProps) {
       return;
     }
 
-    const { error: privateError } = await supabase
+    let { error: privateError } = await supabase
       .from("profile_private")
       .upsert(
         {
@@ -124,9 +125,27 @@ export function ProfileForm({ isEdit, nextUrl }: ProfileFormProps) {
             : null,
           birth_date: profileHook.birthDate || null,
           phone_number: formatPhoneNumber(profileHook.phoneNumber) || null,
+          gender: profileHook.gender || null,
         },
         { onConflict: "profile_id" }
       );
+
+    if (privateError?.code === "42703") {
+      ({ error: privateError } = await supabase
+        .from("profile_private")
+        .upsert(
+          {
+            profile_id: session.user.id,
+            student_id: normalizeStudentId(profileHook.studentId),
+            enrollment_year: profileHook.enrollmentYear
+              ? Number(profileHook.enrollmentYear)
+              : null,
+            birth_date: profileHook.birthDate || null,
+            phone_number: formatPhoneNumber(profileHook.phoneNumber) || null,
+          },
+          { onConflict: "profile_id" }
+        ));
+    }
 
     if (privateError) {
       console.error(privateError);
@@ -305,6 +324,22 @@ export function ProfileForm({ isEdit, nextUrl }: ProfileFormProps) {
               value={profileHook.birthDate}
               onChange={(e) => profileHook.setBirthDate(e.target.value)}
             />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">性別（自動割当の同性優先に使用・任意）</label>
+            <select
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              value={profileHook.gender}
+              onChange={(e) => profileHook.setGender(e.target.value as typeof profileHook.gender)}
+            >
+              <option value="">未設定</option>
+              {profileGenderOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="space-y-2">

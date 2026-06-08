@@ -220,8 +220,10 @@ export function useRepertoireData(
         supabase.from("profiles").select("id, display_name, real_name, part, leader"),
       ]);
 
-      if (songsRes.error) console.error(songsRes.error);
-      if (membersRes.error) console.error(membersRes.error);
+      const relatedDataError = songsRes.error ?? membersRes.error ?? allProfilesRes.error;
+      if (relatedDataError) {
+        throw relatedDataError;
+      }
 
       const plotData = readStagePlotData<StageItem>(foundBand.stage_plot_data ?? null);
       const resolvedStagePlots =

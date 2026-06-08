@@ -121,6 +121,11 @@ export function useAdminEventData(
             if (resolvedEvent.error || !resolvedEvent.data) {
                 throw new Error(resolvedEvent.error?.message || "event fetch failed");
             }
+            const primaryDataError =
+                bandsRes.error ?? profilesRes.error ?? slotsRes.error ?? staffRes.error;
+            if (primaryDataError) {
+                throw primaryDataError;
+            }
 
             setEvent(resolvedEvent.data as EventRow);
             const bandList = (bandsRes.data ?? []) as Band[];
@@ -151,7 +156,7 @@ export function useAdminEventData(
                     .select("id, event_slot_id, profile_id, role, is_fixed, note")
                     .in("event_slot_id", slotIds);
 
-                if (assignError) console.error(assignError);
+                if (assignError) throw assignError;
                 setStaffAssignments((assignData ?? []) as SlotStaffAssignment[]);
             } else {
                 setStaffAssignments([]);
@@ -175,8 +180,8 @@ export function useAdminEventData(
                         .order("created_at", { ascending: true }),
                 ]);
 
-                if (membersRes.error) console.error(membersRes.error);
-                if (songsRes.error) console.error(songsRes.error);
+                const bandDetailsError = membersRes.error ?? songsRes.error;
+                if (bandDetailsError) throw bandDetailsError;
 
                 setMembers((membersRes.data ?? []) as BandMember[]);
                 setSongs((songsRes.data ?? []) as Song[]);

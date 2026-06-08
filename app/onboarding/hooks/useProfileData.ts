@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/lib/toast";
 import { formatPhoneNumber } from "@/lib/phone";
 import { normalizeProfileGender, type ProfileGender } from "@/lib/profileGender";
+import { isMissingColumnError } from "@/lib/supabaseErrors";
 
 export const crewOptions = ["User", "PA", "Lighting"];
 export const partOptions = [
@@ -87,6 +88,7 @@ const normalizeStudentId = (value: string | null | undefined) =>
 export function useProfileData() {
   const { session } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Basic Info
   const [displayName, setDisplayName] = useState("");
@@ -120,6 +122,7 @@ export function useProfileData() {
 
     (async () => {
       setLoading(true);
+      setError(null);
 
       const { data, error } = await supabase
         .from("profiles")
@@ -151,6 +154,7 @@ export function useProfileData() {
         if (insertError) {
           console.error(insertError);
           toast.error("プロフィールの取得に失敗しました。");
+          setError("プロフィールの取得に失敗しました。再読み込みしてください。");
           setLoading(false);
           return;
         }
@@ -178,7 +182,7 @@ export function useProfileData() {
 
       let privateData = privateResWithPhone.data as ProfilePrivateRow | null;
       let privateError = privateResWithPhone.error;
-      if (privateError?.code === "42703") {
+      if (isMissingColumnError(privateError)) {
         const legacyPrivateResWithPhone = await supabase
           .from("profile_private")
           .select(legacyPrivateColumnsWithPhone)
@@ -187,7 +191,7 @@ export function useProfileData() {
         privateData = legacyPrivateResWithPhone.data as ProfilePrivateRow | null;
         privateError = legacyPrivateResWithPhone.error;
       }
-      if (privateError?.code === "42703") {
+      if (isMissingColumnError(privateError)) {
         const legacyPrivateRes = await supabase
           .from("profile_private")
           .select(legacyPrivateColumns)
@@ -197,9 +201,14 @@ export function useProfileData() {
         privateError = legacyPrivateRes.error;
       }
 
-      if (partsRes.error) console.error(partsRes.error);
-      if (leadersRes.error) console.error(leadersRes.error);
-      if (privateError) console.error(privateError);
+      const relatedDataError = partsRes.error ?? leadersRes.error ?? privateError;
+      if (relatedDataError) {
+        console.error(relatedDataError);
+        toast.error("プロフィール詳細の取得に失敗しました。");
+        setError("プロフィール詳細の取得に失敗しました。再読み込みしてください。");
+        setLoading(false);
+        return;
+      }
 
       const parts = (partsRes.data ?? []) as ProfilePartRow[];
       const primaryPart =
@@ -255,6 +264,7 @@ export function useProfileData() {
 
   return {
     loading,
+    error,
     displayName,
     setDisplayName,
     realNameFamily,

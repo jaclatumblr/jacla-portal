@@ -119,6 +119,7 @@ alter table public.form_responses enable row level security;
 
 drop policy if exists "form_responses_select_owner_or_admin" on public.form_responses;
 drop policy if exists "form_responses_insert_published_or_admin" on public.form_responses;
+drop policy if exists "form_responses_delete_owner_or_admin" on public.form_responses;
 
 create policy "form_responses_select_owner_or_admin"
 on public.form_responses
@@ -144,6 +145,15 @@ with check (
         or public.is_admin_or_supervisor(auth.uid())
       )
   )
+);
+
+create policy "form_responses_delete_owner_or_admin"
+on public.form_responses
+for delete
+to authenticated
+using (
+  submitted_by = auth.uid()
+  or public.is_admin_or_supervisor(auth.uid())
 );
 
 -- =========================================================

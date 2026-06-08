@@ -1435,17 +1435,6 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
         }
 
         setGenerating(true);
-
-        // delete existing slots
-        const { error: delError } = await supabase.from("event_slots").delete().eq("event_id", event.id);
-        if (delError) {
-            console.error(delError);
-            toast.error("Failed to delete existing slots.");
-            setGenerating(false);
-            return;
-        }
-
-        // delete existing slots??
         const showDurationMap = new Map<string, number>();
         const rehearsalDurationMap = new Map<string, number>();
         songs.forEach((song) => {
@@ -1637,6 +1626,32 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
             console.error(error);
             toast.error("Failed to auto-generate slots.");
         } else {
+            const existingSlotIds = slots.map((slot) => slot.id);
+            if (existingSlotIds.length > 0) {
+                const { error: deleteError } = await supabase
+                    .from("event_slots")
+                    .delete()
+                    .in("id", existingSlotIds);
+
+                if (deleteError) {
+                    console.error(deleteError);
+                    const insertedIds = (data as EventSlot[]).map((slot) => slot.id);
+                    const { error: rollbackError } = await supabase
+                        .from("event_slots")
+                        .delete()
+                        .in("id", insertedIds);
+                    if (rollbackError) {
+                        console.error(rollbackError);
+                        toast.error("旧TTの削除と新規TTの取り消しに失敗しました。再読み込みして確認してください。");
+                    } else {
+                        toast.error("旧TTを削除できなかったため、自動生成を取り消しました。");
+                    }
+                    await onRefresh();
+                    setGenerating(false);
+                    return;
+                }
+            }
+
             applySlotsUpdate(data as EventSlot[], { recordHistory: false, clearHistory: true });
             toast.success("Slots generated.");
         }

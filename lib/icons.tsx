@@ -61,6 +61,7 @@ import {
   PiPlayBold,
   PiPlusBold,
   PiPowerBold,
+  PiPrinterBold,
   PiPushPinBold,
   PiSelectionAllBold,
   PiShieldBold,
@@ -148,6 +149,7 @@ export const Pin = PiPushPinBold;
 export const Play = PiPlayBold;
 export const Plus = PiPlusBold;
 export const Power = PiPowerBold;
+export const Printer = PiPrinterBold;
 export const Redo2 = PiArrowClockwiseBold;
 export const RefreshCw = PiArrowsClockwiseBold;
 export const RotateCcw = PiArrowCounterClockwiseBold;

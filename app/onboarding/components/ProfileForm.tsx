@@ -14,6 +14,7 @@ import { useDiscord } from "../hooks/useDiscord";
 import { partOptions, useProfileData } from "../hooks/useProfileData";
 import { formatPhoneNumber } from "@/lib/phone";
 import { profileGenderOptions } from "@/lib/profileGender";
+import { isMissingColumnError } from "@/lib/supabaseErrors";
 
 type ProfileFormProps = {
   isEdit: boolean;
@@ -42,6 +43,17 @@ export function ProfileForm({ isEdit, nextUrl }: ProfileFormProps) {
     return (
       <div className="flex items-center justify-center p-12">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (profileHook.error) {
+    return (
+      <div className="space-y-4 rounded-lg border border-destructive/40 bg-destructive/5 p-4">
+        <p className="text-sm text-destructive">{profileHook.error}</p>
+        <Button type="button" variant="outline" onClick={() => window.location.reload()}>
+          再読み込み
+        </Button>
       </div>
     );
   }
@@ -130,7 +142,7 @@ export function ProfileForm({ isEdit, nextUrl }: ProfileFormProps) {
         { onConflict: "profile_id" }
       );
 
-    if (privateError?.code === "42703") {
+    if (isMissingColumnError(privateError, "gender")) {
       ({ error: privateError } = await supabase
         .from("profile_private")
         .upsert(
@@ -155,11 +167,75 @@ export function ProfileForm({ isEdit, nextUrl }: ProfileFormProps) {
     }
 
     const desiredParts = [profileHook.part, ...profileHook.subParts].filter(Boolean) as string[];
+    const { data: partSnapshot, error: partSnapshotError } = await supabase
+      .from("profile_parts")
+      .select("part, is_primary")
+      .eq("profile_id", session.user.id);
+    if (partSnapshotError) {
+      console.error(partSnapshotError);
+      toast.error("楽器設定の保存前確認に失敗しました。");
+      setSaving(false);
+      return;
+    }
+    const snapshotParts = partSnapshot ?? [];
+    const snapshotPartSet = new Set(snapshotParts.map((row) => row.part));
+    const restoreParts = async () => {
+      const resetResult = await supabase
+        .from("profile_parts")
+        .update({ is_primary: false })
+        .eq("profile_id", session.user.id);
+      if (resetResult.error) return false;
 
-    await supabase
+      if (snapshotParts.length > 0) {
+        const restoreResult = await supabase
+          .from("profile_parts")
+          .upsert(
+            snapshotParts.map((row) => ({
+              profile_id: session.user.id,
+              part: row.part,
+              is_primary: row.is_primary,
+            })),
+            { onConflict: "profile_id,part" }
+          );
+        if (restoreResult.error) return false;
+      }
+
+      const { data: currentParts, error: currentPartsError } = await supabase
+        .from("profile_parts")
+        .select("id, part")
+        .eq("profile_id", session.user.id);
+      if (currentPartsError) return false;
+
+      const addedIds = (currentParts ?? [])
+        .filter((row) => !snapshotPartSet.has(row.part))
+        .map((row) => row.id);
+      if (addedIds.length === 0) return true;
+
+      const { error: deleteAddedError } = await supabase
+        .from("profile_parts")
+        .delete()
+        .in("id", addedIds);
+      return !deleteAddedError;
+    };
+    const failPartSave = async (error: unknown) => {
+      console.error(error);
+      const restored = await restoreParts();
+      toast.error(
+        restored
+          ? "楽器設定の保存に失敗しました。変更前の状態へ戻しました。"
+          : "楽器設定の保存と変更前状態への復元に失敗しました。"
+      );
+      setSaving(false);
+    };
+
+    const resetPartsRes = await supabase
       .from("profile_parts")
       .update({ is_primary: false })
       .eq("profile_id", session.user.id);
+    if (resetPartsRes.error) {
+      await failPartSave(resetPartsRes.error);
+      return;
+    }
 
     const upsertRows = desiredParts.map((part) => ({
       profile_id: session.user.id,
@@ -173,26 +249,34 @@ export function ProfileForm({ isEdit, nextUrl }: ProfileFormProps) {
         .upsert(upsertRows, { onConflict: "profile_id,part" });
 
       if (partsError) {
-        console.error(partsError);
+        await failPartSave(partsError);
+        return;
       }
+    }
 
-      const { data: currentRows } = await supabase
+    const { data: currentRows, error: currentPartsError } = await supabase
+      .from("profile_parts")
+      .select("part")
+      .eq("profile_id", session.user.id);
+
+    if (currentPartsError) {
+      await failPartSave(currentPartsError);
+      return;
+    }
+
+    const partsToDelete = (currentRows ?? [])
+      .map((row) => row.part)
+      .filter((part) => !desiredParts.includes(part));
+
+    if (partsToDelete.length > 0) {
+      const { error: deletePartsError } = await supabase
         .from("profile_parts")
-        .select("part")
-        .eq("profile_id", session.user.id);
-
-      if (currentRows) {
-        const partsToDelete = currentRows
-          .map((row) => row.part)
-          .filter((part) => !desiredParts.includes(part));
-
-        if (partsToDelete.length > 0) {
-          await supabase
-            .from("profile_parts")
-            .delete()
-            .eq("profile_id", session.user.id)
-            .in("part", partsToDelete);
-        }
+        .delete()
+        .eq("profile_id", session.user.id)
+        .in("part", partsToDelete);
+      if (deletePartsError) {
+        await failPartSave(deletePartsError);
+        return;
       }
     }
 

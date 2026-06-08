@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdminApiAuth } from "@/lib/adminApiAuth";
 
 const VERCEL_TOKEN = process.env.VERCEL_TOKEN;
 const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID;
@@ -21,6 +22,11 @@ type VercelEvent = {
 };
 
 export async function GET(request: NextRequest) {
+    const auth = await requireAdminApiAuth(request);
+    if (!auth.authorized) {
+        return auth.response;
+    }
+
     if (!VERCEL_TOKEN || !VERCEL_PROJECT_ID) {
         return NextResponse.json(
             { error: "Vercel credentials not configured" },

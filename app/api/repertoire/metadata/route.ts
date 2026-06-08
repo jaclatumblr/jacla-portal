@@ -1,4 +1,8 @@
 import { NextResponse } from "next/server";
+import { lookup } from "node:dns/promises";
+import net from "node:net";
+
+export const runtime = "nodejs";
 
 type MetadataResponse = {
   title: string | null;
@@ -10,19 +14,20 @@ type MetadataResponse = {
 const providerConfigs = [
   {
     name: "youtube",
-    test: (host: string) => host.includes("youtube.com") || host === "youtu.be",
+    test: (host: string) =>
+      isSameOrSubdomain(host, "youtube.com") || isSameOrSubdomain(host, "youtu.be"),
     oembed: (url: string) =>
       `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(url)}`,
   },
   {
     name: "spotify",
-    test: (host: string) => host.includes("open.spotify.com"),
+    test: (host: string) => isSameOrSubdomain(host, "open.spotify.com"),
     oembed: (url: string) =>
       `https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`,
   },
   {
     name: "apple-music",
-    test: (host: string) => host.includes("music.apple.com"),
+    test: (host: string) => isSameOrSubdomain(host, "music.apple.com"),
     oembed: (url: string) =>
       `https://music.apple.com/oembed?url=${encodeURIComponent(url)}`,
   },
@@ -36,11 +41,81 @@ const privateHostPatterns = [
   /^0\./,
   /^192\.168\./,
   /^172\.(1[6-9]|2\d|3[0-1])\./,
+  /^169\.254\./,
+  /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./,
   /^::1$/,
+  /^::$/,
+  /^fc[0-9a-f]{2}:/i,
+  /^fd[0-9a-f]{2}:/i,
+  /^fe[89ab][0-9a-f]:/i,
+  /^ff[0-9a-f]{2}:/i,
 ];
 
-const isPrivateHost = (host: string) =>
-  privateHostPatterns.some((pattern) => pattern.test(host));
+const normalizeHost = (host: string) =>
+  host.toLowerCase().replace(/^\[(.*)\]$/, "$1").replace(/\.$/, "");
+
+const isSameOrSubdomain = (host: string, domain: string) => {
+  const normalizedHost = normalizeHost(host);
+  const normalizedDomain = normalizeHost(domain);
+  return normalizedHost === normalizedDomain || normalizedHost.endsWith(`.${normalizedDomain}`);
+};
+
+const isPrivateIpv4 = (host: string) => {
+  const parts = host.split(".");
+  if (parts.length !== 4) return false;
+  const octets = parts.map((part) => Number.parseInt(part, 10));
+  if (
+    octets.some(
+      (octet, index) =>
+        !/^\d+$/.test(parts[index]) || Number.isNaN(octet) || octet < 0 || octet > 255
+    )
+  ) {
+    return false;
+  }
+  const [a, b] = octets;
+  return (
+    a === 0 ||
+    a === 10 ||
+    a === 127 ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 198 && (b === 18 || b === 19)) ||
+    a >= 224
+  );
+};
+
+const isPrivateIpv6 = (host: string) => {
+  const normalized = normalizeHost(host);
+  if (normalized.startsWith("::ffff:")) {
+    return isPrivateIpv4(normalized.slice("::ffff:".length));
+  }
+  return privateHostPatterns.some((pattern) => pattern.test(normalized));
+};
+
+const isPrivateHost = (host: string) => {
+  const normalized = normalizeHost(host);
+  if (privateHostPatterns.some((pattern) => pattern.test(normalized))) return true;
+  if (isPrivateIpv4(normalized)) return true;
+  if (net.isIP(normalized) === 6 && isPrivateIpv6(normalized)) return true;
+  return false;
+};
+
+const assertPublicUrl = async (url: string) => {
+  const parsed = new URL(url);
+  const host = normalizeHost(parsed.hostname);
+  if (isPrivateHost(host)) {
+    throw new Error("Blocked host");
+  }
+
+  if (net.isIP(host)) return;
+
+  const addresses = await lookup(host, { all: true });
+  if (addresses.some((entry) => isPrivateHost(entry.address))) {
+    throw new Error("Blocked host resolution");
+  }
+};
 
 const parseMeta = (html: string, property: string) => {
   const escaped = property.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -96,8 +171,10 @@ const parseDurationSeconds = (raw: string | null) => {
 };
 
 const fetchHtml = async (url: string) => {
+  await assertPublicUrl(url);
   const res = await fetch(url, {
     cache: "no-store",
+    redirect: "error",
     headers: {
       "User-Agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
@@ -180,7 +257,8 @@ const mergeMetadata = (
 };
 
 const fetchOembed = async (url: string, source: string): Promise<MetadataResponse> => {
-  const res = await fetch(url, { cache: "no-store" });
+  await assertPublicUrl(url);
+  const res = await fetch(url, { cache: "no-store", redirect: "error" });
   if (!res.ok) {
     throw new Error(`oEmbed failed: ${res.status}`);
   }

@@ -97,11 +97,18 @@ export function CreateEventBandForm({
 
         if (memberError) {
             console.error(memberError);
-            toast.error("作成者の参加登録に失敗しました。");
-        } else {
-            toast.success("イベントバンドを作成しました。");
+            const { error: cleanupError } = await supabase.from("bands").delete().eq("id", bandData.id);
+            if (cleanupError) console.error(cleanupError);
+            toast.error(
+                cleanupError
+                    ? "作成者の参加登録と作成途中バンドの削除に失敗しました。"
+                    : "作成者の参加登録に失敗したため、バンド作成を取り消しました。"
+            );
+            setCreating(false);
+            return;
         }
 
+        toast.success("イベントバンドを作成しました。");
         setBandName("");
         setInstrument(selfPart || "");
         setCreating(false);
@@ -150,6 +157,15 @@ export function CreateEventBandForm({
 
         if (membersError) {
             console.error(membersError);
+            const { error: cleanupError } = await supabase.from("bands").delete().eq("id", bandData.id);
+            if (cleanupError) console.error(cleanupError);
+            toast.error(
+                cleanupError
+                    ? "メンバー取得と作成途中バンドの削除に失敗しました。"
+                    : "元バンドのメンバーを取得できなかったため、作成を取り消しました。"
+            );
+            setCreatingFromFixed(false);
+            return;
         }
 
         const payload = (membersData ?? []).map((row, index) => {
@@ -181,7 +197,15 @@ export function CreateEventBandForm({
             const { error: insertError } = await supabase.from("band_members").insert(payload);
             if (insertError) {
                 console.error(insertError);
-                toast.error("メンバーの複製に失敗しました。");
+                const { error: cleanupError } = await supabase.from("bands").delete().eq("id", bandData.id);
+                if (cleanupError) console.error(cleanupError);
+                toast.error(
+                    cleanupError
+                        ? "メンバー複製と作成途中バンドの削除に失敗しました。"
+                        : "メンバーの複製に失敗したため、作成を取り消しました。"
+                );
+                setCreatingFromFixed(false);
+                return;
             }
         }
 

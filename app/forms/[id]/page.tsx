@@ -48,6 +48,7 @@ export default function FormDetailPage() {
   const [fields, setFields] = useState<FieldRow[]>([]);
   const [answers, setAnswers] = useState<Record<string, AnswerValue>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     if (!formId) return;
@@ -55,6 +56,7 @@ export default function FormDetailPage() {
 
     (async () => {
       setLoading(true);
+      setLoadError(false);
       const [formRes, fieldsRes] = await Promise.all([
         supabase
           .from("forms")
@@ -70,11 +72,13 @@ export default function FormDetailPage() {
 
       if (cancelled) return;
 
-      if (formRes.error) {
-        console.error(formRes.error);
+      const loadFailure = formRes.error ?? fieldsRes.error;
+      if (loadFailure) {
+        console.error(loadFailure);
         toast.error("フォームの取得に失敗しました。");
         setForm(null);
         setFields([]);
+        setLoadError(true);
       } else {
         setForm(formRes.data as FormRow | null);
         setFields((fieldsRes.data ?? []) as FieldRow[]);
@@ -155,13 +159,23 @@ export default function FormDetailPage() {
       };
     });
 
-    const { error: answerError } = await supabase
-      .from("form_response_answers")
-      .insert(answerRows);
+    const { error: answerError } =
+      answerRows.length > 0
+        ? await supabase.from("form_response_answers").insert(answerRows)
+        : { error: null };
 
     if (answerError) {
       console.error(answerError);
-      toast.error("送信に失敗しました。時間をおいて再度お試しください。");
+      const { error: cleanupError } = await supabase
+        .from("form_responses")
+        .delete()
+        .eq("id", responseData.id);
+      if (cleanupError) {
+        console.error(cleanupError);
+        toast.error("送信と失敗データの取り消しに失敗しました。管理者へ連絡してください。");
+      } else {
+        toast.error("送信に失敗しました。時間をおいて再度お試しください。");
+      }
       setSubmitting(false);
       return;
     }
@@ -181,8 +195,11 @@ export default function FormDetailPage() {
         <main className="flex-1 md:ml-20">
           <PageHeader
             kicker="Form"
-            title={form?.title ?? "フォーム"}
-            description={form?.description ?? "フォームに回答してください。"}
+            title={form?.title ?? (loadError ? "フォームの取得に失敗しました" : "フォーム")}
+            description={
+              form?.description ??
+              (loadError ? "再読み込みしてから、もう一度お試しください。" : "フォームに回答してください。")
+            }
             backHref="/"
             backLabel="ホームに戻る"
             size="lg"

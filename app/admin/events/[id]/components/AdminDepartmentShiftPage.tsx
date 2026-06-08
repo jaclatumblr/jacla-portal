@@ -9,16 +9,18 @@ import { SideNav } from "@/components/SideNav";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Calendar, RefreshCw, Users } from "@/lib/icons";
+import { Calendar, Download, RefreshCw, Users } from "@/lib/icons";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/lib/toast";
 import { formatTimeText } from "@/lib/time";
+import { downloadShiftStaffExcel } from "@/lib/shiftStaffExport";
 import {
   isBinaryProfileGender,
   normalizeProfileGender,
   type BinaryProfileGender,
   type ProfileGender,
 } from "@/lib/profileGender";
+import { isMissingColumnError } from "@/lib/supabaseErrors";
 import { useRoleFlags } from "@/lib/useRoleFlags";
 
 type Department = "pa" | "lighting";
@@ -48,6 +50,7 @@ type BandMemberRow = {
 type ProfileOption = {
   id: string;
   display_name: string;
+  real_name?: string | null;
   discord?: string | null;
   crew?: string | null;
 };
@@ -55,6 +58,7 @@ type ProfileOption = {
 type ProfileRow = {
   id: string;
   display_name?: string | null;
+  real_name?: string | null;
   discord_username?: string | null;
   crew?: string | null;
 };
@@ -215,6 +219,24 @@ const slotTypeLabel = (slot: EventSlot) => {
   return "付帯作業";
 };
 
+const slotOrderValue = (slot: { order_in_event: number | null }) =>
+  slot.order_in_event ?? Number.MAX_SAFE_INTEGER;
+
+const bandShowOrderValue = (
+  bandSlots: Array<{
+    slot_phase?: "show" | "rehearsal_normal" | "rehearsal_pre" | null;
+    order_in_event: number | null;
+  }>
+) => {
+  const showSlots = bandSlots.filter((slot) => slot.slot_phase === "show");
+  const targetSlots = showSlots.length > 0 ? showSlots : bandSlots;
+  return Math.min(...targetSlots.map(slotOrderValue));
+};
+
+const profileDisplayName = (
+  profile?: Pick<ProfileOption, "display_name" | "real_name"> | null
+) => profile?.real_name?.trim() || profile?.display_name?.trim() || "未登録";
+
 const pageConfig = {
   pa: {
     kicker: "PA Shift",
@@ -338,25 +360,32 @@ export function AdminDepartmentShiftPage({ department }: { department: Departmen
     );
   }, [department, eventStaff]);
 
-  const helperOptions = useMemo(() => {
-    return eligibleProfiles.filter(
-      (profile) => !assignedStaffIds.has(profile.id) && !performerIds.has(profile.id)
-    );
-  }, [assignedStaffIds, eligibleProfiles, performerIds]);
-
-  const departmentStaffOptions = useMemo(() => {
-    return eventStaff.filter(
-      (staff) =>
-        (department === "pa" ? staff.can_pa : staff.can_light) &&
-        eligibleProfileIds.has(staff.profile_id)
-    );
-  }, [department, eligibleProfileIds, eventStaff]);
-
   const profileMap = useMemo(() => {
     const next = new Map<string, ProfileOption>();
     profiles.forEach((profile) => next.set(profile.id, profile));
     return next;
   }, [profiles]);
+
+  const helperOptions = useMemo(() => {
+    return eligibleProfiles
+      .filter((profile) => !assignedStaffIds.has(profile.id) && !performerIds.has(profile.id))
+      .sort((a, b) => profileDisplayName(a).localeCompare(profileDisplayName(b), "ja"));
+  }, [assignedStaffIds, eligibleProfiles, performerIds]);
+
+  const departmentStaffOptions = useMemo(() => {
+    return eventStaff
+      .filter(
+        (staff) =>
+          (department === "pa" ? staff.can_pa : staff.can_light) &&
+          eligibleProfileIds.has(staff.profile_id)
+      )
+      .sort((a, b) =>
+        profileDisplayName(profileMap.get(a.profile_id)).localeCompare(
+          profileDisplayName(profileMap.get(b.profile_id)),
+          "ja"
+        )
+      );
+  }, [department, eligibleProfileIds, eventStaff, profileMap]);
 
   const bandNameMap = useMemo(() => {
     const next = new Map<string, string>();
@@ -590,7 +619,7 @@ export function AdminDepartmentShiftPage({ department }: { department: Departmen
           staffId: staff.id,
           profileId: staff.profile_id,
           enrollmentYear: profileEnrollmentYears[staff.profile_id] ?? null,
-          name: profileMap.get(staff.profile_id)?.display_name ?? "未登録",
+          name: profileDisplayName(profileMap.get(staff.profile_id)),
           totalCount: assigned.length,
           bandCount: bandIds.size,
           rehearsalCount,
@@ -620,7 +649,38 @@ export function AdminDepartmentShiftPage({ department }: { department: Departmen
 
   const displayProfileName = (profileId?: string | null) => {
     if (!profileId) return "未割当";
-    return profileMap.get(profileId)?.display_name ?? "未登録";
+    return profileDisplayName(profileMap.get(profileId));
+  };
+
+  const handleExportShiftList = () => {
+    const exportItems = [...bandItems].sort((a, b) => {
+      const showOrderA = bandShowOrderValue(a.slots);
+      const showOrderB = bandShowOrderValue(b.slots);
+      if (showOrderA !== showOrderB) return showOrderA - showOrderB;
+      if (a.orderInEvent !== b.orderInEvent) return a.orderInEvent - b.orderInEvent;
+      return a.bandName.localeCompare(b.bandName, "ja");
+    });
+
+    void downloadShiftStaffExcel({
+      department,
+      eventName: event?.name,
+      eventDate: event?.date,
+      items: exportItems.map((band) => ({
+        bandName: band.bandName,
+        staffCells: roleOptions.map((role) => ({
+          label: role.label,
+          staff: (assignmentsByBandRole[band.bandId]?.[role.value]?.profileIds ?? []).map(
+            (profileId) => ({
+              name: displayProfileName(profileId),
+              enrollmentYear: profileEnrollmentYears[profileId] ?? null,
+            })
+          ),
+        })),
+      })),
+    }).catch((error) => {
+      console.error(error);
+      toast.error("Excel出力に失敗しました。");
+    });
   };
 
   const fetchAssignments = useCallback(async (slotIds: string[]) => {
@@ -683,18 +743,21 @@ export function AdminDepartmentShiftPage({ department }: { department: Departmen
       }
     });
 
-    const { error: deleteError } = await supabase
-      .from("slot_staff_assignments")
-      .delete()
-      .in("event_slot_id", slotIds)
-      .eq("role", role);
-
-    if (deleteError) {
-      console.error(deleteError);
-      return { ok: false, nextAssignments: snapshot };
-    }
-
     if (!profileId) {
+      if (scopedAssignments.length === 0) {
+        return { ok: true, nextAssignments: retainedAssignments };
+      }
+      const { error: deleteError } = await supabase
+        .from("slot_staff_assignments")
+        .delete()
+        .in(
+          "id",
+          scopedAssignments.map((assignment) => assignment.id)
+        );
+      if (deleteError) {
+        console.error(deleteError);
+        return { ok: false, nextAssignments: snapshot };
+      }
       return { ok: true, nextAssignments: retainedAssignments };
     }
 
@@ -713,8 +776,29 @@ export function AdminDepartmentShiftPage({ department }: { department: Departmen
 
     if (error || !data) {
       console.error(error);
-      await restoreAssignments(scopedAssignments);
       return { ok: false, nextAssignments: snapshot };
+    }
+
+    if (scopedAssignments.length > 0) {
+      const { error: deleteError } = await supabase
+        .from("slot_staff_assignments")
+        .delete()
+        .in(
+          "id",
+          scopedAssignments.map((assignment) => assignment.id)
+        );
+      if (deleteError) {
+        console.error(deleteError);
+        const { error: rollbackError } = await supabase
+          .from("slot_staff_assignments")
+          .delete()
+          .in(
+            "id",
+            data.map((assignment) => assignment.id)
+          );
+        if (rollbackError) console.error(rollbackError);
+        return { ok: false, nextAssignments: snapshot };
+      }
     }
 
     return {
@@ -754,7 +838,7 @@ export function AdminDepartmentShiftPage({ department }: { department: Departmen
           .select("id, event_id, profile_id, can_pa, can_light, note")
           .eq("event_id", eventId)
           .order("created_at", { ascending: true }),
-        supabase.from("profiles").select("id, display_name, discord_username, crew").order("display_name"),
+        supabase.from("profiles").select("id, display_name, real_name, discord_username, crew").order("display_name"),
       ]);
 
       if (cancelled) {
@@ -771,7 +855,7 @@ export function AdminDepartmentShiftPage({ department }: { department: Departmen
 
       if (bandsRes.error || slotsRes.error || staffRes.error || profilesRes.error) {
         console.error(bandsRes.error ?? slotsRes.error ?? staffRes.error ?? profilesRes.error);
-        toast.error("繧ｷ繝輔ヨ菴懈・逕ｨ縺ｮ繝・・繧ｿ蜿門ｾ励↓螟ｱ謨励＠縺ｾ縺励◆縲・");
+        toast.error("シフト作成用のデータ取得に失敗しました。");
         setLoading(false);
         return;
       }
@@ -791,6 +875,7 @@ export function AdminDepartmentShiftPage({ department }: { department: Departmen
         ((profilesRes.data ?? []) as ProfileRow[]).map((row) => ({
           id: row.id,
           display_name: row.display_name ?? "未登録",
+          real_name: row.real_name ?? null,
           discord: row.discord_username ?? null,
           crew: row.crew ?? null,
         }))
@@ -809,7 +894,7 @@ export function AdminDepartmentShiftPage({ department }: { department: Departmen
             toast.error("バンドメンバーの取得に失敗しました。");
             setBandMembers([]);
             setBandMembersLoadError(
-              "蜃ｺ貍斐Γ繝ｳ繝舌・諠・ｱ縺ｮ蜿門ｾ励↓螟ｱ謨励＠縺ｾ縺励◆縲・蜑企勁遒ｺ隱阪ｒ蛛懈ｭ斐〒縺阪↑縺・◆繧√√さ繝ｼ繝峨↓縺ｯ蜿ｯ隕ｧ縺ｮ縺ｿ縺ｫ縺励※縺・∪縺吶・"
+              "出演メンバー情報の取得に失敗しました。削除可否を安全に確認できないため、この画面は閲覧のみになります。"
             );
           } else {
             setBandMembers((membersRes.data ?? []) as BandMemberRow[]);
@@ -844,7 +929,7 @@ export function AdminDepartmentShiftPage({ department }: { department: Departmen
 
       if (cancelled) return;
 
-      if (error && error.code !== "42703") {
+      if (error && !isMissingColumnError(error, "gender")) {
         console.error(error);
       }
 
@@ -1167,7 +1252,7 @@ export function AdminDepartmentShiftPage({ department }: { department: Departmen
 
       if (assignmentError) {
         console.error(assignmentError);
-        toast.error("繧ｷ繝輔ヨ蜑ｲ蠖薙・蜑企勁縺ｫ螟ｱ謨励＠縺ｾ縺励◆縲・");
+        toast.error("シフト割当の削除に失敗しました。");
         setSavingStaff(false);
         return;
       }
@@ -1215,29 +1300,14 @@ export function AdminDepartmentShiftPage({ department }: { department: Departmen
     }
 
     if (profileAssignments.length > 0) {
-      const { error: assignmentError } = await supabase
-        .from("slot_staff_assignments")
-        .delete()
-        .eq("profile_id", staff.profile_id)
-        .in("event_slot_id", managedSlotIds)
-        .in(
-          "role",
-          roleOptions.map((role) => role.value)
-        );
-
-      if (assignmentError) {
-        console.error(assignmentError);
-        toast.error("シフト割当の削除に失敗しました。");
-      } else {
-        setStaffAssignments((prev) =>
-          prev.filter(
-            (assignment) =>
-              assignment.profile_id !== staff.profile_id ||
-              !roleOptions.some((role) => role.value === assignment.role)
-          )
-        );
-        setAssignmentDrafts({});
-      }
+      setStaffAssignments((prev) =>
+        prev.filter(
+          (assignment) =>
+            assignment.profile_id !== staff.profile_id ||
+            !roleOptions.some((role) => role.value === assignment.role)
+        )
+      );
+      setAssignmentDrafts({});
     }
 
     setSavingStaff(false);
@@ -1750,7 +1820,7 @@ export function AdminDepartmentShiftPage({ department }: { department: Departmen
                           <optgroup label="手伝いメンバー">
                             {helperOptions.map((profile) => (
                               <option key={profile.id} value={profile.id}>
-                                {profile.display_name}
+                                {profileDisplayName(profile)}
                               </option>
                             ))}
                           </optgroup>
@@ -1782,7 +1852,7 @@ export function AdminDepartmentShiftPage({ department }: { department: Departmen
                             key={staff.id}
                             className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-xs"
                           >
-                            {profile?.display_name ?? "未登録"}
+                            {profileDisplayName(profile)}
                             {isPerformer ? (
                               <Badge variant="secondary" className="text-[10px]">
                                 出演
@@ -1818,6 +1888,16 @@ export function AdminDepartmentShiftPage({ department }: { department: Departmen
                     </CardDescription>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={handleExportShiftList}
+                      disabled={bandItems.length === 0}
+                    >
+                      <Download className="w-4 h-4" />
+                      Excel出力
+                    </Button>
                     <Button
                       type="button"
                       size="sm"
@@ -1963,7 +2043,7 @@ export function AdminDepartmentShiftPage({ department }: { department: Departmen
                                             key={staff.id}
                                             value={staff.profile_id}
                                           >
-                                            {profile?.display_name ?? "未登録"}
+                                            {profileDisplayName(profile)}
                                           </option>
                                         );
                                       })}

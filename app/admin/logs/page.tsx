@@ -5,6 +5,7 @@ import Link from "next/link";
 import { RefreshCw, Terminal, Play, Pause, Trash2, Users, Eye } from "@/lib/icons";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { useIsAdmin } from "@/lib/useIsAdmin";
+import { useAuth } from "@/contexts/AuthContext";
 import { PageHeader } from "@/components/PageHeader";
 import { SideNav } from "@/components/SideNav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -73,6 +74,7 @@ const LOG_COLORS: Record<string, string> = {
 
 export default function AdminLogsPage() {
     const { isAdmin, loading: adminLoading } = useIsAdmin();
+    const { session } = useAuth();
     const [deployments, setDeployments] = useState<Deployment[]>([]);
     const [selectedDeploymentId, setSelectedDeploymentId] = useState<string | null>(null);
     const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -80,6 +82,7 @@ export default function AdminLogsPage() {
     const [logsLoading, setLogsLoading] = useState(false);
     const [autoRefresh, setAutoRefresh] = useState(true);
     const terminalRef = useRef<HTMLDivElement>(null);
+    const logsRef = useRef<LogEntry[]>([]);
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
     // User activity logs
@@ -91,13 +94,17 @@ export default function AdminLogsPage() {
 
     // Fetch deployments
     useEffect(() => {
-        if (adminLoading || !isAdmin) return;
+        if (adminLoading || !isAdmin || !session?.access_token) return;
         let cancelled = false;
 
         (async () => {
             setLoading(true);
             try {
-                const res = await fetch("/api/admin/vercel/deployments");
+                const res = await fetch("/api/admin/vercel/deployments", {
+                    headers: {
+                        Authorization: `Bearer ${session.access_token}`,
+                    },
+                });
                 if (!res.ok) throw new Error("Failed to fetch deployments");
                 const data = await res.json();
                 if (cancelled) return;
@@ -116,27 +123,34 @@ export default function AdminLogsPage() {
         return () => {
             cancelled = true;
         };
-    }, [adminLoading, isAdmin]);
+    }, [adminLoading, isAdmin, session?.access_token]);
 
     // Fetch Vercel logs
     const fetchLogs = useCallback(async (append = false) => {
-        if (!selectedDeploymentId) return;
+        if (!selectedDeploymentId || !session?.access_token) return;
 
         setLogsLoading(true);
         try {
-            const since = append && logs.length > 0 ? logs[logs.length - 1].date : undefined;
+            const currentLogs = logsRef.current;
+            const since = append && currentLogs.length > 0
+                ? currentLogs[currentLogs.length - 1].date
+                : undefined;
             const url = `/api/admin/vercel/logs?deploymentId=${selectedDeploymentId}${since ? `&since=${since}` : ""}`;
-            const res = await fetch(url);
+            const res = await fetch(url, {
+                headers: {
+                    Authorization: `Bearer ${session.access_token}`,
+                },
+            });
             if (!res.ok) throw new Error("Failed to fetch logs");
             const data = await res.json();
 
             if (append) {
-                const newLogs = (data.logs ?? []).filter(
-                    (l: LogEntry) => !logs.some((existing) => existing.id === l.id)
-                );
-                if (newLogs.length > 0) {
-                    setLogs((prev) => [...prev, ...newLogs]);
-                }
+                setLogs((prev) => {
+                    const newLogs = (data.logs ?? []).filter(
+                        (l: LogEntry) => !prev.some((existing) => existing.id === l.id)
+                    );
+                    return newLogs.length > 0 ? [...prev, ...newLogs] : prev;
+                });
             } else {
                 setLogs(data.logs ?? []);
             }
@@ -148,7 +162,7 @@ export default function AdminLogsPage() {
         } finally {
             setLogsLoading(false);
         }
-    }, [selectedDeploymentId, logs]);
+    }, [selectedDeploymentId, session?.access_token]);
 
     // Fetch user activity logs
     const fetchActivityLogs = useCallback(async () => {
@@ -251,6 +265,7 @@ export default function AdminLogsPage() {
 
     // Auto-scroll to bottom
     useEffect(() => {
+        logsRef.current = logs;
         if (terminalRef.current) {
             terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
         }

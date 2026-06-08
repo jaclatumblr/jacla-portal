@@ -63,11 +63,18 @@ export function CreateFixedBandForm({ selfPart, onCreated }: CreateFixedBandForm
 
         if (memberError) {
             console.error(memberError);
-            toast.error("作成者の参加登録に失敗しました。");
-        } else {
-            toast.success("固定バンドを作成しました。");
+            const { error: cleanupError } = await supabase.from("bands").delete().eq("id", bandData.id);
+            if (cleanupError) console.error(cleanupError);
+            toast.error(
+                cleanupError
+                    ? "作成者の参加登録と作成途中バンドの削除に失敗しました。"
+                    : "作成者の参加登録に失敗したため、バンド作成を取り消しました。"
+            );
+            setCreating(false);
+            return;
         }
 
+        toast.success("固定バンドを作成しました。");
         setBandName("");
         setInstrument(selfPart || "");
         setCreating(false);

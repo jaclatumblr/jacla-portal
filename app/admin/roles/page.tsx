@@ -32,6 +32,7 @@ import {
   profileGenderOptions,
   type ProfileGender,
 } from "@/lib/profileGender";
+import { isMissingColumnError } from "@/lib/supabaseErrors";
 
 type ProfileRow = {
   id: string;
@@ -329,7 +330,7 @@ export default function AdminRolesPage() {
           }
         | null;
       let error = privateResWithPhone.error;
-      if (error?.code === "42703") {
+      if (isMissingColumnError(error)) {
         const legacyResWithPhone = await supabase
           .from("profile_private")
           .select(legacyPrivateColumnsWithPhone)
@@ -346,7 +347,7 @@ export default function AdminRolesPage() {
           | null;
         error = legacyResWithPhone.error;
       }
-      if (error?.code === "42703") {
+      if (isMissingColumnError(error)) {
         const legacyRes = await supabase
           .from("profile_private")
           .select(legacyPrivateColumns)

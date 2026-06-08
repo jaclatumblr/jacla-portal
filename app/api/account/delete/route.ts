@@ -97,6 +97,15 @@ export async function POST(request: Request) {
       }),
   ]);
 
+  const { error: authDeleteError } = await adminClient.auth.admin.deleteUser(targetUserId);
+  if (authDeleteError) {
+    console.error(authDeleteError);
+    return NextResponse.json(
+      { error: "Auth delete failed", details: authDeleteError.message },
+      { status: 500 }
+    );
+  }
+
   const { error: profileDeleteError } = await adminClient
     .from("profiles")
     .delete()
@@ -105,16 +114,10 @@ export async function POST(request: Request) {
   if (profileDeleteError) {
     console.error(profileDeleteError);
     return NextResponse.json(
-      { error: "Profile delete failed", details: profileDeleteError.message },
-      { status: 500 }
-    );
-  }
-
-  const { error: authDeleteError } = await adminClient.auth.admin.deleteUser(targetUserId);
-  if (authDeleteError) {
-    console.error(authDeleteError);
-    return NextResponse.json(
-      { error: "Auth delete failed", details: authDeleteError.message },
+      {
+        error: "Auth user deleted, but profile cleanup failed",
+        details: profileDeleteError.message,
+      },
       { status: 500 }
     );
   }

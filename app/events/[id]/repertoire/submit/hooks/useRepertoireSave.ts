@@ -269,67 +269,6 @@ export function useRepertoireSave({
       return;
     }
 
-    const restoreMemberSnapshot = async () => {
-      const { error: deleteError } = await supabase.from("band_members").delete().eq("band_id", band.id);
-      if (deleteError) return deleteError;
-      if (persistedMemberSnapshot.length === 0) return null;
-      const { error: insertError } = await supabase
-        .from("band_members")
-        .insert(persistedMemberSnapshot, { defaultToNull: false });
-      return insertError;
-    };
-
-    const restoreSongSnapshot = async () => {
-      const { error: deleteError } = await supabase.from("songs").delete().eq("band_id", band.id);
-      if (deleteError) return deleteError;
-      if (persistedSongSnapshot.length === 0) return null;
-      const { error: insertError } = await supabase
-        .from("songs")
-        .insert(persistedSongSnapshot, { defaultToNull: false });
-      return insertError;
-    };
-
-    const restoreBandSnapshot = async () => {
-      const { error } = await supabase.from("bands").update(persistedBandSnapshot).eq("id", band.id);
-      return error;
-    };
-
-    const rollbackRepertoireSave = async (options: {
-      restoreBand?: boolean;
-      restoreMembers?: boolean;
-      restoreSongs?: boolean;
-    }) => {
-      const rollbackFailures: string[] = [];
-
-      if (options.restoreBand) {
-        const rollbackBandError = await restoreBandSnapshot();
-        if (rollbackBandError) {
-          console.error(rollbackBandError);
-          rollbackFailures.push("band");
-        }
-      }
-
-      if (options.restoreSongs) {
-        const rollbackSongError = await restoreSongSnapshot();
-        if (rollbackSongError) {
-          console.error(rollbackSongError);
-          rollbackFailures.push("songs");
-        }
-      }
-
-      if (options.restoreMembers) {
-        const rollbackMemberError = await restoreMemberSnapshot();
-        if (rollbackMemberError) {
-          console.error(rollbackMemberError);
-          rollbackFailures.push("members");
-        }
-      }
-
-      if (rollbackFailures.length > 0) {
-        toast.error(`保存に失敗し、${rollbackFailures.join(" / ")} の復元にも失敗しました。`);
-      }
-    };
-
     const memberRowsToSave = defaultPlotMembers.map((member, index) => {
       const isTemp = member.id.startsWith("temp-");
       return {
@@ -376,232 +315,224 @@ export function useRepertoireSave({
       };
     });
 
-    let membersChangedInDb = false;
-    let songsChangedInDb = false;
-
-    const { error: deleteMembersForReplaceError } = await supabase
-      .from("band_members")
-      .delete()
-      .eq("band_id", band.id);
-    if (deleteMembersForReplaceError) {
-      console.error(deleteMembersForReplaceError);
-      toast.error("メンバー情報の保存に失敗しました。");
+    if (
+      persistedMemberSnapshot.length > 0 &&
+      memberRowsToSave.length === 0 &&
+      !window.confirm(
+        `登録済みのメンバー ${persistedMemberSnapshot.length} 人を全員削除します。よろしいですか？`
+      )
+    ) {
       setSaving(false);
       return;
     }
-    membersChangedInDb = true;
 
-    if (memberRowsToSave.length > 0) {
-      const { error: insertMembersForReplaceError } = await supabase
+    const persistedMemberIds = new Set(persistedMemberSnapshot.map((member) => member.id));
+    const persistedSongIds = new Set(persistedSongSnapshot.map((song) => song.id));
+    const localMemberIds = new Set(
+      memberRowsToSave.flatMap((row) =>
+        typeof (row as { id?: string }).id === "string" ? [(row as { id: string }).id] : []
+      )
+    );
+    const localSongIds = new Set(
+      songRowsToSave.flatMap((row) =>
+        typeof (row as { id?: string }).id === "string" ? [(row as { id: string }).id] : []
+      )
+    );
+    const memberIdsToDelete = Array.from(persistedMemberIds).filter((id) => !localMemberIds.has(id));
+    const songIdsToDelete = Array.from(persistedSongIds).filter((id) => !localSongIds.has(id));
+
+    const existingMemberRows = memberRowsToSave.filter(
+      (row): row is (typeof row & { id: string }) =>
+        typeof (row as { id?: string }).id === "string"
+    );
+    const newMemberRows = memberRowsToSave.filter(
+      (row) => typeof (row as { id?: string }).id !== "string"
+    );
+    const existingSongRows = songRowsToSave.filter(
+      (row): row is (typeof row & { id: string }) =>
+        typeof (row as { id?: string }).id === "string"
+    );
+    const newSongRows = songRowsToSave.filter(
+      (row) => typeof (row as { id?: string }).id !== "string"
+    );
+
+    const restoreMemberSnapshot = async () => {
+      if (persistedMemberSnapshot.length > 0) {
+        const { error: upsertError } = await supabase
+          .from("band_members")
+          .upsert(persistedMemberSnapshot, { onConflict: "id" });
+        if (upsertError) return upsertError;
+      }
+
+      const { data: currentRows, error: currentRowsError } = await supabase
         .from("band_members")
-        .insert(memberRowsToSave, { defaultToNull: false });
+        .select("id")
+        .eq("band_id", band.id);
+      if (currentRowsError) return currentRowsError;
 
-      if (insertMembersForReplaceError) {
-        console.error(insertMembersForReplaceError);
-        await rollbackRepertoireSave({ restoreMembers: true });
-        toast.error("メンバー情報の保存に失敗しました。");
-        setSaving(false);
+      const addedIds = (currentRows ?? [])
+        .map((row) => row.id)
+        .filter((id) => !persistedMemberIds.has(id));
+      if (addedIds.length === 0) return null;
+
+      const { error: deleteError } = await supabase.from("band_members").delete().in("id", addedIds);
+      return deleteError;
+    };
+
+    const restoreSongSnapshot = async () => {
+      if (persistedSongSnapshot.length > 0) {
+        const { error: upsertError } = await supabase
+          .from("songs")
+          .upsert(persistedSongSnapshot, { onConflict: "id" });
+        if (upsertError) return upsertError;
+      }
+
+      const { data: currentRows, error: currentRowsError } = await supabase
+        .from("songs")
+        .select("id")
+        .eq("band_id", band.id);
+      if (currentRowsError) return currentRowsError;
+
+      const addedIds = (currentRows ?? [])
+        .map((row) => row.id)
+        .filter((id) => !persistedSongIds.has(id));
+      if (addedIds.length === 0) return null;
+
+      const { error: deleteError } = await supabase.from("songs").delete().in("id", addedIds);
+      return deleteError;
+    };
+
+    const restoreBandSnapshot = async () => {
+      const { error } = await supabase.from("bands").update(persistedBandSnapshot).eq("id", band.id);
+      return error;
+    };
+
+    const rollbackRepertoireSave = async (options: {
+      restoreBand?: boolean;
+      restoreMembers?: boolean;
+      restoreSongs?: boolean;
+    }) => {
+      const rollbackFailures: string[] = [];
+
+      if (options.restoreBand) {
+        const rollbackBandError = await restoreBandSnapshot();
+        if (rollbackBandError) {
+          console.error(rollbackBandError);
+          rollbackFailures.push("band");
+        }
+      }
+
+      if (options.restoreSongs) {
+        const rollbackSongError = await restoreSongSnapshot();
+        if (rollbackSongError) {
+          console.error(rollbackSongError);
+          rollbackFailures.push("songs");
+        }
+      }
+
+      if (options.restoreMembers) {
+        const rollbackMemberError = await restoreMemberSnapshot();
+        if (rollbackMemberError) {
+          console.error(rollbackMemberError);
+          rollbackFailures.push("members");
+        }
+      }
+
+      if (rollbackFailures.length > 0) {
+        toast.error(`保存に失敗し、${rollbackFailures.join(" / ")} の復元にも失敗しました。`);
+      }
+    };
+
+    const failSave = async (
+      error: unknown,
+      message: string,
+      rollback: { restoreBand?: boolean; restoreMembers?: boolean; restoreSongs?: boolean }
+    ) => {
+      console.error(error);
+      await rollbackRepertoireSave(rollback);
+      toast.error(message);
+      setSaving(false);
+    };
+
+    if (existingMemberRows.length > 0) {
+      const { error } = await supabase
+        .from("band_members")
+        .upsert(existingMemberRows, { onConflict: "id" });
+      if (error) {
+        await failSave(error, "メンバー情報の保存に失敗しました。", { restoreMembers: true });
         return;
       }
     }
 
-    const { error: deleteSongsForReplaceError } = await supabase.from("songs").delete().eq("band_id", band.id);
-    if (deleteSongsForReplaceError) {
-      console.error(deleteSongsForReplaceError);
-      await rollbackRepertoireSave({ restoreMembers: membersChangedInDb });
-      toast.error("曲情報の保存に失敗しました。");
-      setSaving(false);
-      return;
+    if (newMemberRows.length > 0) {
+      const { error } = await supabase
+        .from("band_members")
+        .insert(newMemberRows, { defaultToNull: false });
+      if (error) {
+        await failSave(error, "メンバー情報の保存に失敗しました。", { restoreMembers: true });
+        return;
+      }
     }
-    songsChangedInDb = true;
 
-    if (songRowsToSave.length > 0) {
-      const { error: insertSongsForReplaceError } = await supabase
-        .from("songs")
-        .insert(songRowsToSave, { defaultToNull: false });
+    if (existingSongRows.length > 0) {
+      const { error } = await supabase.from("songs").upsert(existingSongRows, { onConflict: "id" });
+      if (error) {
+        await failSave(error, "曲情報の保存に失敗しました。", {
+          restoreMembers: true,
+          restoreSongs: true,
+        });
+        return;
+      }
+    }
 
-      if (insertSongsForReplaceError) {
-        console.error(insertSongsForReplaceError);
-        await rollbackRepertoireSave({ restoreMembers: membersChangedInDb, restoreSongs: true });
-        toast.error("曲情報の保存に失敗しました。");
-        setSaving(false);
+    if (newSongRows.length > 0) {
+      const { error } = await supabase.from("songs").insert(newSongRows, { defaultToNull: false });
+      if (error) {
+        await failSave(error, "曲情報の保存に失敗しました。", {
+          restoreMembers: true,
+          restoreSongs: true,
+        });
+        return;
+      }
+    }
+
+    if (songIdsToDelete.length > 0) {
+      const { error } = await supabase.from("songs").delete().in("id", songIdsToDelete);
+      if (error) {
+        await failSave(error, "曲情報の保存に失敗しました。", {
+          restoreMembers: true,
+          restoreSongs: true,
+        });
         return;
       }
     }
 
     const { error: bandWriteError } = await supabase.from("bands").update(bandPayload).eq("id", band.id);
     if (bandWriteError) {
-      console.error(bandWriteError);
-      await rollbackRepertoireSave({ restoreMembers: membersChangedInDb, restoreSongs: songsChangedInDb });
-      toast.error("バンド情報の保存に失敗しました。");
-      setSaving(false);
+      await failSave(bandWriteError, "バンド情報の保存に失敗しました。", {
+        restoreBand: true,
+        restoreMembers: true,
+        restoreSongs: true,
+      });
       return;
+    }
+
+    // Membership grants write permission, so remove departed members only after every other write.
+    if (memberIdsToDelete.length > 0) {
+      const { error } = await supabase.from("band_members").delete().in("id", memberIdsToDelete);
+      if (error) {
+        await failSave(error, "メンバー情報の保存に失敗しました。", {
+          restoreBand: true,
+          restoreMembers: true,
+          restoreSongs: true,
+        });
+        return;
+      }
     }
 
     toast.success(status === "submitted" ? "提出しました。" : "下書きを保存しました。");
     setBand({ ...band, repertoire_status: status });
     await refreshData();
-    setSaving(false);
-    return;
-
-    const { error: bandError } = await supabase.from("bands").update(bandPayload).eq("id", band!.id);
-    if (bandError) {
-      console.error(bandError);
-      toast.error("バンド情報の保存に失敗しました。");
-      setSaving(false);
-      return;
-    }
-
-    const { data: currentDbMembers } = await supabase
-      .from("band_members")
-      .select("id")
-      .eq("band_id", band!.id);
-
-    const currentDbIds = new Set(currentDbMembers?.map((member) => member.id) ?? []);
-    const localIds = new Set(stageMembers.map((member) => member.id).filter((id) => !id.startsWith("temp-")));
-
-    const toDeleteIds = Array.from(currentDbIds).filter((id) => !localIds.has(id));
-    let memberError: { message?: string } | null = null;
-
-    if (toDeleteIds.length > 0) {
-      const { error: deleteMemberError } = await supabase
-        .from("band_members")
-        .delete()
-        .in("id", toDeleteIds);
-      if (deleteMemberError) {
-        memberError = deleteMemberError;
-      }
-    }
-
-    const hasInvalidMemberUserId = stageMembers.some(
-      (member) => !member.userId || member.userId.startsWith("temp-")
-    );
-    if (hasInvalidMemberUserId) {
-      toast.error("メンバーの選択情報が不正です。メンバーを選び直してください。");
-      setSaving(false);
-      return;
-    }
-
-    const memberPayloads = defaultPlotMembers.map((member, index) => {
-      const isTemp = member.id.startsWith("temp-");
-      return {
-        ...(isTemp ? {} : { id: member.id }),
-        band_id: band!.id,
-        user_id: member.userId,
-        instrument: member.instrument,
-        position_x: member.x,
-        position_y: member.y,
-        order_index: index + 1,
-        monitor_request: member.monitorRequest,
-        monitor_note: member.monitorNote,
-        is_mc: member.isMc,
-      };
-    });
-
-    const existingMemberPayloads = memberPayloads.filter(
-      (payload): payload is (typeof payload & { id: string }) =>
-        typeof (payload as { id?: string }).id === "string"
-    );
-    const newMemberPayloads = memberPayloads.filter(
-      (payload) => typeof (payload as { id?: string }).id !== "string"
-    );
-
-    if (!memberError && existingMemberPayloads.length > 0) {
-      const { error } = await supabase
-        .from("band_members")
-        .upsert(existingMemberPayloads, { onConflict: "id" });
-      if (error) memberError = error;
-    }
-
-    if (!memberError && newMemberPayloads.length > 0) {
-      const { error } = await supabase
-        .from("band_members")
-        .insert(newMemberPayloads, { defaultToNull: false });
-      if (error) memberError = error;
-    }
-
-    if (memberError) {
-      console.error(memberError);
-      toast.error("メンバー情報の保存に失敗しました。");
-    }
-
-    const { data: currentDbSongs } = await supabase
-      .from("songs")
-      .select("id")
-      .eq("band_id", band!.id);
-
-    const dbSongIds = new Set(currentDbSongs?.map((song) => song.id) ?? []);
-    const localSongIds = new Set(normalizedSongs.map((song) => song.id).filter((id) => !id.startsWith("temp-")));
-
-    const deleteSongIds = Array.from(dbSongIds).filter((id) => !localSongIds.has(id));
-    let songError: { message?: string } | null = null;
-
-    if (deleteSongIds.length > 0) {
-      const { error: deleteSongError } = await supabase.from("songs").delete().in("id", deleteSongIds);
-      if (deleteSongError) {
-        songError = deleteSongError;
-      }
-    }
-
-    const songPayloads = normalizedSongs.map((song, index) => {
-      const isTemp = song.id.startsWith("temp-");
-      const minValue = Number.parseInt(song.durationMin, 10);
-      const secValue = Number.parseInt(song.durationSec, 10);
-      const hasDurationInput =
-        String(song.durationMin).trim() !== "" || String(song.durationSec).trim() !== "";
-      const duration_sec =
-        hasDurationInput && (!Number.isNaN(minValue) || !Number.isNaN(secValue))
-          ? (Number.isNaN(minValue) ? 0 : Math.max(0, minValue)) * 60 +
-            (Number.isNaN(secValue) ? 0 : Math.max(0, Math.min(59, secValue)))
-          : null;
-
-      return {
-        ...(isTemp ? {} : { id: song.id }),
-        band_id: band!.id,
-        title: song.title,
-        artist: normalizeText(song.artist),
-        entry_type: song.entry_type ?? "song",
-        url: normalizeText(song.url),
-        order_index: index + 1,
-        duration_sec,
-        arrangement_note: normalizeText(song.arrangementNote),
-        lighting_spot: song.lightingSpot || null,
-        lighting_strobe: song.lightingStrobe || null,
-        lighting_moving: song.lightingMoving || null,
-        lighting_color: normalizeText(song.lightingColor),
-        memo: normalizeText(song.memo),
-      };
-    });
-
-    const existingSongPayloads = songPayloads.filter(
-      (payload): payload is (typeof payload & { id: string }) =>
-        typeof (payload as { id?: string }).id === "string"
-    );
-    const newSongPayloads = songPayloads.filter(
-      (payload) => typeof (payload as { id?: string }).id !== "string"
-    );
-
-    if (!songError && existingSongPayloads.length > 0) {
-      const { error } = await supabase.from("songs").upsert(existingSongPayloads, { onConflict: "id" });
-      if (error) songError = error;
-    }
-
-    if (!songError && newSongPayloads.length > 0) {
-      const { error } = await supabase.from("songs").insert(newSongPayloads, { defaultToNull: false });
-      if (error) songError = error;
-    }
-
-    if (songError) {
-      console.error(songError);
-      toast.error("曲情報の保存に失敗しました。");
-    }
-
-    if (!bandError && !memberError && !songError) {
-      toast.success(status === "submitted" ? "提出しました。" : "下書きを保存しました。");
-      setBand({ ...band!, repertoire_status: status });
-      await refreshData();
-    }
-
     setSaving(false);
   };
 

@@ -111,4 +111,5 @@ export type InstructionProfileRow = {
     id: string;
     display_name: string | null;
     real_name: string | null;
+    enrollment_year?: number | null;
 };

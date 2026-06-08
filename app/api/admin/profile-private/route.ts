@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { formatPhoneNumber } from "@/lib/phone";
 import { normalizeProfileGender } from "@/lib/profileGender";
+import { isMissingColumnError } from "@/lib/supabaseErrors";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -109,7 +110,7 @@ export async function POST(request: Request) {
     .from("profile_private")
     .upsert(payload, { onConflict: "profile_id" });
 
-  if (upsertError?.code === "42703") {
+  if (isMissingColumnError(upsertError, "gender")) {
     ({ error: upsertError } = await adminClient.from("profile_private").upsert(
       {
         profile_id: profileId,

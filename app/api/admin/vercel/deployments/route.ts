@@ -3,6 +3,7 @@ import { requireAdminApiAuth } from "@/lib/adminApiAuth";
 
 const VERCEL_TOKEN = process.env.VERCEL_TOKEN;
 const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID;
+const VERCEL_FETCH_TIMEOUT_MS = 8_000;
 
 type VercelDeploymentResponse = {
     deployments?: Array<{
@@ -13,6 +14,20 @@ type VercelDeploymentResponse = {
         target?: string;
         createdAt?: number;
     }>;
+};
+
+const fetchVercel = async (url: string, init: RequestInit) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), VERCEL_FETCH_TIMEOUT_MS);
+    try {
+        return await fetch(url, {
+            ...init,
+            cache: "no-store",
+            signal: controller.signal,
+        });
+    } finally {
+        clearTimeout(timeoutId);
+    }
 };
 
 export async function GET(request: Request) {
@@ -29,7 +44,7 @@ export async function GET(request: Request) {
     }
 
     try {
-        const response = await fetch(
+        const response = await fetchVercel(
             `https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&limit=10`,
             {
                 headers: {
@@ -61,6 +76,12 @@ export async function GET(request: Request) {
         return NextResponse.json({ deployments });
     } catch (error) {
         console.error("Error fetching deployments:", error);
+        if (error instanceof Error && error.name === "AbortError") {
+            return NextResponse.json(
+                { error: "Vercel request timed out" },
+                { status: 504 }
+            );
+        }
         return NextResponse.json(
             { error: "Internal server error" },
             { status: 500 }

@@ -3,6 +3,7 @@ import { requireAdminApiAuth } from "@/lib/adminApiAuth";
 
 const VERCEL_TOKEN = process.env.VERCEL_TOKEN;
 const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID;
+const VERCEL_FETCH_TIMEOUT_MS = 8_000;
 
 type VercelEventPayload = {
     text?: string;
@@ -19,6 +20,20 @@ type VercelEvent = {
     text?: string;
     date?: number;
     payload?: VercelEventPayload;
+};
+
+const fetchVercel = async (url: string, init: RequestInit) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), VERCEL_FETCH_TIMEOUT_MS);
+    try {
+        return await fetch(url, {
+            ...init,
+            cache: "no-store",
+            signal: controller.signal,
+        });
+    } finally {
+        clearTimeout(timeoutId);
+    }
 };
 
 export async function GET(request: NextRequest) {
@@ -51,7 +66,7 @@ export async function GET(request: NextRequest) {
             url += `&since=${since}`;
         }
 
-        const response = await fetch(url, {
+        const response = await fetchVercel(url, {
             headers: {
                 Authorization: `Bearer ${VERCEL_TOKEN}`,
             },
@@ -84,6 +99,12 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ logs });
     } catch (error) {
         console.error("Error fetching logs:", error);
+        if (error instanceof Error && error.name === "AbortError") {
+            return NextResponse.json(
+                { error: "Vercel request timed out" },
+                { status: 504 }
+            );
+        }
         return NextResponse.json(
             { error: "Internal server error" },
             { status: 500 }

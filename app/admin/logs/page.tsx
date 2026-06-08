@@ -72,9 +72,15 @@ const LOG_COLORS: Record<string, string> = {
     request: "text-blue-400",
 };
 
+const LOG_REFRESH_INTERVAL_MS = 15_000;
+const ACTIVITY_REFRESH_INTERVAL_MS = 30_000;
+const LOG_REQUEST_TIMEOUT_MS = 8_000;
+const MAX_LOG_REFRESH_FAILURES = 3;
+
 export default function AdminLogsPage() {
     const { isAdmin, loading: adminLoading } = useIsAdmin();
     const { session } = useAuth();
+    const [activeTab, setActiveTab] = useState<"activity" | "server">("activity");
     const [deployments, setDeployments] = useState<Deployment[]>([]);
     const [selectedDeploymentId, setSelectedDeploymentId] = useState<string | null>(null);
     const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -83,6 +89,11 @@ export default function AdminLogsPage() {
     const [autoRefresh, setAutoRefresh] = useState(true);
     const terminalRef = useRef<HTMLDivElement>(null);
     const logsRef = useRef<LogEntry[]>([]);
+    const logsAbortRef = useRef<AbortController | null>(null);
+    const logsFetchInFlightRef = useRef(false);
+    const logsRequestIdRef = useRef(0);
+    const nextLogsRetryAtRef = useRef(0);
+    const consecutiveLogFailuresRef = useRef(0);
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
     // User activity logs
@@ -90,6 +101,7 @@ export default function AdminLogsPage() {
     const [pageViewLogs, setPageViewLogs] = useState<PageViewEntry[]>([]);
     const [activityLoading, setActivityLoading] = useState(false);
     const activityRef = useRef<HTMLDivElement>(null);
+    const activityFetchInFlightRef = useRef(false);
     const activityIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
     // Fetch deployments
@@ -126,23 +138,47 @@ export default function AdminLogsPage() {
     }, [adminLoading, isAdmin, session?.access_token]);
 
     // Fetch Vercel logs
-    const fetchLogs = useCallback(async (append = false) => {
+    const fetchLogs = useCallback(async (append = false, options?: { force?: boolean }) => {
         if (!selectedDeploymentId || !session?.access_token) return;
+        if (append && typeof document !== "undefined" && document.visibilityState === "hidden") return;
+
+        const force = options?.force ?? false;
+        if (!force && Date.now() < nextLogsRetryAtRef.current) return;
+
+        if (logsFetchInFlightRef.current) {
+            if (!force) return;
+            logsAbortRef.current?.abort();
+        }
+
+        const requestId = logsRequestIdRef.current + 1;
+        logsRequestIdRef.current = requestId;
+        logsFetchInFlightRef.current = true;
 
         setLogsLoading(true);
+        const controller = new AbortController();
+        logsAbortRef.current = controller;
+        const timeoutId = window.setTimeout(() => controller.abort(), LOG_REQUEST_TIMEOUT_MS);
+        const isCurrentRequest = () => logsRequestIdRef.current === requestId;
+
         try {
             const currentLogs = logsRef.current;
             const since = append && currentLogs.length > 0
                 ? currentLogs[currentLogs.length - 1].date
                 : undefined;
-            const url = `/api/admin/vercel/logs?deploymentId=${selectedDeploymentId}${since ? `&since=${since}` : ""}`;
+            const url = `/api/admin/vercel/logs?deploymentId=${encodeURIComponent(selectedDeploymentId)}${since ? `&since=${since}` : ""}`;
             const res = await fetch(url, {
+                cache: "no-store",
                 headers: {
                     Authorization: `Bearer ${session.access_token}`,
                 },
+                signal: controller.signal,
             });
             if (!res.ok) throw new Error("Failed to fetch logs");
             const data = await res.json();
+            if (!isCurrentRequest()) return;
+
+            consecutiveLogFailuresRef.current = 0;
+            nextLogsRetryAtRef.current = 0;
 
             if (append) {
                 setLogs((prev) => {
@@ -155,17 +191,49 @@ export default function AdminLogsPage() {
                 setLogs(data.logs ?? []);
             }
         } catch (error) {
+            if (!isCurrentRequest()) return;
             console.error(error);
-            if (!append) {
-                toast.error("ログの取得に失敗しました。");
+            const nextFailureCount = consecutiveLogFailuresRef.current + 1;
+            consecutiveLogFailuresRef.current = nextFailureCount;
+
+            if (append) {
+                const backoffMs = Math.min(
+                    60_000,
+                    LOG_REFRESH_INTERVAL_MS * 2 ** Math.min(nextFailureCount - 1, 3)
+                );
+                nextLogsRetryAtRef.current = Date.now() + backoffMs;
+
+                if (nextFailureCount >= MAX_LOG_REFRESH_FAILURES) {
+                    setAutoRefresh(false);
+                    toast.error("ログ取得に連続失敗したため、自動更新を停止しました。");
+                } else if (nextFailureCount === 1) {
+                    toast.error("ログ取得に失敗しました。自動更新を一時的に間引きます。");
+                }
+            } else {
+                const message =
+                    error instanceof Error && error.name === "AbortError"
+                        ? "ログ取得がタイムアウトしました。"
+                        : "ログの取得に失敗しました。";
+                toast.error(message);
             }
         } finally {
-            setLogsLoading(false);
+            window.clearTimeout(timeoutId);
+            if (isCurrentRequest()) {
+                if (logsAbortRef.current === controller) {
+                    logsAbortRef.current = null;
+                }
+                logsFetchInFlightRef.current = false;
+                setLogsLoading(false);
+            }
         }
     }, [selectedDeploymentId, session?.access_token]);
 
     // Fetch user activity logs
     const fetchActivityLogs = useCallback(async () => {
+        if (activityFetchInFlightRef.current) return;
+        if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+
+        activityFetchInFlightRef.current = true;
         setActivityLoading(true);
         try {
             const [loginRes, pageViewRes] = await Promise.all([
@@ -210,29 +278,36 @@ export default function AdminLogsPage() {
         } catch (error) {
             console.error(error);
         } finally {
+            activityFetchInFlightRef.current = false;
             setActivityLoading(false);
         }
     }, []);
 
     // Initial load
     useEffect(() => {
-        if (adminLoading || !isAdmin) return;
+        if (adminLoading || !isAdmin || activeTab !== "activity") return;
         fetchActivityLogs();
-    }, [adminLoading, isAdmin, fetchActivityLogs]);
+    }, [activeTab, adminLoading, isAdmin, fetchActivityLogs]);
 
     // Initial load and deployment change
     useEffect(() => {
-        if (!selectedDeploymentId) return;
+        if (activeTab !== "server" || !selectedDeploymentId || !session?.access_token) return;
         setLogs([]);
-        void fetchLogs(false);
-    }, [fetchLogs, selectedDeploymentId]);
+        consecutiveLogFailuresRef.current = 0;
+        nextLogsRetryAtRef.current = 0;
+        void fetchLogs(false, { force: true });
+
+        return () => {
+            logsAbortRef.current?.abort();
+        };
+    }, [activeTab, fetchLogs, selectedDeploymentId, session?.access_token]);
 
     // Auto-refresh for Vercel logs
     useEffect(() => {
-        if (autoRefresh && selectedDeploymentId) {
+        if (autoRefresh && activeTab === "server" && selectedDeploymentId && session?.access_token) {
             intervalRef.current = setInterval(() => {
-                fetchLogs(true);
-            }, 5000);
+                void fetchLogs(true);
+            }, LOG_REFRESH_INTERVAL_MS);
         } else if (intervalRef.current) {
             clearInterval(intervalRef.current);
             intervalRef.current = null;
@@ -243,14 +318,14 @@ export default function AdminLogsPage() {
                 clearInterval(intervalRef.current);
             }
         };
-    }, [autoRefresh, selectedDeploymentId, fetchLogs]);
+    }, [activeTab, autoRefresh, selectedDeploymentId, session?.access_token, fetchLogs]);
 
     // Auto-refresh for activity logs
     useEffect(() => {
-        if (autoRefresh && isAdmin) {
+        if (autoRefresh && activeTab === "activity" && isAdmin) {
             activityIntervalRef.current = setInterval(() => {
-                fetchActivityLogs();
-            }, 10000);
+                void fetchActivityLogs();
+            }, ACTIVITY_REFRESH_INTERVAL_MS);
         } else if (activityIntervalRef.current) {
             clearInterval(activityIntervalRef.current);
             activityIntervalRef.current = null;
@@ -261,7 +336,7 @@ export default function AdminLogsPage() {
                 clearInterval(activityIntervalRef.current);
             }
         };
-    }, [autoRefresh, isAdmin, fetchActivityLogs]);
+    }, [activeTab, autoRefresh, isAdmin, fetchActivityLogs]);
 
     // Auto-scroll to bottom
     useEffect(() => {
@@ -287,6 +362,15 @@ export default function AdminLogsPage() {
             minute: "2-digit",
             second: "2-digit",
         });
+    };
+
+    const toggleAutoRefresh = () => {
+        const nextValue = !autoRefresh;
+        if (nextValue) {
+            consecutiveLogFailuresRef.current = 0;
+            nextLogsRetryAtRef.current = 0;
+        }
+        setAutoRefresh(nextValue);
     };
 
     const clearLogs = () => {
@@ -345,7 +429,7 @@ export default function AdminLogsPage() {
                                             <Button
                                                 variant={autoRefresh ? "default" : "outline"}
                                                 size="sm"
-                                                onClick={() => setAutoRefresh(!autoRefresh)}
+                                                onClick={toggleAutoRefresh}
                                             >
                                                 {autoRefresh ? (
                                                     <>
@@ -370,7 +454,11 @@ export default function AdminLogsPage() {
                                 </CardContent>
                             </Card>
 
-                            <Tabs defaultValue="activity" className="space-y-4">
+                            <Tabs
+                                value={activeTab}
+                                onValueChange={(value) => setActiveTab(value === "server" ? "server" : "activity")}
+                                className="space-y-4"
+                            >
                                 <TabsList className="grid w-full max-w-md grid-cols-2">
                                     <TabsTrigger value="activity" className="flex items-center gap-2">
                                         <Users className="w-4 h-4" />
@@ -488,7 +576,7 @@ export default function AdminLogsPage() {
                                             <Button
                                                 variant="outline"
                                                 size="sm"
-                                                onClick={() => fetchLogs(false)}
+                                                onClick={() => void fetchLogs(false, { force: true })}
                                                 disabled={!selectedDeploymentId || logsLoading}
                                             >
                                                 <RefreshCw className={`w-4 h-4 mr-2 ${logsLoading ? "animate-spin" : ""}`} />

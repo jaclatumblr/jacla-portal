@@ -285,7 +285,15 @@ export function StagePlotEditor({
   };
 
   const removeItem = (id: string) => {
+    const targetItem = normalizedItems.find((item) => item.id === id);
+    if (!targetItem) return false;
+
+    if (!window.confirm(`配置図から機材「${targetItem.label}」を削除しますか？`)) {
+      return false;
+    }
+
     setNormalizedItems(normalizedItems.filter((item) => item.id !== id));
+    return true;
   };
 
   const resetDefaultItems = () => {
@@ -609,8 +617,9 @@ export function StagePlotEditor({
                           variant="destructive"
                           className="w-full"
                           onClick={() => {
-                            removeItem(editingItem.id);
-                            setEditingItem(null);
+                            if (removeItem(editingItem.id)) {
+                              setEditingItem(null);
+                            }
                           }}
                         >
                           <Trash2 className="mr-2 h-4 w-4" />

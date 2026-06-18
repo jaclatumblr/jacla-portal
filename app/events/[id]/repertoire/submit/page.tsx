@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
+import { useRoleFlags } from "@/lib/useRoleFlags";
 import { useRepertoireData } from "./hooks/useRepertoireData";
 import { useRepertoireSave } from "./hooks/useRepertoireSave";
 import { useMetadata } from "./hooks/useMetadata";
@@ -26,8 +27,10 @@ export default function RepertoireSubmitPage() {
   const eventId = typeof params?.id === "string" ? params.id : "";
   const searchParams = useSearchParams();
   const { session } = useAuth();
+  const { isAdmin, loading: roleLoading } = useRoleFlags();
   const userId = session?.user.id;
   const initialBandId = searchParams?.get("bandId");
+  const hasAdminAccess = isAdmin;
 
   const {
     loading,
@@ -51,7 +54,10 @@ export default function RepertoireSubmitPage() {
     setBand,
     setSelectedBandId,
     refreshData,
-  } = useRepertoireData(eventId, userId, { initialBandId });
+  } = useRepertoireData(eventId, userId, {
+    adminMode: hasAdminAccess,
+    initialBandId,
+  });
 
   const { saving, saveRepertoire } = useRepertoireSave({
     band,
@@ -63,6 +69,8 @@ export default function RepertoireSubmitPage() {
     refreshData,
     submitDeadline: event?.repertoire_deadline ?? null,
     submitClosed: Boolean(event?.repertoire_is_closed),
+    canBypassDeadline: hasAdminAccess,
+    canBypassClose: hasAdminAccess,
   });
 
   const { fetchMetadata } = useMetadata();
@@ -126,7 +134,15 @@ export default function RepertoireSubmitPage() {
     await saveRepertoire("submitted");
   };
 
-  if (loading) {
+  const handleResetRepertoire = () => {
+    if (!window.confirm("レパ表を保存済みの内容に戻します。未保存の変更は消えます。よろしいですか？")) {
+      return;
+    }
+
+    refreshData();
+  };
+
+  if (roleLoading || loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -161,10 +177,10 @@ export default function RepertoireSubmitPage() {
             lastSavedAt={lastSavedAt}
             saving={saving}
             onSave={saveRepertoire}
-            onReset={() => refreshData()}
+            onReset={handleResetRepertoire}
             showReset
-            submitDisabled={isManualClosed || isDeadlinePassed}
-            submitDisabledReason={submitDisabledReason}
+            submitDisabled={!hasAdminAccess && (isManualClosed || isDeadlinePassed)}
+            submitDisabledReason={hasAdminAccess ? null : submitDisabledReason}
           />
 
           <section className="pb-12 md:pb-16">

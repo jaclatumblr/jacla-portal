@@ -115,7 +115,7 @@ const slotPhaseLabel = (slot: SlotRow) => {
     return note;
   }
   if (slot.slot_phase === "rehearsal_normal") return "\u901A\u5E38\u30EA\u30CF";
-  if (slot.slot_phase === "rehearsal_pre") return "\u524D\u65E5\u30EA\u30CF";
+  if (slot.slot_phase === "rehearsal_pre") return "\u76F4\u524D\u30EA\u30CF";
   return "\u672C\u756A";
 };
 

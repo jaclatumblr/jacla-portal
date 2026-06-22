@@ -54,6 +54,13 @@ type SlotManagerProps = {
     onBandSelect?: (bandId: string | null) => void;
 };
 
+type RehearsalPhase = "rehearsal_normal" | "rehearsal_pre";
+
+const isRehearsalPhase = (
+    phase: EventSlot["slot_phase"] | null | undefined
+): phase is RehearsalPhase =>
+    phase === "rehearsal_normal" || phase === "rehearsal_pre";
+
 // Sortable Item Component
 type SortableItemRenderProps = {
     attributes: DraggableAttributes;
@@ -113,7 +120,7 @@ export function SlotManager({
         event.normal_rehearsal_order ?? "same"
     );
     const [savingRehearsalOrder, setSavingRehearsalOrder] = useState(false);
-    const [rehearsalPhase, setRehearsalPhase] = useState<"rehearsal_normal" | "rehearsal_pre">(
+    const [rehearsalPhase, setRehearsalPhase] = useState<RehearsalPhase>(
         "rehearsal_normal"
     );
 
@@ -372,7 +379,7 @@ export function SlotManager({
         const bandId = slot.band_id ?? null;
         if (!bandId) return null;
         const phase = slot.slot_phase ?? "show";
-        return phase === "rehearsal_normal" || phase === "rehearsal_pre"
+        return isRehearsalPhase(phase)
             ? durationMaps.rehearsal.get(bandId) ?? durationMaps.show.get(bandId) ?? null
             : durationMaps.show.get(bandId) ?? null;
     };
@@ -455,6 +462,16 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
 
     useEffect(() => {
         slotsRef.current = cloneSlotsSnapshot(slots);
+    }, [slots]);
+
+    useEffect(() => {
+        const hasPreRehearsal = slots.some((slot) => slot.slot_phase === "rehearsal_pre");
+        const hasNormalRehearsal = slots.some((slot) => slot.slot_phase === "rehearsal_normal");
+        if (hasPreRehearsal && !hasNormalRehearsal) {
+            setRehearsalPhase("rehearsal_pre");
+        } else if (hasNormalRehearsal && !hasPreRehearsal) {
+            setRehearsalPhase("rehearsal_normal");
+        }
     }, [slots]);
 
     useEffect(() => {
@@ -833,7 +850,7 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
     };
 
     const applyRehearsalSort = (
-        phase: "rehearsal_normal" | "rehearsal_pre",
+        phase: RehearsalPhase,
         order: "same" | "reverse"
     ) => {
         if (bands.length === 0) return;
@@ -899,9 +916,25 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
         setSavingRehearsalOrder(false);
     };
 
-    const handleRehearsalPhaseChange = (nextPhase: "rehearsal_normal" | "rehearsal_pre") => {
+    const handleRehearsalPhaseChange = (nextPhase: RehearsalPhase) => {
         if (nextPhase === rehearsalPhase) return;
+        const previousPhase = rehearsalPhase;
         setRehearsalPhase(nextPhase);
+
+        const currentSlots = sortSlotsByOrder(slotsRef.current);
+        const hasPreviousPhaseSlots = currentSlots.some(
+            (slot) => slot.slot_phase === previousPhase
+        );
+        const hasNextPhaseSlots = currentSlots.some((slot) => slot.slot_phase === nextPhase);
+        if (hasPreviousPhaseSlots && !hasNextPhaseSlots) {
+            applySlotsUpdate((prev) =>
+                sortSlotsByOrder(prev).map((slot) =>
+                    slot.slot_phase === previousPhase ? { ...slot, slot_phase: nextPhase } : slot
+                )
+            );
+            return;
+        }
+
         applyRehearsalSort(nextPhase, rehearsalOrder);
     };
 
@@ -1172,16 +1205,38 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                 const { Workbook } = await import("exceljs");
                 const workbook = new Workbook();
                 const sheet = workbook.addWorksheet("Sheet1");
+                const exportFontSize = {
+                    title: 18,
+                    header: 13,
+                    section: 13,
+                    body: 12,
+                };
 
                 sheet.columns = [
                     { width: 8 },
-                    { width: 34 },
-                    { width: 11 },
+                    { width: 40 },
+                    { width: 12 },
                     { width: 8 },
-                    { width: 10 },
+                    { width: 11 },
                     { width: 4 },
-                    { width: 10 },
+                    { width: 11 },
                 ];
+                sheet.properties.defaultRowHeight = 24;
+                sheet.pageSetup = {
+                    paperSize: 9,
+                    orientation: "landscape",
+                    fitToPage: true,
+                    fitToWidth: 1,
+                    fitToHeight: 0,
+                    margins: {
+                        top: 0.3,
+                        left: 0.25,
+                        bottom: 0.3,
+                        right: 0.25,
+                        header: 0.15,
+                        footer: 0.15,
+                    },
+                };
 
                 const bandNameMap = new Map(bands.map((band) => [band.id, band.name]));
                 const memberCountMap = new Map<string, number>();
@@ -1229,18 +1284,20 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                     "\u7D42\u4E86\u6642\u9593",
                 ]);
 
-                titleRow.height = 28;
+                titleRow.height = 34;
                 titleRow.eachCell((cell) => {
-                    cell.font = { bold: true, size: 14, color: { argb: palette.titleFg } };
+                    cell.font = { bold: true, size: exportFontSize.title, color: { argb: palette.titleFg } };
                     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: palette.titleBg } };
                     cell.alignment = { horizontal: "center", vertical: "middle" };
                 });
+                headerRow.height = 26;
                 headerRow.eachCell((cell, col) => {
-                    cell.font = { bold: true, color: { argb: palette.headerFg } };
+                    cell.font = { bold: true, size: exportFontSize.header, color: { argb: palette.headerFg } };
                     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: palette.headerBg } };
                     cell.alignment = {
                         horizontal: col === 2 ? "left" : "center",
                         vertical: "middle",
+                        wrapText: true,
                     };
                     cell.border = {
                         top: { style: "thin", color: { argb: palette.border } },
@@ -1257,7 +1314,7 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                         currentSection = section;
                         const sectionRow = sheet.addRow(["", section, "", "", "", "", ""]);
                         sheet.mergeCells(`B${sectionRow.number}:G${sectionRow.number}`);
-                        sectionRow.height = 22;
+                        sectionRow.height = 26;
                         sectionRow.eachCell((cell, col) => {
                             if (section === "\u672C\u756A") {
                                 cell.fill = {
@@ -1272,7 +1329,7 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                                     fgColor: { argb: col === 1 ? palette.sectionRehearsalA : palette.sectionRehearsal },
                                 };
                             }
-                            cell.font = { bold: true, color: { argb: palette.headerFg } };
+                            cell.font = { bold: true, size: exportFontSize.section, color: { argb: palette.headerFg } };
                             cell.alignment = { horizontal: col === 1 ? "center" : "left", vertical: "middle" };
                             cell.border = {
                                 top: { style: "thin", color: { argb: palette.border } },
@@ -1320,11 +1377,18 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                         fillArgb = palette.otherRow;
                     }
 
+                    row.height = 24;
                     row.eachCell((cell, col) => {
                         cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fillArgb } };
+                        cell.font = {
+                            size: exportFontSize.body,
+                            bold: col === 1 && Boolean(bandNo),
+                            color: { argb: palette.headerFg },
+                        };
                         cell.alignment = {
                             horizontal: col === 2 ? "left" : "center",
                             vertical: "middle",
+                            wrapText: col === 2,
                         };
                         cell.border = {
                             top: { style: "thin", color: { argb: palette.border } },
@@ -1493,7 +1557,7 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
             event_id: event.id,
             band_id: null,
             slot_type: "other",
-            slot_phase: "rehearsal_normal",
+            slot_phase: rehearsalPhase,
             order_in_event: orderIndex++,
             start_time: prepStart,
             end_time: prepEnd,
@@ -1732,7 +1796,7 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                                     variant="outline"
                                     size="sm"
                                     className="w-24"
-                                    onClick={() => handleAddSpecialSlot(PREP_NOTE, "rehearsal_normal")}
+                                    onClick={() => handleAddSpecialSlot(PREP_NOTE, rehearsalPhase)}
                                 >
                                     準備追加
                                 </Button>

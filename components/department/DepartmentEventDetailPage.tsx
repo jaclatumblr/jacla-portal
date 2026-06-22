@@ -33,7 +33,12 @@ import { InstructionPanel } from "@/components/instructions/InstructionPanel";
 import { instructionTheme, type InstructionRole } from "@/components/instructions/theme";
 import { phaseLabel, slotTimeLabel } from "@/components/instructions/helpers";
 import { DepartmentBandSubmissionDetail } from "@/components/department/DepartmentBandSubmissionDetail";
-import { applyStagePlotAssignments, readStagePlotData } from "@/lib/stagePlot";
+import {
+  STATIC_STAGE_MARKERS,
+  applyStagePlotAssignments,
+  applyStagePlotMemberPositions,
+  readStagePlotData,
+} from "@/lib/stagePlot";
 import { downloadShiftStaffExcel } from "@/lib/shiftStaffExport";
 import {
   BandMemberDetail,
@@ -96,6 +101,8 @@ type BandMemberQueryRow = {
 
 const dateLabel = (value: string | null) => (value ? value.slice(0, 10) : "");
 const clampPercent = (value: number) => Math.min(95, Math.max(5, value));
+const clampPrintStagePercent = (value: number) =>
+  Math.min(100, Math.max(0, Number.isFinite(value) ? value : 50));
 const hasText = (value: string | null | undefined) => Boolean(value?.trim());
 const printText = (value: string | null | undefined) => (hasText(value) ? value!.trim() : "-");
 const PA_SHIFT_ROLES = [
@@ -205,8 +212,7 @@ export function DepartmentEventDetailPage({
   const [loading, setLoading] = useState(true);
   const [manualSelectedBandId, setManualSelectedBandId] = useState<string | null>(null);
   const [mobileTab, setMobileTab] = useState<"detail" | "timeline">("detail");
-  const printSheetRef = useRef<HTMLDivElement | null>(null);
-  const printFitContentRef = useRef<HTMLDivElement | null>(null);
+  const printAreaRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!eventId) return;
@@ -513,17 +519,6 @@ export function DepartmentEventDetailPage({
   const activeSongs = activeBand ? songsByBand[activeBand.id] ?? [] : [];
   const activeStagePlots = activeBand ? stagePlotsByBand[activeBand.id] ?? [] : [];
   const activeStageMembers = activeBand ? stageMembersByBand[activeBand.id] ?? [] : [];
-  const activeStagePlotNameById = Object.fromEntries(
-    activeStagePlots.map((plot) => [plot.id, plot.name])
-  );
-  const activeCarryInEntries = activeMemberDetails.filter((member) => hasText(member.monitorNote));
-  const activeMonitorEntries = activeMemberDetails.filter((member) => hasText(member.monitorRequest));
-  const activeSongCount = activeSongs.filter((song) => song.entry_type !== "mc").length;
-  const activeMcCount = activeSongs.length - activeSongCount;
-  const activePaMemoCount = activeSongs.filter((song) => hasText(song.memo)).length;
-  const activeLightingCueCount = activeSongs.filter(
-    (song) => song.entry_type !== "mc" && hasLightingCue(song)
-  ).length;
   const shiftRoles = role === "pa" ? PA_SHIFT_ROLES : LIGHTING_SHIFT_ROLES;
   const summaryShiftRoles =
     role === "pa"
@@ -557,6 +552,69 @@ export function DepartmentEventDetailPage({
     });
     return next;
   }, [activeBandSlots, slotAssignmentsBySlot]);
+  const printBandContexts = useMemo(() => {
+    const seenBandIds = new Set<string>();
+
+    return availableBandIds.flatMap((bandId) => {
+      if (seenBandIds.has(bandId)) return [];
+      seenBandIds.add(bandId);
+
+      const band = bandsById[bandId];
+      if (!band) return [];
+
+      const bandSlots = slots.filter((slot) => slot.slot_type === "band" && slot.band_id === band.id);
+      const memberDetails = memberDetailsByBand[band.id] ?? [];
+      const songs = songsByBand[band.id] ?? [];
+      const stagePlots = stagePlotsByBand[band.id] ?? [];
+      const stageMembers = stageMembersByBand[band.id] ?? [];
+      const stagePlotNameById = Object.fromEntries(stagePlots.map((plot) => [plot.id, plot.name]));
+      const printStagePlot =
+        stagePlots.find((plot) => songs.some((song) => song.stagePlotId === plot.id)) ??
+        stagePlots[0] ??
+        null;
+      const printStageMembers = printStagePlot
+        ? applyStagePlotMemberPositions(stageMembers, printStagePlot.memberPositions)
+        : stageMembers.map((member) => ({ ...member }));
+      const shiftAssignmentsBySlotForBand = Object.fromEntries(
+        bandSlots.map((slot) => [slot.id, slotAssignmentsBySlot[slot.id] ?? []])
+      );
+      const carryInEntries = memberDetails.filter((member) => hasText(member.monitorNote));
+      const monitorEntries = memberDetails.filter((member) => hasText(member.monitorRequest));
+      const songCount = songs.filter((song) => song.entry_type !== "mc").length;
+      const mcCount = songs.length - songCount;
+
+      return [
+        {
+          band,
+          bandSlots,
+          memberDetails,
+          songs,
+          stagePlots,
+          stagePlotNameById,
+          printStagePlot,
+          printStageMembers,
+          shiftAssignmentsBySlotForBand,
+          carryInEntries,
+          monitorEntries,
+          songCount,
+          mcCount,
+          paMemoCount: songs.filter((song) => hasText(song.memo)).length,
+          lightingCueCount: songs.filter(
+            (song) => song.entry_type !== "mc" && hasLightingCue(song)
+          ).length,
+        },
+      ];
+    });
+  }, [
+    availableBandIds,
+    bandsById,
+    memberDetailsByBand,
+    slotAssignmentsBySlot,
+    slots,
+    songsByBand,
+    stageMembersByBand,
+    stagePlotsByBand,
+  ]);
   const bandShiftItems = useMemo(() => {
     const grouped = new Map<string, SlotRow[]>();
 
@@ -670,25 +728,32 @@ export function DepartmentEventDetailPage({
     });
   };
   const fitPrintToOnePage = async () => {
-    const sheet = printSheetRef.current;
-    const content = printFitContentRef.current;
-    if (!sheet || !content) return;
+    const sheets = Array.from(
+      printAreaRef.current?.querySelectorAll<HTMLElement>(".department-print-sheet") ?? []
+    );
+    if (sheets.length === 0) return;
 
-    sheet.style.setProperty("--department-print-scale", "1");
+    sheets.forEach((sheet) => {
+      sheet.style.setProperty("--department-print-scale", "1");
+    });
 
     for (let i = 0; i < 4; i += 1) {
       await waitForPrintLayout();
-      const sheetWidth = sheet.clientWidth || 1;
-      const sheetHeight = sheet.clientHeight || 1;
-      const contentWidth = Math.max(content.scrollWidth, content.offsetWidth, 1);
-      const contentHeight = Math.max(content.scrollHeight, content.offsetHeight, 1);
-      const scale = Math.min(1, sheetWidth / contentWidth, sheetHeight / contentHeight);
-      sheet.style.setProperty("--department-print-scale", String(Number(scale.toFixed(4))));
+      sheets.forEach((sheet) => {
+        const content = sheet.querySelector<HTMLElement>(".department-print-fit-content");
+        if (!content) return;
+        const sheetWidth = sheet.clientWidth || 1;
+        const sheetHeight = sheet.clientHeight || 1;
+        const contentWidth = Math.max(content.scrollWidth, content.offsetWidth, 1);
+        const contentHeight = Math.max(content.scrollHeight, content.offsetHeight, 1);
+        const scale = Math.min(1, sheetWidth / contentWidth, sheetHeight / contentHeight);
+        sheet.style.setProperty("--department-print-scale", String(Number(scale.toFixed(4))));
+      });
     }
   };
   const handlePrintBandDetail = () => {
-    if (!activeBand) {
-      toast.error("印刷するバンドを選択してください。");
+    if (printBandContexts.length === 0) {
+      toast.error("印刷するバンドがありません。");
       return;
     }
 
@@ -702,7 +767,9 @@ export function DepartmentEventDetailPage({
       } else {
         delete document.body.dataset.printMode;
       }
-      printSheetRef.current?.style.removeProperty("--department-print-scale");
+      printAreaRef.current
+        ?.querySelectorAll<HTMLElement>(".department-print-sheet")
+        .forEach((sheet) => sheet.style.removeProperty("--department-print-scale"));
       window.removeEventListener("afterprint", cleanup);
     };
 
@@ -1010,6 +1077,306 @@ export function DepartmentEventDetailPage({
       </div>
     );
   const bandDetailContent = renderBandDetailContent();
+  const renderPrintBandPage = (printBand: (typeof printBandContexts)[number]) => {
+    const printStageMarkers = printBand.printStageMembers.some((member) => member.isMc)
+      ? [...STATIC_STAGE_MARKERS, { id: "mc-area", label: "MC", x: 50, y: 75, kind: "monitor" as const }]
+      : STATIC_STAGE_MARKERS;
+    const stagePlotSection = (
+      <section className="department-print-card">
+        <h2>配置図</h2>
+        <p className="department-print-stage-caption">
+          {printBand.printStagePlot?.name ??
+            (printBand.printStageMembers.length > 0 ? "配置図" : "-")}
+        </p>
+        <div className="department-print-stage-plot">
+          {printBand.printStagePlot || printBand.printStageMembers.length > 0 ? (
+            <>
+              <span className="department-print-stage-axis department-print-stage-axis-back">
+                舞台奥
+              </span>
+              <span className="department-print-stage-axis department-print-stage-axis-left">
+                下手
+              </span>
+              <span className="department-print-stage-axis department-print-stage-axis-right">
+                上手
+              </span>
+              <span className="department-print-stage-axis department-print-stage-axis-front">
+                客席
+              </span>
+              {printStageMarkers.map((marker) => (
+                <span
+                  key={`print-stage-marker-${printBand.band.id}-${marker.id}`}
+                  className={cn(
+                    "department-print-stage-marker",
+                    marker.kind === "main" && "department-print-stage-marker-main"
+                  )}
+                  style={{
+                    left: `${clampPrintStagePercent(marker.x)}%`,
+                    top: `${clampPrintStagePercent(marker.y)}%`,
+                  }}
+                >
+                  {marker.label}
+                </span>
+              ))}
+              {printBand.printStagePlot?.items.map((item) => (
+                <span
+                  key={`print-stage-item-${printBand.band.id}-${item.id}`}
+                  className={cn(
+                    "department-print-stage-item",
+                    item.variant === "backline" || item.variant === "split-backline"
+                      ? "department-print-stage-item-backline"
+                      : "department-print-stage-item-circle",
+                    item.dashed && "department-print-stage-item-dashed"
+                  )}
+                  style={{
+                    left: `${clampPrintStagePercent(item.x)}%`,
+                    top: `${clampPrintStagePercent(item.y)}%`,
+                  }}
+                >
+                  {item.label}
+                </span>
+              ))}
+              {printBand.printStageMembers.map((member) => (
+                <span
+                  key={`print-stage-member-${printBand.band.id}-${member.id}`}
+                  className="department-print-stage-member"
+                  style={{
+                    left: `${clampPrintStagePercent(member.x)}%`,
+                    top: `${clampPrintStagePercent(member.y)}%`,
+                  }}
+                >
+                  <strong>{member.instrument || "Part"}</strong>
+                  <em>{member.name}</em>
+                  {member.isMc ? <b>MC</b> : null}
+                </span>
+              ))}
+            </>
+          ) : (
+            <span className="department-print-stage-empty">配置データなし</span>
+          )}
+        </div>
+      </section>
+    );
+
+    return (
+      <div key={`department-print-sheet-${printBand.band.id}`} className="department-print-sheet">
+        <div className="department-print-fit">
+          <div className="department-print-fit-content">
+            <article className="department-print-one-page">
+              <header className="department-print-compact-header">
+                <div>
+                  <p className="department-print-kicker">{config.label} A4一枚</p>
+                  <h1 className="department-print-title">{event?.name ?? config.noteTitle}</h1>
+                  <p className="department-print-subtitle">{printBand.band.name}</p>
+                </div>
+                <dl className="department-print-meta">
+                  <div>
+                    <dt>日付</dt>
+                    <dd>{dateLabel(event?.date ?? null) || "-"}</dd>
+                  </div>
+                  <div>
+                    <dt>会場</dt>
+                    <dd>{event?.venue ?? "-"}</dd>
+                  </div>
+                  <div>
+                    <dt>集合</dt>
+                    <dd>
+                      {event?.assembly_time
+                        ? formatTimeText(event.assembly_time) ?? event.assembly_time
+                        : "-"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>開場 / 開演</dt>
+                    <dd>
+                      {[
+                        event?.open_time ? formatTimeText(event.open_time) ?? event.open_time : null,
+                        event?.start_time ? formatTimeText(event.start_time) ?? event.start_time : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" / ") || "-"}
+                    </dd>
+                  </div>
+                </dl>
+              </header>
+
+              <div className="department-print-stats">
+                <span>代表者: {printText(printBand.band.representative_name)}</span>
+                <span>枠: {printBand.bandSlots.length}</span>
+                <span>メンバー: {printBand.memberDetails.length}</span>
+                <span>
+                  曲: {printBand.songCount} / MC: {printBand.mcCount}
+                </span>
+                <span>返し: {printBand.monitorEntries.length}</span>
+                <span>持込: {printBand.carryInEntries.length}</span>
+                <span>PAメモ: {printBand.paMemoCount}</span>
+                <span>照明キュー: {printBand.lightingCueCount}</span>
+                {printBand.band.lighting_total_min != null ? (
+                  <span>照明打合せ: {printBand.band.lighting_total_min}分</span>
+                ) : null}
+              </div>
+
+              <div className="department-print-columns">
+                <div className="department-print-column">
+                  <section className="department-print-card">
+                    <h2>進行 / 打合せ</h2>
+                    <table className="department-print-table">
+                      <tbody>
+                        {printBand.bandSlots.length === 0 ? (
+                          <tr>
+                            <td>バンド枠なし</td>
+                          </tr>
+                        ) : (
+                          printBand.bandSlots.map((slot) => (
+                            <tr key={`print-slot-${printBand.band.id}-${slot.id}`}>
+                              <th>{phaseLabel(slot.slot_phase)}</th>
+                              <td>{slotTimeLabel(slot)}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </section>
+
+                  <section className="department-print-card">
+                    <h2>{role === "pa" ? "PAシフト" : "照明シフト"}</h2>
+                    <table className="department-print-table">
+                      <tbody>
+                        {shiftRoles.map((shiftRole) => {
+                          const profileIds = Array.from(
+                            new Set(
+                              printBand.bandSlots.flatMap((slot) =>
+                                (printBand.shiftAssignmentsBySlotForBand[slot.id] ?? [])
+                                  .filter((assignment) => assignment.role === shiftRole.value)
+                                  .map((assignment) => assignment.profile_id)
+                                  .filter((profileId): profileId is string => Boolean(profileId))
+                              )
+                            )
+                          );
+
+                          return (
+                            <tr key={`print-shift-${printBand.band.id}-${shiftRole.value}`}>
+                              <th>{shiftRole.label}</th>
+                              <td>
+                                {profileIds.length > 0
+                                  ? profileIds.map((profileId) => displayShiftProfileName(profileId)).join(" / ")
+                                  : "未割当"}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </section>
+
+                  <section className="department-print-card">
+                    <h2>メンバー / 返し / 持込</h2>
+                    <table className="department-print-table department-print-member-table">
+                      <thead>
+                        <tr>
+                          <th>Part</th>
+                          <th>名前</th>
+                          <th>返し</th>
+                          <th>持込</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {printBand.memberDetails.length === 0 ? (
+                          <tr>
+                            <td colSpan={4}>メンバー情報なし</td>
+                          </tr>
+                        ) : (
+                          printBand.memberDetails.map((member, index) => (
+                            <tr key={`print-member-${printBand.band.id}-${member.id}`}>
+                              <td>
+                                {member.instrument || `Part ${index + 1}`}
+                                {member.isMc ? " / MC" : ""}
+                              </td>
+                              <td>{member.name}</td>
+                              <td>{printText(member.monitorRequest)}</td>
+                              <td>{printText(member.monitorNote)}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </section>
+                </div>
+
+                <div className="department-print-column">
+                  {stagePlotSection}
+
+                  <section className="department-print-card">
+                    <h2>共通メモ</h2>
+                    <p className="department-print-note">{printText(printBand.band.general_note)}</p>
+                  </section>
+
+                  <section className="department-print-card department-print-notes-grid">
+                    <div>
+                      <h2>PAへの指示</h2>
+                      <p className="department-print-note">{printText(printBand.band.sound_note)}</p>
+                    </div>
+                    <div>
+                      <h2>照明への指示</h2>
+                      <p className="department-print-note">{printText(printBand.band.lighting_note)}</p>
+                    </div>
+                  </section>
+
+                  <section className="department-print-card department-print-setlist-card">
+                    <h2>セットリスト詳細</h2>
+                    <table className="department-print-table department-print-setlist-table">
+                      <thead>
+                        <tr>
+                          <th>#</th>
+                          <th>曲 / MC</th>
+                          <th>分</th>
+                          <th>配置</th>
+                          <th>補足</th>
+                          <th>PA</th>
+                          <th>照明</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {printBand.songs.length === 0 ? (
+                          <tr>
+                            <td colSpan={7}>セットリストなし</td>
+                          </tr>
+                        ) : (
+                          printBand.songs.map((song, index) => {
+                            const assignedPlotName =
+                              song.stagePlotId && printBand.stagePlotNameById[song.stagePlotId]
+                                ? printBand.stagePlotNameById[song.stagePlotId]
+                                : printBand.stagePlots.length > 1
+                                  ? "未指定"
+                                  : printBand.stagePlots[0]?.name ?? "-";
+
+                            return (
+                              <tr key={`print-song-${printBand.band.id}-${song.id}`}>
+                                <td>{index + 1}</td>
+                                <td>
+                                  <strong>{song.entry_type === "mc" ? "MC" : songTitle(song)}</strong>
+                                  {hasText(song.artist) ? <span> / {song.artist!.trim()}</span> : null}
+                                </td>
+                                <td>{formatDuration(song.duration_sec)}</td>
+                                <td>{assignedPlotName}</td>
+                                <td>{printText(song.arrangement_note)}</td>
+                                <td>{printText(song.memo)}</td>
+                                <td>{formatLightingSummary(song)}</td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </section>
+                </div>
+              </div>
+            </article>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <AuthGuard>
@@ -1065,10 +1432,10 @@ export function DepartmentEventDetailPage({
                   variant="outline"
                   className="print-hide"
                   onClick={handlePrintBandDetail}
-                  disabled={!activeBand}
+                  disabled={printBandContexts.length === 0}
                 >
                   <Printer className="h-4 w-4" />
-                  A4印刷 / PDF
+                  全バンド A4印刷 / PDF
                 </Button>
               ) : undefined
             }
@@ -1129,249 +1496,9 @@ export function DepartmentEventDetailPage({
                 </>
               )}
 
-              {!isShiftOverview && activeBand ? (
-                <div className="department-print-area hidden" aria-hidden="true">
-                  <div ref={printSheetRef} className="department-print-sheet">
-                    <div className="department-print-fit">
-                      <div ref={printFitContentRef} className="department-print-fit-content">
-                        <article className="department-print-one-page">
-                          <header className="department-print-compact-header">
-                            <div>
-                              <p className="department-print-kicker">{config.label} A4一枚</p>
-                              <h1 className="department-print-title">
-                                {event?.name ?? config.noteTitle}
-                              </h1>
-                              <p className="department-print-subtitle">{activeBand.name}</p>
-                            </div>
-                            <dl className="department-print-meta">
-                              <div>
-                                <dt>日付</dt>
-                                <dd>{dateLabel(event?.date ?? null) || "-"}</dd>
-                              </div>
-                              <div>
-                                <dt>会場</dt>
-                                <dd>{event?.venue ?? "-"}</dd>
-                              </div>
-                              <div>
-                                <dt>集合</dt>
-                                <dd>
-                                  {event?.assembly_time
-                                    ? formatTimeText(event.assembly_time) ?? event.assembly_time
-                                    : "-"}
-                                </dd>
-                              </div>
-                              <div>
-                                <dt>開場 / 開演</dt>
-                                <dd>
-                                  {[
-                                    event?.open_time
-                                      ? formatTimeText(event.open_time) ?? event.open_time
-                                      : null,
-                                    event?.start_time
-                                      ? formatTimeText(event.start_time) ?? event.start_time
-                                      : null,
-                                  ]
-                                    .filter(Boolean)
-                                    .join(" / ") || "-"}
-                                </dd>
-                              </div>
-                            </dl>
-                          </header>
-
-                          <div className="department-print-stats">
-                            <span>代表者: {printText(activeBand.representative_name)}</span>
-                            <span>枠: {activeBandSlots.length}</span>
-                            <span>メンバー: {activeMemberDetails.length}</span>
-                            <span>曲: {activeSongCount} / MC: {activeMcCount}</span>
-                            <span>返し: {activeMonitorEntries.length}</span>
-                            <span>持込: {activeCarryInEntries.length}</span>
-                            <span>PAメモ: {activePaMemoCount}</span>
-                            <span>照明キュー: {activeLightingCueCount}</span>
-                            {activeBand.lighting_total_min != null ? (
-                              <span>照明打合せ: {activeBand.lighting_total_min}分</span>
-                            ) : null}
-                          </div>
-
-                          <div className="department-print-columns">
-                            <div className="department-print-column">
-                              <section className="department-print-card">
-                                <h2>進行 / 打合せ</h2>
-                                <table className="department-print-table">
-                                  <tbody>
-                                    {activeBandSlots.length === 0 ? (
-                                      <tr>
-                                        <td>バンド枠なし</td>
-                                      </tr>
-                                    ) : (
-                                      activeBandSlots.map((slot) => (
-                                        <tr key={`print-slot-${slot.id}`}>
-                                          <th>{phaseLabel(slot.slot_phase)}</th>
-                                          <td>{slotTimeLabel(slot)}</td>
-                                        </tr>
-                                      ))
-                                    )}
-                                  </tbody>
-                                </table>
-                              </section>
-
-                              <section className="department-print-card">
-                                <h2>{role === "pa" ? "PAシフト" : "照明シフト"}</h2>
-                                <table className="department-print-table">
-                                  <tbody>
-                                    {shiftRoles.map((shiftRole) => {
-                                      const profileIds = Array.from(
-                                        new Set(
-                                          activeBandSlots.flatMap((slot) =>
-                                            (activeShiftAssignmentsBySlot[slot.id] ?? [])
-                                              .filter((assignment) => assignment.role === shiftRole.value)
-                                              .map((assignment) => assignment.profile_id)
-                                              .filter((profileId): profileId is string => Boolean(profileId))
-                                          )
-                                        )
-                                      );
-
-                                      return (
-                                        <tr key={`print-shift-${shiftRole.value}`}>
-                                          <th>{shiftRole.label}</th>
-                                          <td>
-                                            {profileIds.length > 0
-                                              ? profileIds.map((profileId) => displayShiftProfileName(profileId)).join(" / ")
-                                              : "未割当"}
-                                          </td>
-                                        </tr>
-                                      );
-                                    })}
-                                  </tbody>
-                                </table>
-                              </section>
-
-                              <section className="department-print-card">
-                                <h2>メンバー / 返し / 持込</h2>
-                                <table className="department-print-table department-print-member-table">
-                                  <thead>
-                                    <tr>
-                                      <th>Part</th>
-                                      <th>名前</th>
-                                      <th>返し</th>
-                                      <th>持込</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {activeMemberDetails.length === 0 ? (
-                                      <tr>
-                                        <td colSpan={4}>メンバー情報なし</td>
-                                      </tr>
-                                    ) : (
-                                      activeMemberDetails.map((member, index) => (
-                                        <tr key={`print-member-${member.id}`}>
-                                          <td>
-                                            {member.instrument || `Part ${index + 1}`}
-                                            {member.isMc ? " / MC" : ""}
-                                          </td>
-                                          <td>{member.name}</td>
-                                          <td>{printText(member.monitorRequest)}</td>
-                                          <td>{printText(member.monitorNote)}</td>
-                                        </tr>
-                                      ))
-                                    )}
-                                  </tbody>
-                                </table>
-                              </section>
-
-                              <section className="department-print-card">
-                                <h2>配置図</h2>
-                                <p className="department-print-note">
-                                  {activeStagePlots.length > 0
-                                    ? activeStagePlots.map((plot) => plot.name).join(" / ")
-                                    : activeStageMembers.length > 0
-                                      ? "配置図"
-                                      : "-"}
-                                </p>
-                                <div className="department-print-tags">
-                                  {activeStageMembers.length === 0 ? (
-                                    <span>配置メンバーなし</span>
-                                  ) : (
-                                    activeStageMembers.map((member) => (
-                                      <span key={`print-stage-member-${member.id}`}>
-                                        {member.instrument || "Part"}: {member.name}
-                                        {member.isMc ? " (MC)" : ""}
-                                      </span>
-                                    ))
-                                  )}
-                                </div>
-                              </section>
-                            </div>
-
-                            <div className="department-print-column">
-                              <section className="department-print-card">
-                                <h2>共通メモ</h2>
-                                <p className="department-print-note">{printText(activeBand.general_note)}</p>
-                              </section>
-
-                              <section className="department-print-card department-print-notes-grid">
-                                <div>
-                                  <h2>PAへの指示</h2>
-                                  <p className="department-print-note">{printText(activeBand.sound_note)}</p>
-                                </div>
-                                <div>
-                                  <h2>照明への指示</h2>
-                                  <p className="department-print-note">{printText(activeBand.lighting_note)}</p>
-                                </div>
-                              </section>
-
-                              <section className="department-print-card department-print-setlist-card">
-                                <h2>セットリスト詳細</h2>
-                                <table className="department-print-table department-print-setlist-table">
-                                  <thead>
-                                    <tr>
-                                      <th>#</th>
-                                      <th>曲 / MC</th>
-                                      <th>分</th>
-                                      <th>配置</th>
-                                      <th>補足</th>
-                                      <th>PA</th>
-                                      <th>照明</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {activeSongs.length === 0 ? (
-                                      <tr>
-                                        <td colSpan={7}>セットリストなし</td>
-                                      </tr>
-                                    ) : (
-                                      activeSongs.map((song, index) => {
-                                        const assignedPlotName =
-                                          song.stagePlotId && activeStagePlotNameById[song.stagePlotId]
-                                            ? activeStagePlotNameById[song.stagePlotId]
-                                            : activeStagePlots.length > 1
-                                              ? "未指定"
-                                              : activeStagePlots[0]?.name ?? "-";
-
-                                        return (
-                                          <tr key={`print-song-${song.id}`}>
-                                            <td>{index + 1}</td>
-                                            <td>
-                                              <strong>{song.entry_type === "mc" ? "MC" : songTitle(song)}</strong>
-                                              {hasText(song.artist) ? <span> / {song.artist!.trim()}</span> : null}
-                                            </td>
-                                            <td>{formatDuration(song.duration_sec)}</td>
-                                            <td>{assignedPlotName}</td>
-                                            <td>{printText(song.arrangement_note)}</td>
-                                            <td>{printText(song.memo)}</td>
-                                            <td>{formatLightingSummary(song)}</td>
-                                          </tr>
-                                        );
-                                      })
-                                    )}
-                                  </tbody>
-                                </table>
-                              </section>
-                            </div>
-                          </div>
-                        </article>
-                      </div>
-                    </div>
-                  </div>
+              {!isShiftOverview && printBandContexts.length > 0 ? (
+                <div ref={printAreaRef} className="department-print-area hidden" aria-hidden="true">
+                  {printBandContexts.map((printBand) => renderPrintBandPage(printBand))}
                 </div>
               ) : null}
             </div>

@@ -389,8 +389,8 @@ body[data-print-mode="department-detail"] .department-print-area {
   position: absolute !important;
   left: -10000px !important;
   top: 0 !important;
-  width: 190mm !important;
-  height: 277mm !important;
+  width: 202mm !important;
+  height: 289mm !important;
   overflow: hidden !important;
   pointer-events: none !important;
   visibility: hidden !important;
@@ -398,8 +398,8 @@ body[data-print-mode="department-detail"] .department-print-area {
 
 .department-print-sheet {
   --department-print-scale: 1;
-  width: 190mm;
-  height: 277mm;
+  width: 202mm;
+  height: 289mm;
   overflow: hidden;
   background: #fff;
   color: #111827;
@@ -418,29 +418,29 @@ body[data-print-mode="department-detail"] .department-print-area {
 .department-print-one-page {
   display: flex;
   flex-direction: column;
-  gap: 1.6mm;
+  gap: 0.8mm;
   font-family:
     Arial,
     "Yu Gothic",
     "Hiragino Kaku Gothic ProN",
     Meiryo,
     sans-serif;
-  font-size: 7.2px;
-  line-height: 1.24;
+  font-size: 11px;
+  line-height: 1.16;
   color: #111827;
 }
 
 .department-print-compact-header {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
-  gap: 3mm;
-  padding-bottom: 1.6mm;
+  gap: 1.8mm;
+  padding-bottom: 0.8mm;
   border-bottom: 1px solid #9ca3af;
 }
 
 .department-print-kicker {
-  margin: 0 0 0.8mm;
-  font-size: 6.8px;
+  margin: 0 0 0.5mm;
+  font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -449,16 +449,16 @@ body[data-print-mode="department-detail"] .department-print-area {
 
 .department-print-title {
   margin: 0;
-  font-size: 13px;
-  line-height: 1.15;
+  font-size: 18px;
+  line-height: 1.08;
   font-weight: 700;
   color: #111827;
 }
 
 .department-print-subtitle {
-  margin: 0.8mm 0 0;
-  font-size: 9px;
-  line-height: 1.2;
+  margin: 0.5mm 0 0;
+  font-size: 13px;
+  line-height: 1.12;
   font-weight: 700;
   color: #374151;
 }
@@ -466,9 +466,9 @@ body[data-print-mode="department-detail"] .department-print-area {
 .department-print-meta {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.9mm 2mm;
+  gap: 0.45mm 1.2mm;
   margin: 0;
-  font-size: 6.8px;
+  font-size: 9.8px;
 }
 
 .department-print-meta div {
@@ -481,7 +481,7 @@ body[data-print-mode="department-detail"] .department-print-area {
 }
 
 .department-print-meta dd {
-  margin: 0.3mm 0 0;
+  margin: 0.2mm 0 0;
   overflow-wrap: anywhere;
   color: #111827;
 }
@@ -489,7 +489,7 @@ body[data-print-mode="department-detail"] .department-print-area {
 .department-print-stats {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.8mm;
+  gap: 0.25mm;
 }
 
 .department-print-stats span,
@@ -498,7 +498,7 @@ body[data-print-mode="department-detail"] .department-print-area {
   align-items: center;
   border: 1px solid #d1d5db;
   border-radius: 999px;
-  padding: 0.45mm 1mm;
+  padding: 0.22mm 0.6mm;
   background: #f9fafb;
   color: #111827;
 }
@@ -506,7 +506,7 @@ body[data-print-mode="department-detail"] .department-print-area {
 .department-print-columns {
   display: grid;
   grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
-  gap: 1.6mm;
+  gap: 0.8mm;
   align-items: start;
 }
 
@@ -514,21 +514,21 @@ body[data-print-mode="department-detail"] .department-print-area {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 1.4mm;
+  gap: 0.65mm;
 }
 
 .department-print-card {
   min-width: 0;
   border: 1px solid #d1d5db;
-  border-radius: 1.2mm;
-  padding: 1.2mm;
+  border-radius: 0.9mm;
+  padding: 0.6mm;
   background: #fff;
 }
 
 .department-print-card h2 {
-  margin: 0 0 0.9mm;
-  font-size: 7.4px;
-  line-height: 1.15;
+  margin: 0 0 0.4mm;
+  font-size: 11.4px;
+  line-height: 1.08;
   font-weight: 700;
   color: #111827;
 }
@@ -542,13 +542,202 @@ body[data-print-mode="department-detail"] .department-print-area {
 .department-print-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.6mm;
+  gap: 0.22mm;
+}
+
+.department-print-stage-caption {
+  margin: 0 0 0.4mm;
+  font-size: 10.4px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: #111827;
+}
+
+.department-print-stage-plot {
+  position: relative;
+  width: 100%;
+  height: 56mm;
+  overflow: hidden;
+  border: 1.4px solid #111827;
+  border-radius: 0.8mm;
+  background:
+    linear-gradient(to right, rgba(17, 24, 39, 0.12) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(17, 24, 39, 0.12) 1px, transparent 1px),
+    #ffffff;
+  background-size:
+    5% 5%,
+    5% 5%,
+    auto;
+  color: #111827;
+}
+
+.department-print-stage-axis,
+.department-print-stage-marker,
+.department-print-stage-item,
+.department-print-stage-member,
+.department-print-stage-empty {
+  position: absolute;
+  z-index: 1;
+  box-sizing: border-box;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.department-print-stage-axis {
+  border: 1px solid #111827;
+  border-radius: 0.7mm;
+  padding: 0.2mm 0.8mm;
+  background: #ffffff;
+  font-size: 8.2px;
+  font-weight: 700;
+  line-height: 1;
+  color: #111827;
+}
+
+.department-print-stage-axis-back {
+  top: 1mm;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.department-print-stage-axis-left {
+  bottom: 1mm;
+  left: 1mm;
+}
+
+.department-print-stage-axis-right {
+  right: 1mm;
+  bottom: 1mm;
+}
+
+.department-print-stage-axis-front {
+  bottom: 1mm;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.department-print-stage-marker,
+.department-print-stage-item,
+.department-print-stage-member {
+  transform: translate(-50%, -50%);
+  text-align: center;
+  box-shadow: none;
+}
+
+.department-print-stage-marker {
+  display: inline-flex;
+  min-width: 9mm;
+  min-height: 4.6mm;
+  align-items: center;
+  justify-content: center;
+  border: 1.2px dashed #111827;
+  border-radius: 0.8mm;
+  padding: 0.3mm 0.7mm;
+  background: #f3f4f6;
+  font-size: 7.8px;
+  font-weight: 700;
+  line-height: 1;
+  color: #111827;
+}
+
+.department-print-stage-marker-main {
+  border-style: solid;
+  background: #e5e7eb;
+}
+
+.department-print-stage-item {
+  display: inline-flex;
+  max-width: 26mm;
+  align-items: center;
+  justify-content: center;
+  border: 1.2px solid #111827;
+  padding: 0.35mm 0.8mm;
+  background: #ffffff;
+  color: #111827;
+  font-size: 8.4px;
+  font-weight: 700;
+  line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.department-print-stage-item-circle {
+  width: 10.6mm;
+  height: 10.6mm;
+  border-radius: 999px;
+  padding: 0.2mm;
+}
+
+.department-print-stage-item-backline {
+  min-width: 15mm;
+  min-height: 6mm;
+  border-radius: 0.9mm;
+  background: #f9fafb;
+}
+
+.department-print-stage-item-dashed {
+  border-style: dashed;
+}
+
+.department-print-stage-member {
+  display: flex;
+  width: 10.4mm;
+  height: 10.4mm;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1.4px solid #111827;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.74);
+  color: #111827;
+  font-size: 7px;
+  font-weight: 700;
+  line-height: 0.98;
+  outline: 1px solid #111827;
+  outline-offset: 1px;
+}
+
+.department-print-stage-member strong,
+.department-print-stage-member em,
+.department-print-stage-member b {
+  display: block;
+  max-width: 9mm;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-style: normal;
+}
+
+.department-print-stage-member em {
+  margin-top: 0.15mm;
+  font-size: 5.7px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.department-print-stage-member b {
+  margin-top: 0.15mm;
+  border: 1px solid #111827;
+  border-radius: 999px;
+  padding: 0 0.45mm;
+  font-size: 5.2px;
+  color: #111827;
+}
+
+.department-print-stage-empty {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 10px;
+  font-weight: 700;
+  color: #111827;
 }
 
 .department-print-notes-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1.2mm;
+  gap: 0.5mm;
 }
 
 .department-print-table {
@@ -560,7 +749,7 @@ body[data-print-mode="department-detail"] .department-print-area {
 .department-print-table th,
 .department-print-table td {
   border: 1px solid #d1d5db;
-  padding: 0.65mm;
+  padding: 0.36mm;
   vertical-align: top;
   text-align: left;
   overflow-wrap: anywhere;
@@ -585,7 +774,7 @@ body[data-print-mode="department-detail"] .department-print-area {
 
 .department-print-setlist-table th,
 .department-print-setlist-table td {
-  padding: 0.55mm;
+  padding: 0.3mm;
 }
 
 .department-print-setlist-table th:nth-child(1),
@@ -612,7 +801,7 @@ body[data-print-mode="department-detail"] .department-print-area {
 @media print {
   @page {
     size: A4 portrait;
-    margin: 10mm;
+    margin: 4mm;
   }
 
   body {
@@ -646,11 +835,11 @@ body[data-print-mode="department-detail"] .department-print-area {
     display: block !important;
     position: absolute !important;
     inset: 0 auto auto 0 !important;
-    width: 190mm !important;
-    height: 277mm !important;
+    width: 202mm !important;
+    height: auto !important;
     margin: 0 !important;
     padding: 0 !important;
-    overflow: hidden !important;
+    overflow: visible !important;
     background: #fff !important;
     color: #111827 !important;
     -webkit-print-color-adjust: exact;
@@ -660,13 +849,23 @@ body[data-print-mode="department-detail"] .department-print-area {
   body[data-print-mode="department-detail"] .department-print-sheet {
     display: block !important;
     width: 100% !important;
-    height: 277mm !important;
+    height: 289mm !important;
     margin: 0 !important;
     padding: 0 !important;
     overflow: hidden !important;
     background: #fff !important;
-    page-break-after: avoid;
     page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  body[data-print-mode="department-detail"] .department-print-sheet:not(:last-child) {
+    page-break-after: always;
+    break-after: page;
+  }
+
+  body[data-print-mode="department-detail"] .department-print-sheet:last-child {
+    page-break-after: auto;
+    break-after: auto;
   }
 
   body[data-print-mode="department-detail"] .department-print-header {

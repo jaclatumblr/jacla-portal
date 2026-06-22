@@ -109,10 +109,30 @@ const slotTypeLabel = (slot: SlotRow) => {
   return "\u4ED8\u5E2F\u4F5C\u696D";
 };
 
-const slotPhaseLabel = (slot: SlotRow) => {
+const CONNECTED_PRE_SHOW_LABEL = "\u76F4\u524D\u30EA\u30CF\uFF0B\u672C\u756A";
+
+const isConnectedPreShowPair = (
+  rehearsalSlot: SlotRow | null | undefined,
+  showSlot: SlotRow | null | undefined
+) =>
+  rehearsalSlot?.slot_type === "band" &&
+  showSlot?.slot_type === "band" &&
+  rehearsalSlot.slot_phase === "rehearsal_pre" &&
+  showSlot.slot_phase === "show" &&
+  Boolean(rehearsalSlot.band_id) &&
+  rehearsalSlot.band_id === showSlot.band_id;
+
+const slotPhaseLabel = (
+  slot: SlotRow,
+  previousSlot?: SlotRow | null,
+  nextSlot?: SlotRow | null
+) => {
   const note = normalizeNote(slot.note);
   if (note === PREP_NOTE || note === CLEANUP_NOTE || note === CLEANUP_NOTE_ALT || note === REST_NOTE) {
     return note;
+  }
+  if (isConnectedPreShowPair(slot, nextSlot) || isConnectedPreShowPair(previousSlot, slot)) {
+    return CONNECTED_PRE_SHOW_LABEL;
   }
   if (slot.slot_phase === "rehearsal_normal") return "\u901A\u5E38\u30EA\u30CF";
   if (slot.slot_phase === "rehearsal_pre") return "\u76F4\u524D\u30EA\u30CF";
@@ -270,7 +290,7 @@ export default function EventTimeTableViewPage() {
             formatTimeText(slot.start_time),
             formatTimeText(slot.end_time),
             slotTypeLabel(slot),
-            slotPhaseLabel(slot),
+            slotPhaseLabel(slot, orderedSlots[index - 1], orderedSlots[index + 1]),
           ];
         });
 
@@ -282,7 +302,7 @@ export default function EventTimeTableViewPage() {
             name: "Sheet1",
             headers: ["#", "\u9805\u76EE", "\u30E1\u30F3\u30D0\u30FC\u6570", "\u66F2\u6570", "\u958B\u59CB", "\u7D42\u4E86", "\u7A2E\u5225", "\u533A\u5206"],
             rows,
-            colWidths: [6, 34, 12, 8, 10, 10, 10, 14],
+            colWidths: [6, 34, 12, 8, 10, 10, 10, 18],
           },
         ]);
 
@@ -440,6 +460,8 @@ export default function EventTimeTableViewPage() {
                         </CardHeader>
                         <CardContent className="max-h-[70vh] space-y-2 overflow-y-auto pr-1">
                           {orderedSlots.map((slot, index) => {
+                            const previousSlot = orderedSlots[index - 1];
+                            const nextSlot = orderedSlots[index + 1];
                             const isSelected = slot.slot_type === "band" && slot.band_id === effectiveBandId;
                             const tone = getTimetableTone({
                               slotType: slot.slot_type,
@@ -462,7 +484,7 @@ export default function EventTimeTableViewPage() {
                                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                   <span>#{String(index + 1).padStart(2, "0")}</span>
                                   <Badge variant="outline" className={cn("text-[10px]", tone.badgeClass)}>
-                                    {slotPhaseLabel(slot)}
+                                    {slotPhaseLabel(slot, previousSlot, nextSlot)}
                                   </Badge>
                                   <Badge variant="outline" className="text-[10px]">
                                     {slotTypeLabel(slot)}

@@ -428,7 +428,62 @@ export function SlotManager({
         return note || "\u4ED8\u5E2F\u4F5C\u696D";
     };
 
-    const slotSectionLabelForExport = (slot: EventSlot) => {
+    const CONNECTED_PRE_SHOW_LABEL = "\u76F4\u524D\u30EA\u30CF\uFF0B\u672C\u756A";
+
+    const isChangeoverSlot = (slot: EventSlot | null | undefined) => {
+        const note = slot?.note?.trim() ?? "";
+        return slot?.slot_type === "break" || note.includes("転換");
+    };
+
+    const isConnectedPreShowPair = (
+        rehearsalSlot: EventSlot | null | undefined,
+        showSlot: EventSlot | null | undefined
+    ) =>
+        rehearsalSlot?.slot_type === "band" &&
+        showSlot?.slot_type === "band" &&
+        rehearsalSlot.slot_phase === "rehearsal_pre" &&
+        showSlot.slot_phase === "show" &&
+        Boolean(rehearsalSlot.band_id) &&
+        rehearsalSlot.band_id === showSlot.band_id;
+
+    const isConnectedPreShowSlot = (
+        slot: EventSlot,
+        previousSlot?: EventSlot | null,
+        nextSlot?: EventSlot | null
+    ) => isConnectedPreShowPair(slot, nextSlot) || isConnectedPreShowPair(previousSlot, slot);
+
+    const isConnectedPreShowChangeover = (
+        slot: EventSlot,
+        previousSlot?: EventSlot | null,
+        previousPreviousSlot?: EventSlot | null
+    ) => isChangeoverSlot(slot) && isConnectedPreShowPair(previousPreviousSlot, previousSlot);
+
+    const isConnectedPreShowBlockSlot = (
+        slot: EventSlot,
+        previousSlot?: EventSlot | null,
+        nextSlot?: EventSlot | null,
+        previousPreviousSlot?: EventSlot | null
+    ) =>
+        isConnectedPreShowSlot(slot, previousSlot, nextSlot) ||
+        isConnectedPreShowChangeover(slot, previousSlot, previousPreviousSlot);
+
+    const slotPhaseDisplayLabel = (
+        slot: EventSlot,
+        previousSlot?: EventSlot | null,
+        nextSlot?: EventSlot | null
+    ) => {
+        if (isConnectedPreShowSlot(slot, previousSlot, nextSlot)) return CONNECTED_PRE_SHOW_LABEL;
+        if (slot.slot_phase === "rehearsal_normal") return "\u901A\u5E38\u30EA\u30CF";
+        if (slot.slot_phase === "rehearsal_pre") return "\u76F4\u524D\u30EA\u30CF";
+        return "\u672C\u756A";
+    };
+
+    const slotSectionLabelForExport = (
+        slot: EventSlot,
+        previousSlot?: EventSlot | null,
+        nextSlot?: EventSlot | null
+    ) => {
+        if (isConnectedPreShowSlot(slot, previousSlot, nextSlot)) return CONNECTED_PRE_SHOW_LABEL;
         if (slot.slot_phase === "rehearsal_normal") return "\u901A\u5E38\u30EA\u30CF";
         if (slot.slot_phase === "rehearsal_pre") return "\u76F4\u524D\u30EA\u30CF";
         return "\u672C\u756A";
@@ -517,8 +572,40 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
 
     const collisionDetection: CollisionDetection = (args) => {
         const activeId = String(args.active.id);
-        const activeSlot = orderedSlots.find((slot) => slot.id === activeId);
-        if (!activeSlot || activeSlot.slot_type !== "band") {
+        const activeIndex = orderedSlots.findIndex((slot) => slot.id === activeId);
+        const activeSlot = orderedSlots[activeIndex];
+        if (!activeSlot) {
+            return closestCenter(args);
+        }
+
+        if (
+            isConnectedPreShowBlockSlot(
+                activeSlot,
+                orderedSlots[activeIndex - 1],
+                orderedSlots[activeIndex + 1],
+                orderedSlots[activeIndex - 2]
+            )
+        ) {
+            const linkedBlockContainers = args.droppableContainers.filter((container) => {
+                const slotIndex = orderedSlots.findIndex((candidate) => candidate.id === String(container.id));
+                const slot = orderedSlots[slotIndex];
+                return slot != null && isConnectedPreShowBlockSlot(
+                    slot,
+                    orderedSlots[slotIndex - 1],
+                    orderedSlots[slotIndex + 1],
+                    orderedSlots[slotIndex - 2]
+                );
+            });
+
+            if (linkedBlockContainers.length > 0) {
+                return closestCenter({
+                    ...args,
+                    droppableContainers: linkedBlockContainers,
+                });
+            }
+        }
+
+        if (activeSlot.slot_type !== "band") {
             return closestCenter(args);
         }
 
@@ -576,6 +663,75 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
             cursor = null;
             return slot;
         });
+    };
+
+    const reorderConnectedPreShowBlocks = (
+        source: EventSlot[],
+        activeId: string,
+        overId: string
+    ) => {
+        const sorted = sortSlotsByOrder(source);
+        const units: EventSlot[][] = [];
+        let index = 0;
+
+        while (index < sorted.length) {
+            const current = sorted[index];
+            const next = sorted[index + 1];
+            const afterNext = sorted[index + 2];
+            if (isConnectedPreShowPair(current, next)) {
+                const unit = [current, next];
+                if (isChangeoverSlot(afterNext)) {
+                    unit.push(afterNext);
+                    index += 3;
+                } else {
+                    index += 2;
+                }
+                units.push(unit);
+                continue;
+            }
+
+            units.push([current]);
+            index += 1;
+        }
+
+        const unitHasSlot = (unit: EventSlot[], slotId: string) =>
+            unit.some((slot) => slot.id === slotId);
+        const unitIsPreShowBlock = (unit: EventSlot[]) =>
+            unit.length >= 2 && isConnectedPreShowPair(unit[0], unit[1]);
+
+        const activeUnitIndex = units.findIndex((unit) => unitHasSlot(unit, activeId));
+        const overUnitIndex = units.findIndex((unit) => unitHasSlot(unit, overId));
+        if (
+            activeUnitIndex < 0 ||
+            overUnitIndex < 0 ||
+            activeUnitIndex === overUnitIndex ||
+            !unitIsPreShowBlock(units[activeUnitIndex]) ||
+            !unitIsPreShowBlock(units[overUnitIndex])
+        ) {
+            return null;
+        }
+
+        const originalFirstLinkedIndex = sorted.findIndex((slot, slotIndex) =>
+            isConnectedPreShowPair(slot, sorted[slotIndex + 1])
+        );
+        const originalTimelineStart = parseTime(sorted[originalFirstLinkedIndex]?.start_time ?? null);
+        const movedUnits = arrayMove(units, activeUnitIndex, overUnitIndex);
+        const flattened = movedUnits.flat();
+        const firstLinkedIndex = flattened.findIndex((slot, slotIndex) =>
+            isConnectedPreShowPair(slot, flattened[slotIndex + 1])
+        );
+        if (firstLinkedIndex >= 0) {
+            const anchorStart = originalTimelineStart ?? parseTime(flattened[firstLinkedIndex]?.start_time ?? null);
+            const retimed = retimeSequentialSlots(flattened.slice(firstLinkedIndex), anchorStart);
+            retimed.forEach((slot, retimedIndex) => {
+                flattened[firstLinkedIndex + retimedIndex] = slot;
+            });
+        }
+
+        return flattened.map((slot, slotIndex) => ({
+            ...slot,
+            order_in_event: slotIndex + 1,
+        }));
     };
 
     const reorderBandSlotsOnly = (
@@ -638,11 +794,27 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
         if (!over || active.id === over.id) return;
         const activeId = String(active.id);
         const overId = String(over.id);
-        const activeSlot = orderedSlots.find((slot) => slot.id === activeId);
-        if (!activeSlot || isFixedChangeoverSlot(activeSlot)) return;
+        const activeIndex = orderedSlots.findIndex((slot) => slot.id === activeId);
+        const activeSlot = orderedSlots[activeIndex];
+        if (!activeSlot) return;
+        const isConnectedBlockDrag = isConnectedPreShowBlockSlot(
+            activeSlot,
+            orderedSlots[activeIndex - 1],
+            orderedSlots[activeIndex + 1],
+            orderedSlots[activeIndex - 2]
+        );
+        if (isFixedChangeoverSlot(activeSlot) && !isConnectedBlockDrag) return;
+
+        if (isConnectedBlockDrag) {
+            applySlotsUpdate((prev) => reorderConnectedPreShowBlocks(prev, activeId, overId) ?? prev);
+            return;
+        }
 
         if (activeSlot.slot_type === "band") {
-            applySlotsUpdate((prev) => reorderBandSlotsOnly(prev, activeId, overId));
+            applySlotsUpdate(
+                (prev) =>
+                    reorderBandSlotsOnly(prev, activeId, overId)
+            );
             return;
         }
 
@@ -1339,8 +1511,12 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                 });
 
                 let currentSection: string | null = null;
-                orderedSlots.forEach((slot) => {
-                    const section = slotSectionLabelForExport(slot);
+                orderedSlots.forEach((slot, index) => {
+                    const section = slotSectionLabelForExport(
+                        slot,
+                        orderedSlots[index - 1],
+                        orderedSlots[index + 1]
+                    );
                     if (section !== currentSection) {
                         currentSection = section;
                         const sectionRow = sheet.addRow(["", section, "", "", "", "", ""]);
@@ -2016,12 +2192,39 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                         strategy={verticalListSortingStrategy}
                     >
                         <div className="max-h-[68vh] overflow-y-auto overflow-x-hidden pr-1">
-                            <div className="space-y-2">
-                            {orderedSlots.map((slot) => (
-                                <SortableItem key={slot.id} id={slot.id} disabled={isFixedChangeoverSlot(slot)}>
+                            <div className="flex flex-col gap-2">
+                            {orderedSlots.map((slot, index) => {
+                                const previousSlot = orderedSlots[index - 1];
+                                const previousPreviousSlot = orderedSlots[index - 2];
+                                const nextSlot = orderedSlots[index + 1];
+                                const isLinkedChangeover = isConnectedPreShowChangeover(
+                                    slot,
+                                    previousSlot,
+                                    previousPreviousSlot
+                                );
+                                return (
+                                <SortableItem
+                                    key={slot.id}
+                                    id={slot.id}
+                                    disabled={isFixedChangeoverSlot(slot) && !isLinkedChangeover}
+                                >
                                     {({ attributes, listeners, setActivatorNodeRef, isDragging, disabled }) => {
                                         const isSelected = slot.slot_type === "band" && slot.band_id === selectedBandId;
                                         const tone = slotTone(slot);
+                                        const isConnectedStart = isConnectedPreShowPair(slot, nextSlot);
+                                        const isConnectedEnd = isConnectedPreShowPair(previousSlot, slot);
+                                        const isConnectedPreShow = isConnectedStart || isConnectedEnd;
+                                        const hasConnectedFollowingChangeover = isConnectedEnd && isChangeoverSlot(nextSlot);
+                                        const phaseDisplayLabel = slotPhaseDisplayLabel(slot, previousSlot, nextSlot);
+                                        const phaseSelectValue = isConnectedPreShow
+                                            ? "pre_show"
+                                            : slot.slot_phase ?? "show";
+                                        const phaseSelectOptions = isConnectedPreShow
+                                            ? [
+                                                { value: "pre_show", label: phaseDisplayLabel },
+                                                ...slotPhaseOptions,
+                                            ]
+                                            : slotPhaseOptions;
                                         return (
                                             <div
                                                 className={cn(
@@ -2029,6 +2232,9 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                                                     "before:absolute before:left-2 before:top-2 before:bottom-2 before:w-1 before:rounded-full before:content-['']",
                                                     tone.railClass,
                                                     tone.cardClass,
+                                                    isConnectedStart && "rounded-b-sm",
+                                                    (isConnectedEnd || isLinkedChangeover) && "-mt-2 rounded-t-sm",
+                                                    hasConnectedFollowingChangeover && "rounded-b-sm",
                                                     isDragging && "shadow-lg bg-accent/50",
                                                     isSelected ? "border-primary ring-2 ring-primary/20" : ""
                                                 )}
@@ -2075,17 +2281,19 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                                                     </select>
 
                                                     <select
-                                                        value={slot.slot_phase ?? "show"}
-                                                        onChange={(e) =>
-                                                            handleSlotChange(slot.id, "slot_phase", e.target.value as EventSlot["slot_phase"])
-                                                        }
+                                                        value={phaseSelectValue}
+                                                        onChange={(e) => {
+                                                            const nextPhase = e.target.value;
+                                                            if (nextPhase === "pre_show") return;
+                                                            handleSlotChange(slot.id, "slot_phase", nextPhase as EventSlot["slot_phase"]);
+                                                        }}
                                                         onClick={(e) => e.stopPropagation()}
                                                         className={cn(
-                                                            "h-7 w-[72px] rounded border px-1 text-[10px] shrink-0",
+                                                            "h-7 w-[112px] rounded border px-1 text-[10px] shrink-0",
                                                             tone.badgeClass
                                                         )}
                                                     >
-                                                        {slotPhaseOptions.map((opt) => (
+                                                        {phaseSelectOptions.map((opt) => (
                                                             <option key={opt.value} value={opt.value}>
                                                                 {opt.label}
                                                             </option>
@@ -2180,7 +2388,8 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                                         );
                                     }}
                                 </SortableItem>
-                            ))}
+                                );
+                            })}
                             </div>
                         </div>
                     </SortableContext>

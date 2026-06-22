@@ -421,6 +421,9 @@ export function SlotManager({
         return value;
     };
 
+    const formatDurationText = (durationMin: number | null) =>
+        durationMin == null ? "" : `${durationMin}\u5206`;
+
     const slotMainLabelForExport = (slot: EventSlot, bandName: string) => {
         const note = slot.note?.trim() ?? "";
         if (slot.slot_type === "band") return bandName || "\u672A\u8A2D\u5B9A\u30D0\u30F3\u30C9";
@@ -1420,6 +1423,7 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                     { width: 40 },
                     { width: 12 },
                     { width: 8 },
+                    { width: 10 },
                     { width: 11 },
                     { width: 4 },
                     { width: 11 },
@@ -1474,14 +1478,15 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                     otherRow: "FFF6F7FB",
                     border: "FFD1D5DB",
                 };
-                const titleRow = sheet.addRow([titleText, "", "", "", "", "", ""]);
-                sheet.mergeCells(`A${titleRow.number}:G${titleRow.number}`);
+                const titleRow = sheet.addRow([titleText, "", "", "", "", "", "", ""]);
+                sheet.mergeCells(`A${titleRow.number}:H${titleRow.number}`);
 
                 const headerRow = sheet.addRow([
                     "",
                     "\u30D0\u30F3\u30C9\u540D",
                     "\u30E1\u30F3\u30D0\u30FC\u6570",
                     "\u66F2\u6570",
+                    "\u6301\u3061\u6642\u9593",
                     "\u958B\u59CB\u6642\u9593",
                     "~",
                     "\u7D42\u4E86\u6642\u9593",
@@ -1519,8 +1524,8 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                     );
                     if (section !== currentSection) {
                         currentSection = section;
-                        const sectionRow = sheet.addRow(["", section, "", "", "", "", ""]);
-                        sheet.mergeCells(`B${sectionRow.number}:G${sectionRow.number}`);
+                        const sectionRow = sheet.addRow(["", section, "", "", "", "", "", ""]);
+                        sheet.mergeCells(`B${sectionRow.number}:H${sectionRow.number}`);
                         sectionRow.height = 26;
                         sectionRow.eachCell((cell, col) => {
                             if (section === "\u672C\u756A") {
@@ -1551,6 +1556,7 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                     const label = slotMainLabelForExport(slot, bandName);
                     const startText = slot.start_time ? formatTimeText(slot.start_time) : "";
                     const endText = slot.end_time ? formatTimeText(slot.end_time) : "";
+                    const durationText = formatDurationText(getSlotDurationMin(slot));
                     const separator = startText || endText ? "~" : "";
                     const bandNo =
                         slot.slot_type === "band" && slot.band_id
@@ -1564,6 +1570,7 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                             ? memberCountMap.get(slot.band_id) ?? ""
                             : "",
                         slot.slot_type === "band" ? bandSongCount(slot) : "",
+                        durationText,
                         startText,
                         separator,
                         endText,

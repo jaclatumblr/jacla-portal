@@ -429,7 +429,9 @@ export function SlotManager({
     };
 
     const slotSectionLabelForExport = (slot: EventSlot) => {
-        return slot.slot_phase === "show" ? "\u672C\u756A" : "\u30EA\u30CF";
+        if (slot.slot_phase === "rehearsal_normal") return "\u901A\u5E38\u30EA\u30CF";
+        if (slot.slot_phase === "rehearsal_pre") return "\u76F4\u524D\u30EA\u30CF";
+        return "\u672C\u756A";
     };
 
 type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
@@ -917,25 +919,54 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
     };
 
     const handleRehearsalPhaseChange = (nextPhase: RehearsalPhase) => {
-        if (nextPhase === rehearsalPhase) return;
-        const previousPhase = rehearsalPhase;
-        setRehearsalPhase(nextPhase);
-
-        const currentSlots = sortSlotsByOrder(slotsRef.current);
-        const hasPreviousPhaseSlots = currentSlots.some(
-            (slot) => slot.slot_phase === previousPhase
+        const needsPhaseSync = slotsRef.current.some(
+            (slot) => isRehearsalPhase(slot.slot_phase) && slot.slot_phase !== nextPhase
         );
-        const hasNextPhaseSlots = currentSlots.some((slot) => slot.slot_phase === nextPhase);
-        if (hasPreviousPhaseSlots && !hasNextPhaseSlots) {
-            applySlotsUpdate((prev) =>
-                sortSlotsByOrder(prev).map((slot) =>
-                    slot.slot_phase === previousPhase ? { ...slot, slot_phase: nextPhase } : slot
-                )
+        if (nextPhase === rehearsalPhase && !needsPhaseSync) return;
+        setRehearsalPhase(nextPhase);
+        applySlotsUpdate((prev) => {
+            const sorted = sortSlotsByOrder(prev).map((slot) =>
+                isRehearsalPhase(slot.slot_phase) ? { ...slot, slot_phase: nextPhase } : slot
             );
-            return;
-        }
+            if (bands.length === 0) return sorted;
 
-        applyRehearsalSort(nextPhase, rehearsalOrder);
+            const targetSlots = sorted.filter(
+                (slot) =>
+                    slot.slot_phase === nextPhase &&
+                    slot.slot_type === "band" &&
+                    slot.band_id
+            );
+            if (targetSlots.length <= 1) return sorted;
+
+            const bandSequence = rehearsalOrder === "reverse" ? [...bands].reverse() : [...bands];
+            const bandOrder = new Map(bandSequence.map((band, index) => [band.id, index]));
+            const sortedTargets = [...targetSlots].sort((a, b) => {
+                const orderA = bandOrder.get(a.band_id ?? "") ?? Number.MAX_SAFE_INTEGER;
+                const orderB = bandOrder.get(b.band_id ?? "") ?? Number.MAX_SAFE_INTEGER;
+                if (orderA !== orderB) return orderA - orderB;
+                const currentA = a.order_in_event ?? 0;
+                const currentB = b.order_in_event ?? 0;
+                return currentA - currentB;
+            });
+
+            let cursor = 0;
+            return sorted
+                .map((slot) => {
+                    if (
+                        slot.slot_phase === nextPhase &&
+                        slot.slot_type === "band" &&
+                        slot.band_id
+                    ) {
+                        const replacement = sortedTargets[cursor++];
+                        return replacement ?? slot;
+                    }
+                    return slot;
+                })
+                .map((slot, index) => ({
+                    ...slot,
+                    order_in_event: index + 1,
+                }));
+        });
     };
 
     const phaseLabelByValue = (phase: "show" | "rehearsal_normal" | "rehearsal_pre") =>
@@ -1517,12 +1548,33 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
             return rounded + extra;
         };
 
+        const rehearsalDurationForBand = (bandId: string) => {
+            const computedRehearsalMin =
+                toRoundedMinutes(rehearsalDurationMap.get(bandId) ?? 0, REHEARSAL_EXTRA_MIN) ??
+                DEFAULT_BAND_DURATION_MIN + REHEARSAL_EXTRA_MIN;
+            return Math.max(MIN_REHEARSAL_MIN, computedRehearsalMin);
+        };
+
+        const showDurationForBand = (bandId: string) =>
+            toRoundedMinutes(showDurationMap.get(bandId) ?? 0, 0) ?? DEFAULT_BAND_DURATION_MIN;
+
         const showStart = parseTime(event.start_time ?? null);
         let showCursor = showStart;
         const changeover = event.default_changeover_min ?? 15;
 
         const rehearsalStart = parseTime(event.rehearsal_start_time ?? null);
-        let rehearsalCursor = rehearsalStart;
+        const firstPreRehearsalDuration =
+            rehearsalPhase === "rehearsal_pre" && bands[0]
+                ? rehearsalDurationForBand(bands[0].id)
+                : null;
+        const timelineStart =
+            rehearsalPhase === "rehearsal_pre"
+                ? rehearsalStart ??
+                    (showStart != null && firstPreRehearsalDuration != null
+                        ? showStart - firstPreRehearsalDuration
+                        : null)
+                : rehearsalStart;
+        let rehearsalCursor = timelineStart;
 
         const payloads: Array<Record<string, unknown>> = [];
         let orderIndex = 1;
@@ -1533,18 +1585,18 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
         const assemblyValue = parseTime(event.assembly_time ?? null);
         if (assemblyValue != null) {
             prepStart = formatTime(assemblyValue);
-            if (rehearsalStart != null && rehearsalStart >= assemblyValue) {
-                prepEnd = formatTime(rehearsalStart);
-                prepDuration = rehearsalStart - assemblyValue;
+            if (timelineStart != null && timelineStart >= assemblyValue) {
+                prepEnd = formatTime(normalizeDayMinutes(timelineStart));
+                prepDuration = timelineStart - assemblyValue;
             } else {
                 prepEnd = formatTime(assemblyValue + DEFAULT_OTHER_DURATION_MIN);
             }
-        } else if (rehearsalStart != null) {
-            const prepStartValue = rehearsalStart - DEFAULT_OTHER_DURATION_MIN;
+        } else if (timelineStart != null) {
+            const prepStartValue = timelineStart - DEFAULT_OTHER_DURATION_MIN;
             if (prepStartValue >= 0) {
                 prepStart = formatTime(prepStartValue);
             }
-            prepEnd = formatTime(rehearsalStart);
+            prepEnd = formatTime(normalizeDayMinutes(timelineStart));
         } else {
             const fallbackStart = parseTime(event.open_time ?? null);
             if (fallbackStart != null) {
@@ -1565,33 +1617,100 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
             note: PREP_NOTE,
         });
 
-        const rehearsalList = rehearsalOrder === "reverse" ? [...bands].reverse() : [...bands];
-        rehearsalList.forEach((band) => {
-            const computedRehearsalMin =
-                toRoundedMinutes(rehearsalDurationMap.get(band.id) ?? 0, REHEARSAL_EXTRA_MIN) ??
-                DEFAULT_BAND_DURATION_MIN + REHEARSAL_EXTRA_MIN;
-            const durationMin = Math.max(MIN_REHEARSAL_MIN, computedRehearsalMin);
-            let startTime: string | null = null;
-            let endTime: string | null = null;
-            if (rehearsalCursor != null) {
-                startTime = formatTime(rehearsalCursor);
-                endTime = formatTime(rehearsalCursor + durationMin);
-                rehearsalCursor += durationMin;
-            }
-            payloads.push({
-                event_id: event.id,
-                band_id: band.id,
-                slot_type: "band",
-                slot_phase: rehearsalPhase,
-                order_in_event: orderIndex++,
-                start_time: startTime,
-                end_time: endTime,
-                changeover_min: event.default_changeover_min ?? 15,
-                note: null,
-            });
-        });
+        if (rehearsalPhase === "rehearsal_pre") {
+            let timelineCursor = rehearsalCursor;
+            bands.forEach((band, index) => {
+                const rehearsalDurationMin = rehearsalDurationForBand(band.id);
+                let rehearsalStartTime: string | null = null;
+                let rehearsalEndTime: string | null = null;
+                if (timelineCursor != null) {
+                    rehearsalStartTime = formatTime(normalizeDayMinutes(timelineCursor));
+                    rehearsalEndTime = formatTime(normalizeDayMinutes(timelineCursor + rehearsalDurationMin));
+                    timelineCursor += rehearsalDurationMin;
+                }
 
-        if (rehearsalPhase === "rehearsal_normal") {
+                payloads.push({
+                    event_id: event.id,
+                    band_id: band.id,
+                    slot_type: "band",
+                    slot_phase: "rehearsal_pre",
+                    order_in_event: orderIndex++,
+                    start_time: rehearsalStartTime,
+                    end_time: rehearsalEndTime,
+                    changeover_min: event.default_changeover_min ?? 15,
+                    note: null,
+                });
+
+                const showDurationMin = showDurationForBand(band.id);
+                let showStartTime: string | null = null;
+                let showEndTime: string | null = null;
+                if (timelineCursor != null) {
+                    showStartTime = formatTime(normalizeDayMinutes(timelineCursor));
+                    showEndTime = formatTime(normalizeDayMinutes(timelineCursor + showDurationMin));
+                    timelineCursor += showDurationMin;
+                }
+
+                payloads.push({
+                    event_id: event.id,
+                    band_id: band.id,
+                    slot_type: "band",
+                    slot_phase: "show",
+                    order_in_event: orderIndex++,
+                    start_time: showStartTime,
+                    end_time: showEndTime,
+                    changeover_min: changeover,
+                    note: null,
+                });
+
+                if (index < bands.length - 1 && changeover > 0) {
+                    let changeoverStart: string | null = null;
+                    let changeoverEnd: string | null = null;
+                    if (timelineCursor != null) {
+                        changeoverStart = formatTime(normalizeDayMinutes(timelineCursor));
+                        changeoverEnd = formatTime(normalizeDayMinutes(timelineCursor + changeover));
+                    }
+                    payloads.push({
+                        event_id: event.id,
+                        band_id: null,
+                        slot_type: "break",
+                        slot_phase: "show",
+                        order_in_event: orderIndex++,
+                        start_time: changeoverStart,
+                        end_time: changeoverEnd,
+                        changeover_min: changeover,
+                        note: "\u8EE2\u63DB",
+                    });
+
+                    if (timelineCursor != null) {
+                        timelineCursor += changeover;
+                    }
+                }
+            });
+            showCursor = timelineCursor;
+        } else {
+            const rehearsalList = rehearsalOrder === "reverse" ? [...bands].reverse() : [...bands];
+            rehearsalList.forEach((band) => {
+                const durationMin = rehearsalDurationForBand(band.id);
+                let startTime: string | null = null;
+                let endTime: string | null = null;
+                if (rehearsalCursor != null) {
+                    startTime = formatTime(rehearsalCursor);
+                    endTime = formatTime(rehearsalCursor + durationMin);
+                    rehearsalCursor += durationMin;
+                }
+                payloads.push({
+                    event_id: event.id,
+                    band_id: band.id,
+                    slot_type: "band",
+                    slot_phase: rehearsalPhase,
+                    order_in_event: orderIndex++,
+                    start_time: startTime,
+                    end_time: endTime,
+                    changeover_min: event.default_changeover_min ?? 15,
+                    note: null,
+                });
+            });
+
             const restMinutes = DEFAULT_OTHER_DURATION_MIN;
             let restStart: string | null = null;
             let restEnd: string | null = null;
@@ -1613,58 +1732,57 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                 changeover_min: restMinutes,
                 note: REST_NOTE,
             });
-        }
 
-        bands.forEach((band, index) => {
-            const durationMin =
-                toRoundedMinutes(showDurationMap.get(band.id) ?? 0, 0) ?? DEFAULT_BAND_DURATION_MIN;
-            let startTime: string | null = null;
-            let endTime: string | null = null;
-            if (showCursor != null) {
-                startTime = formatTime(showCursor);
-                endTime = formatTime(showCursor + durationMin);
-            }
-
-            payloads.push({
-                event_id: event.id,
-                band_id: band.id,
-                slot_type: "band",
-                slot_phase: "show",
-                order_in_event: orderIndex++,
-                start_time: startTime,
-                end_time: endTime,
-                changeover_min: changeover,
-                note: null,
-            });
-
-            if (showCursor != null) {
-                showCursor += durationMin;
-            }
-
-            if (index < bands.length - 1 && changeover > 0) {
-                let changeoverStart: string | null = null;
-                let changeoverEnd: string | null = null;
+            bands.forEach((band, index) => {
+                const durationMin = showDurationForBand(band.id);
+                let startTime: string | null = null;
+                let endTime: string | null = null;
                 if (showCursor != null) {
-                    changeoverStart = formatTime(showCursor);
-                    changeoverEnd = formatTime(showCursor + changeover);
+                    startTime = formatTime(showCursor);
+                    endTime = formatTime(showCursor + durationMin);
                 }
+
                 payloads.push({
                     event_id: event.id,
-                    band_id: null,
-                    slot_type: "break",
+                    band_id: band.id,
+                    slot_type: "band",
                     slot_phase: "show",
                     order_in_event: orderIndex++,
-                    start_time: changeoverStart,
-                    end_time: changeoverEnd,
+                    start_time: startTime,
+                    end_time: endTime,
                     changeover_min: changeover,
-                    note: "\u8EE2\u63DB",
+                    note: null,
                 });
 
                 if (showCursor != null) {
-                    showCursor += changeover;
+                    showCursor += durationMin;
                 }
-            }
-        });
+
+                if (index < bands.length - 1 && changeover > 0) {
+                    let changeoverStart: string | null = null;
+                    let changeoverEnd: string | null = null;
+                    if (showCursor != null) {
+                        changeoverStart = formatTime(showCursor);
+                        changeoverEnd = formatTime(showCursor + changeover);
+                    }
+                    payloads.push({
+                        event_id: event.id,
+                        band_id: null,
+                        slot_type: "break",
+                        slot_phase: "show",
+                        order_in_event: orderIndex++,
+                        start_time: changeoverStart,
+                        end_time: changeoverEnd,
+                        changeover_min: changeover,
+                        note: "\u8EE2\u63DB",
+                    });
+
+                    if (showCursor != null) {
+                        showCursor += changeover;
+                    }
+                }
+            });
+        }
 
         const cleanupStart = showCursor != null ? formatTime(showCursor) : null;
         const cleanupEnd = showCursor != null ? formatTime(showCursor + DEFAULT_OTHER_DURATION_MIN) : null;

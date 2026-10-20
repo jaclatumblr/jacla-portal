@@ -5,6 +5,8 @@ export type EventRow = {
     name: string;
     date: string;
     event_type: string;
+    repertoire_deadline?: string | null;
+    repertoire_is_closed?: boolean;
 };
 
 export type BandRow = {
@@ -13,7 +15,6 @@ export type BandRow = {
     created_by: string | null;
     band_type?: string | null;
     event_id?: string | null;
-    source_band_id?: string | null;
 };
 
 export type BandMemberRow = {
@@ -51,13 +52,6 @@ export type ProfileRow = {
     leader?: string | null;
 };
 
-export type FixedBandSummary = {
-    id: string;
-    name: string;
-    created_by: string | null;
-    members: number;
-};
-
 export type EventBandSummary = {
     id: string;
     name: string;
@@ -65,15 +59,6 @@ export type EventBandSummary = {
     members: number;
     memberNames: string[];
     isMember: boolean;
-};
-
-export type FixedMember = {
-    id: string;
-    userId: string
-    instrument: string;
-    displayName: string;
-    realName: string;
-    part: string;
 };
 
 // ユーティリティ関数

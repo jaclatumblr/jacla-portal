@@ -91,7 +91,7 @@ export function useMembers(): UseMembersResult {
                             : [];
                     const current = bandMap.get(bandRow.user_id) ?? new Set<string>();
                     bandEntries
-                        .filter((band) => band.band_type === "fixed")
+                        .filter((band) => band.band_type === "event")
                         .forEach((band) => current.add(band.name));
                     bandMap.set(bandRow.user_id, current);
                 });
@@ -159,7 +159,8 @@ export function useMembers(): UseMembersResult {
                     if (yearValue) {
                         enrollmentMap.set(entry.profile_id, yearValue);
                     }
-                    const birthValue = entry.birth_date ? String(entry.birth_date) : "";
+                    const birthValue =
+                        canViewStudentId && entry.birth_date ? String(entry.birth_date) : "";
                     if (birthValue) {
                         birthDateMap.set(entry.profile_id, birthValue);
                     }
@@ -198,7 +199,7 @@ export function useMembers(): UseMembersResult {
                     email: isAdministrator ? profile.email ?? null : null,
                     studentId: canViewStudentId ? studentMap.get(profile.id) ?? null : null,
                     enrollmentYear: enrollmentMap.get(profile.id) ?? null,
-                    birthDate: birthDateMap.get(profile.id) ?? null,
+                    birthDate: canViewStudentId ? birthDateMap.get(profile.id) ?? null : null,
                     part: profile.part && profile.part !== "none" ? profile.part : null,
                     crew: profile.crew ?? null,
                     leaderRoles,

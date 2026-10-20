@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
 
 type MetadataUpdates = {
     title?: string;
@@ -20,9 +21,16 @@ export function useMetadata() {
 
         setFetchingMeta((prev) => ({ ...prev, [id]: true }));
         try {
+            const { data } = await supabase.auth.getSession();
+            const accessToken = data.session?.access_token;
+            if (!accessToken) return;
+
             const res = await fetch("/api/repertoire/metadata", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${accessToken}`,
+                },
                 body: JSON.stringify({ url }),
             });
 

@@ -142,7 +142,7 @@ function LoginPageContent() {
               </span>
               <h2 className="text-2xl sm:text-3xl font-bold mt-2">ログイン</h2>
               <p className="text-muted-foreground mt-2">
-                大学アカウントでログインしてください
+                大学アカウント、または連携済みの個人Gmailでログインしてください
               </p>
             </div>
 
@@ -164,7 +164,7 @@ function LoginPageContent() {
               </Button>
 
               <p className="text-xs text-muted-foreground text-center">
-                edu.teu.ac.jp のアカウントでログインしてください
+                卒業生は、在学中に連携した個人Gmailでもログインできます
               </p>
 
               <p className="text-xs text-muted-foreground text-center">

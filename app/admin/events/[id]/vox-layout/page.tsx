@@ -33,7 +33,7 @@ import {
   type VoxSetlistLayout,
 } from "@/lib/voxSetlistLayout";
 
-const storageKey = (eventId: string) => `voxSetlistLayout:${eventId}`;
+const storageKey = (eventId: string) => `voxSetlistLayout:v4:${eventId}`;
 
 const parseStoredLayout = (raw: string | null) => {
   if (!raw) return defaultVoxSetlistLayout;
@@ -422,10 +422,10 @@ export default function VoxLayoutPage() {
   const previewMarks = useMemo(
     () => [
       { key: "fields.bandName", label: "bandName", ...layout.fields.bandName },
-      { key: "fields.pageLabel", label: "pageLabel", ...layout.fields.pageLabel },
+      { key: "fields.pageLabel", label: "page", ...layout.fields.pageLabel },
       { key: "fields.setOrder", label: "setOrder", ...layout.fields.setOrder },
-      { key: "fields.totalDuration", label: "totalDuration", ...layout.fields.totalDuration },
-      { key: "fields.plannedStartTime", label: "plannedStart", ...layout.fields.plannedStartTime },
+      { key: "fields.totalDuration", label: "開始予定時刻", ...layout.fields.totalDuration },
+      { key: "fields.plannedStartTime", label: "終了予定時刻", ...layout.fields.plannedStartTime },
       { key: "notes.lighting", label: "lighting", ...layout.notes.lighting },
       { key: "notes.pa", label: "pa", ...layout.notes.pa },
       { key: "notes.stageSummary", label: "stageSummary", ...layout.notes.stageSummary },
@@ -803,7 +803,7 @@ export default function VoxLayoutPage() {
                   onChange={(next) => setLayout((prev) => ({ ...prev, fields: { ...prev.fields, bandName: next } }))}
                 />
                 <TextFieldEditor
-                  title="Page Label"
+                  title="ページ番号"
                   value={layout.fields.pageLabel}
                   onChange={(next) => setLayout((prev) => ({ ...prev, fields: { ...prev.fields, pageLabel: next } }))}
                 />
@@ -813,12 +813,12 @@ export default function VoxLayoutPage() {
                   onChange={(next) => setLayout((prev) => ({ ...prev, fields: { ...prev.fields, setOrder: next } }))}
                 />
                 <TextFieldEditor
-                  title="Planned Start Time"
+                  title="終了予定時刻"
                   value={layout.fields.plannedStartTime}
                   onChange={(next) => setLayout((prev) => ({ ...prev, fields: { ...prev.fields, plannedStartTime: next } }))}
                 />
                 <TextFieldEditor
-                  title="Total Duration"
+                  title="開始予定時刻"
                   value={layout.fields.totalDuration}
                   onChange={(next) => setLayout((prev) => ({ ...prev, fields: { ...prev.fields, totalDuration: next } }))}
                 />

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import { lookup } from "node:dns/promises";
 import net from "node:net";
 
@@ -10,6 +11,11 @@ type MetadataResponse = {
   source: string | null;
   duration_sec: number | null;
 };
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+const fetchTimeoutMs = 8_000;
+const maxResponseBytes = 1_000_000;
 
 const providerConfigs = [
   {
@@ -170,11 +176,67 @@ const parseDurationSeconds = (raw: string | null) => {
   return null;
 };
 
+const verifyAuthenticated = async (request: Request) => {
+  if (!supabaseUrl || !supabaseAnonKey) return false;
+  const authHeader = request.headers.get("authorization") ?? "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+  if (!token) return false;
+
+  const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: { persistSession: false },
+  });
+  const { data, error } = await authClient.auth.getUser(token);
+  return !error && Boolean(data.user);
+};
+
+const fetchWithTimeout = async (url: string, init: RequestInit = {}) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), fetchTimeoutMs);
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  try {
+    const res = await fetch(url, {
+      ...init,
+      signal: controller.signal,
+      cache: "no-store",
+      redirect: "error",
+    });
+    const declaredSize = Number(res.headers.get("content-length"));
+    if (Number.isFinite(declaredSize) && declaredSize > maxResponseBytes) {
+      controller.abort();
+      throw new Error("Response too large");
+    }
+    reader = res.body?.getReader();
+    const chunks: Uint8Array[] = [];
+    let bytes = 0;
+    if (reader) {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        bytes += value.byteLength;
+        if (bytes > maxResponseBytes) {
+          controller.abort();
+          throw new Error("Response too large");
+        }
+        chunks.push(value);
+      }
+    }
+    const body = new Uint8Array(bytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      body.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return { ok: res.ok, status: res.status, text: new TextDecoder().decode(body) };
+  } finally {
+    if (controller.signal.aborted) void reader?.cancel().catch(() => {});
+    reader?.releaseLock();
+    clearTimeout(timeoutId);
+  }
+};
+
 const fetchHtml = async (url: string) => {
   await assertPublicUrl(url);
-  const res = await fetch(url, {
-    cache: "no-store",
-    redirect: "error",
+  const res = await fetchWithTimeout(url, {
     headers: {
       "User-Agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
@@ -183,7 +245,7 @@ const fetchHtml = async (url: string) => {
   if (!res.ok) {
     throw new Error(`Fetch failed: ${res.status}`);
   }
-  return res.text();
+  return res.text;
 };
 
 const extractHtmlMetadata = (html: string) => {
@@ -258,11 +320,11 @@ const mergeMetadata = (
 
 const fetchOembed = async (url: string, source: string): Promise<MetadataResponse> => {
   await assertPublicUrl(url);
-  const res = await fetch(url, { cache: "no-store", redirect: "error" });
+  const res = await fetchWithTimeout(url);
   if (!res.ok) {
     throw new Error(`oEmbed failed: ${res.status}`);
   }
-  const data = (await res.json()) as {
+  const data = JSON.parse(res.text) as {
     title?: string;
     author_name?: string;
     duration?: number | string;
@@ -294,6 +356,10 @@ const fetchOpenGraph = async (url: string): Promise<MetadataResponse> => {
 };
 
 export async function POST(request: Request) {
+  if (!(await verifyAuthenticated(request))) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const body = (await request.json().catch(() => ({}))) as { url?: string };
   const rawUrl = body.url?.trim();
   if (!rawUrl) {

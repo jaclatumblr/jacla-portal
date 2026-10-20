@@ -45,8 +45,8 @@ export type VoxSetlistLayout = {
     bandName: LayoutTextField;
     pageLabel: LayoutTextField;
     setOrder: LayoutTextField;
-    totalDuration: LayoutTextField;
-    plannedStartTime: LayoutTextField;
+    totalDuration: LayoutTextField; // Legacy storage key: planned start time.
+    plannedStartTime: LayoutTextField; // Legacy storage key: planned end time.
   };
   notes: {
     lighting: LayoutTextField;
@@ -61,26 +61,26 @@ export const defaultVoxSetlistLayout: VoxSetlistLayout = {
   showEventName: false,
   fields: {
     eventName: { x: 74, y: 783, maxWidth: 300, size: 10, align: "left" },
-    eventDate: { x: 450, y: 783, maxWidth: 110, size: 10, align: "right" },
-    bandName: { x: 130, y: 717, maxWidth: 420, size: 15, align: "center" },
-    pageLabel: { x: 505, y: 717, maxWidth: 52, size: 10, align: "center" },
-    setOrder: { x: 53, y: 717, maxWidth: 60, size: 12, align: "center" },
-    totalDuration: { x: 270, y: 675, maxWidth: 100, size: 10, align: "center" },
-    plannedStartTime: { x: 440, y: 675, maxWidth: 100, size: 10, align: "center" },
+    eventDate: { x: 377, y: 801, maxWidth: 145, size: 9, align: "right" },
+    bandName: { x: 88, y: 704, maxWidth: 470, size: 12, align: "center" },
+    pageLabel: { x: 505, y: 686, maxWidth: 52, size: 9, align: "center" },
+    setOrder: { x: 31, y: 704, maxWidth: 52, size: 11, align: "center" },
+    totalDuration: { x: 290, y: 670, maxWidth: 90, size: 10, align: "center" },
+    plannedStartTime: { x: 440, y: 670, maxWidth: 100, size: 10, align: "center" },
   },
   notes: {
-    lighting: { x: 35, y: 130, maxWidth: 240, size: 8, align: "left" },
-    pa: { x: 35, y: 115, maxWidth: 240, size: 8, align: "left" },
-    stageSummary: { x: 35, y: 100, maxWidth: 350, size: 8, align: "left" },
+    lighting: { x: 204, y: 160, maxWidth: 158, size: 7, align: "left" },
+    pa: { x: 366, y: 160, maxWidth: 135, size: 7, align: "left" },
+    stageSummary: { x: 204, y: 136, maxWidth: 158, size: 7, align: "left" },
   },
   setPlot: {
     x: 31,
-    y: 435,
-    width: 325,
-    height: 195,
+    y: 500,
+    width: 334,
+    height: 136,
     maxPoints: 24,
-    pointSize: 1.7,
-    drawLabels: false,
+    pointSize: 3.2,
+    drawLabels: true,
     invertY: true,
   },
   customLayers: [],
@@ -133,6 +133,16 @@ const mergeTextField = (base: LayoutTextField, raw: unknown): LayoutTextField =>
   };
 };
 
+// Migrate saved v4 defaults that would overlap the restored note/page fields.
+// Keep user-adjusted positions intact.
+const migrateDefaultField = (raw: unknown, legacy: LayoutTextField, current: LayoutTextField) => {
+  const value = raw as Partial<LayoutTextField> | undefined;
+  if (value && value.x === legacy.x && value.y === legacy.y && value.maxWidth === legacy.maxWidth && value.size === legacy.size && (value.align ?? "left") === (legacy.align ?? "left")) {
+    return current;
+  }
+  return raw;
+};
+
 export const normalizeVoxSetlistLayout = (raw: unknown): VoxSetlistLayout => {
   const src = (raw ?? {}) as Partial<VoxSetlistLayout>;
   const base = defaultVoxSetlistLayout;
@@ -143,15 +153,19 @@ export const normalizeVoxSetlistLayout = (raw: unknown): VoxSetlistLayout => {
       eventName: mergeTextField(base.fields.eventName, src.fields?.eventName),
       eventDate: mergeTextField(base.fields.eventDate, src.fields?.eventDate),
       bandName: mergeTextField(base.fields.bandName, src.fields?.bandName),
-      pageLabel: mergeTextField(base.fields.pageLabel, src.fields?.pageLabel),
+      pageLabel: mergeTextField(base.fields.pageLabel, migrateDefaultField(src.fields?.pageLabel,
+        { x: 505, y: 704, maxWidth: 52, size: 9, align: "center" }, base.fields.pageLabel)),
       setOrder: mergeTextField(base.fields.setOrder, src.fields?.setOrder),
       totalDuration: mergeTextField(base.fields.totalDuration, src.fields?.totalDuration),
       plannedStartTime: mergeTextField(base.fields.plannedStartTime, src.fields?.plannedStartTime),
     },
     notes: {
-      lighting: mergeTextField(base.notes.lighting, src.notes?.lighting),
-      pa: mergeTextField(base.notes.pa, src.notes?.pa),
-      stageSummary: mergeTextField(base.notes.stageSummary, src.notes?.stageSummary),
+      lighting: mergeTextField(base.notes.lighting, migrateDefaultField(src.notes?.lighting,
+        { x: 92, y: 117, maxWidth: 265, size: 7, align: "left" }, base.notes.lighting)),
+      pa: mergeTextField(base.notes.pa, migrateDefaultField(src.notes?.pa,
+        { x: 76, y: 103, maxWidth: 280, size: 7, align: "left" }, base.notes.pa)),
+      stageSummary: mergeTextField(base.notes.stageSummary, migrateDefaultField(src.notes?.stageSummary,
+        { x: 35, y: 90, maxWidth: 320, size: 7, align: "left" }, base.notes.stageSummary)),
     },
     setPlot: {
       x: asNumber(src.setPlot?.x, base.setPlot.x),

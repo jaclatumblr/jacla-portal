@@ -293,6 +293,91 @@ begin
   end if;
 end $$;
 
+create or replace function public.can_bypass_repertoire_lock(uid uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select public.is_admin_or_supervisor(uid)
+    or public.is_pa_leader(uid)
+    or public.is_lighting_leader(uid);
+$$;
+
+create or replace function public.is_repertoire_locked_for_event(target_event_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.events e
+    where e.id = target_event_id
+      and (
+        e.repertoire_is_closed = true
+        or (
+          e.repertoire_deadline is not null
+          and now() > e.repertoire_deadline
+        )
+      )
+  );
+$$;
+
+create or replace function public.is_repertoire_locked_for_band(target_band_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.bands b
+    where b.id = target_band_id
+      and b.band_type = 'event'
+      and public.is_repertoire_locked_for_event(b.event_id)
+  );
+$$;
+
+create or replace function public.assert_repertoire_event_writable(target_event_id uuid)
+returns void
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if public.can_bypass_repertoire_lock(auth.uid()) then
+    return;
+  end if;
+
+  if public.is_repertoire_locked_for_event(target_event_id) then
+    raise exception 'Repertoire submissions are closed for this event.';
+  end if;
+end;
+$$;
+
+create or replace function public.assert_repertoire_band_writable(target_band_id uuid)
+returns void
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if public.can_bypass_repertoire_lock(auth.uid()) then
+    return;
+  end if;
+
+  if public.is_repertoire_locked_for_band(target_band_id) then
+    raise exception 'Repertoire submissions are closed for this event.';
+  end if;
+end;
+$$;
+
 create policy "bands_select_all_authenticated"
 on public.bands for select
 to authenticated
@@ -416,6 +501,38 @@ create trigger trg_bands_block_member_update
 before update on public.bands
 for each row execute function public.bands_block_member_update();
 
+create or replace function public.bands_block_repertoire_lock()
+returns trigger
+language plpgsql
+as $$
+begin
+  if auth.uid() is null then
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    if new.band_type = 'event' then
+      perform public.assert_repertoire_event_writable(new.event_id);
+    end if;
+    return new;
+  end if;
+
+  if tg_op = 'UPDATE' then
+    if old.band_type = 'event' or new.band_type = 'event' then
+      perform public.assert_repertoire_event_writable(coalesce(new.event_id, old.event_id));
+    end if;
+    return new;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_bands_block_repertoire_lock on public.bands;
+create trigger trg_bands_block_repertoire_lock
+before insert or update on public.bands
+for each row execute function public.bands_block_repertoire_lock();
+
 
 -- =========================
 -- 3) band_members（バンド構成）
@@ -507,6 +624,37 @@ with check (
       )
   )
 );
+
+create or replace function public.band_members_block_repertoire_lock()
+returns trigger
+language plpgsql
+as $$
+declare
+  target_band uuid;
+begin
+  if auth.uid() is null then
+    if tg_op = 'DELETE' then
+      return old;
+    end if;
+    return new;
+  end if;
+
+  if tg_op = 'DELETE' then
+    target_band := old.band_id;
+    perform public.assert_repertoire_band_writable(target_band);
+    return old;
+  end if;
+
+  target_band := new.band_id;
+  perform public.assert_repertoire_band_writable(target_band);
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_band_members_block_repertoire_lock on public.band_members;
+create trigger trg_band_members_block_repertoire_lock
+before insert or update or delete on public.band_members
+for each row execute function public.band_members_block_repertoire_lock();
 
 
 -- =========================
@@ -627,6 +775,37 @@ with check (
       )
   )
 );
+
+create or replace function public.songs_block_repertoire_lock()
+returns trigger
+language plpgsql
+as $$
+declare
+  target_band uuid;
+begin
+  if auth.uid() is null then
+    if tg_op = 'DELETE' then
+      return old;
+    end if;
+    return new;
+  end if;
+
+  if tg_op = 'DELETE' then
+    target_band := old.band_id;
+    perform public.assert_repertoire_band_writable(target_band);
+    return old;
+  end if;
+
+  target_band := new.band_id;
+  perform public.assert_repertoire_band_writable(target_band);
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_songs_block_repertoire_lock on public.songs;
+create trigger trg_songs_block_repertoire_lock
+before insert or update or delete on public.songs
+for each row execute function public.songs_block_repertoire_lock();
 
 -- =========================
 -- 5) event_slots（TT/スロット）

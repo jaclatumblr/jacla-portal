@@ -230,7 +230,7 @@ export default function ProfilePage() {
               : [];
           const role = bandRow.instrument?.trim();
           bandEntries
-            .filter((band) => band.band_type === "fixed")
+            .filter((band) => band.band_type === "event")
             .forEach((band) => {
               const entry = map.get(band.id) ?? { name: band.name, roles: new Set<string>() };
               if (role) entry.roles.add(role);

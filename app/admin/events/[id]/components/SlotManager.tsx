@@ -241,6 +241,9 @@ export function SlotManager({
         return value < 0 ? value + DAY_MINUTES : value;
     };
 
+    const formatGeneratedTime = (minutes: number) =>
+        formatTime(normalizeDayMinutes(minutes));
+
     const compactConsecutiveTimedSlots = (source: EventSlot[]) => {
         let cursor: number | null = null;
         return source.map((slot) => {
@@ -1716,12 +1719,13 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
         const showDurationMap = new Map<string, number>();
         const rehearsalDurationMap = new Map<string, number>();
         songs.forEach((song) => {
-            if (!song.band_id || !song.duration_sec) return;
+            const durationSec = Number(song.duration_sec);
+            if (!song.band_id || !Number.isFinite(durationSec) || durationSec <= 0) return;
             const current = showDurationMap.get(song.band_id) ?? 0;
-            showDurationMap.set(song.band_id, current + song.duration_sec);
+            showDurationMap.set(song.band_id, current + durationSec);
             if (song.entry_type === "mc") return;
             const rehearsalCurrent = rehearsalDurationMap.get(song.band_id) ?? 0;
-            rehearsalDurationMap.set(song.band_id, rehearsalCurrent + song.duration_sec);
+            rehearsalDurationMap.set(song.band_id, rehearsalCurrent + durationSec);
         });
 
         const toRoundedMinutes = (seconds: number, extra: number) => {
@@ -1743,7 +1747,11 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
 
         const showStart = parseTime(event.start_time ?? null);
         let showCursor = showStart;
-        const changeover = event.default_changeover_min ?? 15;
+        const configuredChangeover = Number(event.default_changeover_min);
+        const changeover =
+            Number.isFinite(configuredChangeover) && configuredChangeover >= 0
+                ? Math.floor(configuredChangeover)
+                : 15;
 
         const rehearsalStart = parseTime(event.rehearsal_start_time ?? null);
         const firstPreRehearsalDuration =
@@ -1767,24 +1775,24 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
         let prepDuration = DEFAULT_OTHER_DURATION_MIN;
         const assemblyValue = parseTime(event.assembly_time ?? null);
         if (assemblyValue != null) {
-            prepStart = formatTime(assemblyValue);
+            prepStart = formatGeneratedTime(assemblyValue);
             if (timelineStart != null && timelineStart >= assemblyValue) {
-                prepEnd = formatTime(normalizeDayMinutes(timelineStart));
+                prepEnd = formatGeneratedTime(timelineStart);
                 prepDuration = timelineStart - assemblyValue;
             } else {
-                prepEnd = formatTime(assemblyValue + DEFAULT_OTHER_DURATION_MIN);
+                prepEnd = formatGeneratedTime(assemblyValue + DEFAULT_OTHER_DURATION_MIN);
             }
         } else if (timelineStart != null) {
             const prepStartValue = timelineStart - DEFAULT_OTHER_DURATION_MIN;
             if (prepStartValue >= 0) {
-                prepStart = formatTime(prepStartValue);
+                prepStart = formatGeneratedTime(prepStartValue);
             }
-            prepEnd = formatTime(normalizeDayMinutes(timelineStart));
+            prepEnd = formatGeneratedTime(timelineStart);
         } else {
             const fallbackStart = parseTime(event.open_time ?? null);
             if (fallbackStart != null) {
-                prepStart = formatTime(fallbackStart);
-                prepEnd = formatTime(fallbackStart + DEFAULT_OTHER_DURATION_MIN);
+                prepStart = formatGeneratedTime(fallbackStart);
+                prepEnd = formatGeneratedTime(fallbackStart + DEFAULT_OTHER_DURATION_MIN);
             }
         }
 
@@ -1807,8 +1815,8 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                 let rehearsalStartTime: string | null = null;
                 let rehearsalEndTime: string | null = null;
                 if (timelineCursor != null) {
-                    rehearsalStartTime = formatTime(normalizeDayMinutes(timelineCursor));
-                    rehearsalEndTime = formatTime(normalizeDayMinutes(timelineCursor + rehearsalDurationMin));
+                    rehearsalStartTime = formatGeneratedTime(timelineCursor);
+                    rehearsalEndTime = formatGeneratedTime(timelineCursor + rehearsalDurationMin);
                     timelineCursor += rehearsalDurationMin;
                 }
 
@@ -1820,7 +1828,7 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                     order_in_event: orderIndex++,
                     start_time: rehearsalStartTime,
                     end_time: rehearsalEndTime,
-                    changeover_min: event.default_changeover_min ?? 15,
+                    changeover_min: changeover,
                     note: null,
                 });
 
@@ -1828,8 +1836,8 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                 let showStartTime: string | null = null;
                 let showEndTime: string | null = null;
                 if (timelineCursor != null) {
-                    showStartTime = formatTime(normalizeDayMinutes(timelineCursor));
-                    showEndTime = formatTime(normalizeDayMinutes(timelineCursor + showDurationMin));
+                    showStartTime = formatGeneratedTime(timelineCursor);
+                    showEndTime = formatGeneratedTime(timelineCursor + showDurationMin);
                     timelineCursor += showDurationMin;
                 }
 
@@ -1849,8 +1857,8 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                     let changeoverStart: string | null = null;
                     let changeoverEnd: string | null = null;
                     if (timelineCursor != null) {
-                        changeoverStart = formatTime(normalizeDayMinutes(timelineCursor));
-                        changeoverEnd = formatTime(normalizeDayMinutes(timelineCursor + changeover));
+                        changeoverStart = formatGeneratedTime(timelineCursor);
+                        changeoverEnd = formatGeneratedTime(timelineCursor + changeover);
                     }
                     payloads.push({
                         event_id: event.id,
@@ -1877,8 +1885,8 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                 let startTime: string | null = null;
                 let endTime: string | null = null;
                 if (rehearsalCursor != null) {
-                    startTime = formatTime(rehearsalCursor);
-                    endTime = formatTime(rehearsalCursor + durationMin);
+                    startTime = formatGeneratedTime(rehearsalCursor);
+                    endTime = formatGeneratedTime(rehearsalCursor + durationMin);
                     rehearsalCursor += durationMin;
                 }
                 payloads.push({
@@ -1889,7 +1897,7 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                     order_in_event: orderIndex++,
                     start_time: startTime,
                     end_time: endTime,
-                    changeover_min: event.default_changeover_min ?? 15,
+                    changeover_min: changeover,
                     note: null,
                 });
             });
@@ -1900,8 +1908,8 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
             if (showStart != null) {
                 const restStartValue = showStart - restMinutes;
                 if (restStartValue >= 0) {
-                    restStart = formatTime(restStartValue);
-                    restEnd = formatTime(showStart);
+                    restStart = formatGeneratedTime(restStartValue);
+                    restEnd = formatGeneratedTime(showStart);
                 }
             }
             payloads.push({
@@ -1921,8 +1929,8 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                 let startTime: string | null = null;
                 let endTime: string | null = null;
                 if (showCursor != null) {
-                    startTime = formatTime(showCursor);
-                    endTime = formatTime(showCursor + durationMin);
+                    startTime = formatGeneratedTime(showCursor);
+                    endTime = formatGeneratedTime(showCursor + durationMin);
                 }
 
                 payloads.push({
@@ -1945,8 +1953,8 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
                     let changeoverStart: string | null = null;
                     let changeoverEnd: string | null = null;
                     if (showCursor != null) {
-                        changeoverStart = formatTime(showCursor);
-                        changeoverEnd = formatTime(showCursor + changeover);
+                        changeoverStart = formatGeneratedTime(showCursor);
+                        changeoverEnd = formatGeneratedTime(showCursor + changeover);
                     }
                     payloads.push({
                         event_id: event.id,
@@ -1967,8 +1975,10 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
             });
         }
 
-        const cleanupStart = showCursor != null ? formatTime(showCursor) : null;
-        const cleanupEnd = showCursor != null ? formatTime(showCursor + DEFAULT_OTHER_DURATION_MIN) : null;
+        const cleanupStart = showCursor != null ? formatGeneratedTime(showCursor) : null;
+        const cleanupEnd = showCursor != null
+            ? formatGeneratedTime(showCursor + DEFAULT_OTHER_DURATION_MIN)
+            : null;
 
         payloads.push({
             event_id: event.id,
@@ -1982,14 +1992,29 @@ type PhaseKey = EventSlot["slot_phase"] | "prep" | "cleanup" | "rest";
             note: CLEANUP_NOTE,
         });
 
-        const { data, error } = await supabase
-            .from("event_slots")
-            .insert(payloads)
-            .select();
+        let data: unknown[] | null = null;
+        let error: { message?: string | null } | null = null;
+        try {
+            const result = await supabase
+                .from("event_slots")
+                .insert(payloads)
+                .select();
+            data = result.data;
+            error = result.error;
+        } catch (caughtError) {
+            console.error(caughtError);
+            toast.error("自動生成中に予期しないエラーが発生しました。");
+            setGenerating(false);
+            return;
+        }
 
         if (error || !data) {
             console.error(error);
-            toast.error("Failed to auto-generate slots.");
+            toast.error(
+                error?.message
+                    ? `自動生成に失敗しました: ${error.message}`
+                    : "自動生成に失敗しました。"
+            );
         } else {
             const existingSlotIds = slots.map((slot) => slot.id);
             if (existingSlotIds.length > 0) {

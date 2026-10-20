@@ -102,7 +102,10 @@ export async function GET(request: Request) {
     return NextResponse.redirect(errorRedirect);
   }
 
-  const nextPath = payload.next && payload.next.startsWith("/") ? payload.next : "/me/profile/edit";
+  const nextPath =
+    payload.next && payload.next.startsWith("/") && !payload.next.startsWith("//")
+      ? payload.next
+      : "/me/profile/edit";
   return NextResponse.redirect(buildRedirect(baseUrl, nextPath, "connected"));
 }
 

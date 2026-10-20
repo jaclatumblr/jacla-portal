@@ -4,7 +4,7 @@ import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { safeSignOut, supabase } from "@/lib/supabaseClient";
-import { emailPolicyMessage, getUserEmail, isAllowedEmail, isGmailAddress } from "@/lib/authEmail";
+import { emailPolicyMessage, getUserEmail, hasAllowedEmail, isGmailAddress } from "@/lib/authEmail";
 
 function AuthCallbackContent() {
   const router = useRouter();
@@ -55,7 +55,7 @@ function AuthCallbackContent() {
     const handleSession = async (session: Session | null) => {
       if (!session) return;
       const email = getUserEmail(session.user ?? null);
-      if (isAllowedEmail(email)) {
+      if (hasAllowedEmail(session.user ?? null)) {
         router.replace("/");
         return;
       }

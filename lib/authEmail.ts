@@ -3,12 +3,14 @@ const allowedDomain = "edu.teu.ac.jp";
 const adminAllowlist = parseAllowlist(process.env.NEXT_PUBLIC_ADMIN_EMAIL_ALLOWLIST);
 
 export const emailPolicyMessage =
-  "edu.teu.ac.jp のアカウントのみ利用できます。";
+  "edu.teu.ac.jp のアカウント、または連携済みの個人Gmailのみ利用できます。";
 
 type SupabaseUser = {
   email?: string | null;
-  user_metadata?: Record<string, unknown>;
-  identities?: Array<{ identity_data?: Record<string, unknown> | null }>;
+  identities?: Array<{
+    provider?: string;
+    identity_data?: Record<string, unknown> | null;
+  }>;
 } | null;
 
 export function isAllowedEmail(email?: string | null): boolean {
@@ -16,6 +18,10 @@ export function isAllowedEmail(email?: string | null): boolean {
   const normalized = email.trim().toLowerCase();
   if (normalized.endsWith(`@${allowedDomain}`)) return true;
   return adminAllowlist.includes(normalized);
+}
+
+export function hasAllowedEmail(user?: SupabaseUser): boolean {
+  return getUserEmails(user).some((email) => isAllowedEmail(email));
 }
 
 export function isGmailAddress(email?: string | null): boolean {
@@ -28,25 +34,34 @@ export function isGmailAddress(email?: string | null): boolean {
 }
 
 export function getUserEmail(user?: SupabaseUser): string | null {
-  if (!user) return null;
+  return getUserEmails(user)[0] ?? null;
+}
+
+export function getUserEmails(user?: SupabaseUser): string[] {
+  if (!user) return [];
+  const emails: string[] = [];
+
+  const addEmail = (value: unknown) => {
+    const email = pickEmail(value);
+    if (!email) return;
+    const normalized = email.toLowerCase();
+    if (emails.some((entry) => entry.toLowerCase() === normalized)) return;
+    emails.push(email);
+  };
+
   const direct = pickEmail(user.email);
-  if (direct) return direct;
-  const meta = user.user_metadata ?? {};
-  const metaEmail =
-    pickEmail(meta.email) ||
-    pickEmail(meta.preferred_email) ||
-    pickEmail(meta.email_address);
-  if (metaEmail) return metaEmail;
+  if (direct) addEmail(direct);
+
   const identities = user.identities ?? [];
   for (const identity of identities) {
     const data = identity.identity_data ?? {};
-    const identityEmail =
-      pickEmail(data.email) ||
-      pickEmail(data.preferred_email) ||
-      pickEmail(data.email_address);
-    if (identityEmail) return identityEmail;
+    if (data.email_verified === false || data.verified === false) continue;
+    addEmail(data.email);
+    addEmail(data.preferred_email);
+    addEmail(data.email_address);
   }
-  return null;
+
+  return emails;
 }
 
 function parseAllowlist(value?: string | null): string[] {

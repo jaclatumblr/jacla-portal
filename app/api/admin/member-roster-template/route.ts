@@ -14,13 +14,14 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const isAdminLeader = (leader?: string | null) =>
   leader === "Administrator" || leader === "Supervisor";
 
-const rosterDir = "\u8cc7\u6599";
-const rosterTemplateCandidates = [
-  "event-member-roster (1).xlsx",
-  "\u69cb\u6210\u54e1\u540d\u7c3f.xlsx",
-];
-const allMembersSheetName = "Sheet1";
-const eventMembersSheetName = "Sheet1 (2)";
+const rosterSheetName = "Sheet1";
+const rosterDataStartRow = 9;
+const rosterTemplatePath = path.join(
+  process.cwd(),
+  "assets",
+  "templates",
+  "member-roster-template.xlsx"
+);
 
 const rolePriority = ["President", "Treasurer", "\u90e8\u9577", "\u4f1a\u8a08"];
 
@@ -101,7 +102,7 @@ const detectDataStartRow = (sheet: Worksheet): number => {
       return row + 1;
     }
   }
-  return 9;
+  return rosterDataStartRow;
 };
 
 const isMissingTableError = (error: SupabaseErrorLike | null | undefined) => {
@@ -121,15 +122,39 @@ const isMissingColumnError = (error: SupabaseErrorLike | null | undefined) => {
   return code === "42703" || /column .* does not exist/i.test(message);
 };
 
-const writeEntriesToSheet = (sheet: Worksheet, entries: RosterEntry[]) => {
-  const dataStartRow = detectDataStartRow(sheet);
-  const clearToRow = sheet.rowCount;
-  const capacity = Math.max(0, clearToRow - dataStartRow + 1);
-  if (entries.length > capacity) {
-    throw new Error(`Template capacity exceeded: ${entries.length}/${capacity}`);
+const copyRosterRowStyle = (sheet: Worksheet, sourceRowNumber: number, targetRowNumber: number) => {
+  const sourceRow = sheet.getRow(sourceRowNumber);
+  const targetRow = sheet.getRow(targetRowNumber);
+  targetRow.height = sourceRow.height;
+
+  for (let col = 1; col <= sheet.columnCount; col += 1) {
+    const sourceCell = sheet.getCell(sourceRowNumber, col);
+    const targetCell = sheet.getCell(targetRowNumber, col);
+    targetCell.style = structuredClone(sourceCell.style);
+  }
+};
+
+const ensureRosterCapacity = (sheet: Worksheet, dataStartRow: number, entryCount: number) => {
+  const requiredLastRow = dataStartRow + entryCount - 1;
+  const currentLastRow = Math.max(sheet.rowCount, dataStartRow);
+  if (requiredLastRow <= currentLastRow) return currentLastRow;
+
+  for (let row = currentLastRow + 1; row <= requiredLastRow; row += 1) {
+    copyRosterRowStyle(sheet, dataStartRow, row);
   }
 
-  for (let row = dataStartRow; row <= clearToRow; row += 1) {
+  return requiredLastRow;
+};
+
+const writeEntriesToSheet = (sheet: Worksheet, entries: RosterEntry[]) => {
+  const dataStartRow = detectDataStartRow(sheet);
+  const originalLastRow = sheet.rowCount;
+  const lastDataRow = ensureRosterCapacity(sheet, dataStartRow, entries.length);
+
+  for (let row = dataStartRow; row <= lastDataRow; row += 1) {
+    if (row !== dataStartRow) {
+      copyRosterRowStyle(sheet, dataStartRow, row);
+    }
     for (let col = 1; col <= 6; col += 1) {
       sheet.getCell(row, col).value = null;
     }
@@ -144,24 +169,36 @@ const writeEntriesToSheet = (sheet: Worksheet, entries: RosterEntry[]) => {
     sheet.getCell(row, 5).value = entry.phoneNumber || null;
     sheet.getCell(row, 6).value = entry.phoneNumber || null;
   });
+
+  sheet.pageSetup.printArea = `A1:G${lastDataRow}`;
+  sheet.pageSetup.printTitlesRow = `${dataStartRow - 1}:${dataStartRow - 1}`;
+  if (lastDataRow > originalLastRow) {
+    sheet.pageSetup.fitToPage = true;
+    sheet.pageSetup.fitToWidth = 1;
+    sheet.pageSetup.fitToHeight = 0;
+    delete (sheet.pageSetup as Partial<typeof sheet.pageSetup>).scale;
+  }
 };
 
 const buildRosterWorkbook = async (
   templateBuffer: Buffer,
-  allMemberEntries: RosterEntry[],
-  eventMemberEntries: RosterEntry[]
+  entries: RosterEntry[]
 ) => {
   const workbook = new Workbook();
   await workbook.xlsx.load(templateBuffer as unknown as ExcelJsLoadBuffer);
 
-  const allSheet = workbook.getWorksheet(allMembersSheetName) ?? workbook.worksheets[0];
-  const eventSheet = workbook.getWorksheet(eventMembersSheetName) ?? workbook.worksheets[1];
+  const rosterSheet = workbook.getWorksheet(rosterSheetName) ?? workbook.worksheets[0];
 
-  if (!allSheet) throw new Error("All members sheet not found.");
-  if (!eventSheet) throw new Error("Event members sheet not found.");
+  if (!rosterSheet) throw new Error("Roster sheet not found.");
 
-  writeEntriesToSheet(allSheet, allMemberEntries);
-  writeEntriesToSheet(eventSheet, eventMemberEntries);
+  writeEntriesToSheet(rosterSheet, entries);
+
+  // The downloadable roster follows the supplied one-sheet format. The
+  // template may still contain an older auxiliary sheet, which must never
+  // expose an all-members roster.
+  [...workbook.worksheets]
+    .filter((sheet) => sheet.id !== rosterSheet.id)
+    .forEach((sheet) => workbook.removeWorksheet(sheet.id));
 
   return Buffer.from(await workbook.xlsx.writeBuffer());
 };
@@ -317,14 +354,12 @@ export async function GET(request: Request) {
 
   const nameMap = new Map<string, string>();
   const adminIds = new Set<string>();
-  const allProfileIds: string[] = [];
 
   profileRows.forEach((row) => {
     const profileId = row.id?.trim();
     if (!profileId) return;
     const name = row.real_name?.trim() || row.display_name?.trim() || "\u672a\u767b\u9332";
     nameMap.set(profileId, name);
-    allProfileIds.push(profileId);
     if (row.leader?.trim() === "Administrator") {
       adminIds.add(profileId);
     }
@@ -347,8 +382,6 @@ export async function GET(request: Request) {
       adminIds.add(profileId);
     });
   }
-
-  const allMemberIds = allProfileIds.filter((id) => !adminIds.has(id));
 
   const { data: bandRows, error: bandError } = await adminClient
     .from("bands")
@@ -388,7 +421,8 @@ export async function GET(request: Request) {
 
   const eventMemberIds = Array.from(eventMemberIdSet.values());
 
-  const targetProfileIds = Array.from(new Set([...allMemberIds, ...eventMemberIds]));
+  // Fetch private data only for people assigned to this event's bands.
+  const targetProfileIds = eventMemberIds;
   const privateMap = new Map<string, { studentId: string; phoneNumber: string }>();
   const roleMap = new Map<string, string[]>();
 
@@ -454,33 +488,21 @@ export async function GET(request: Request) {
     }
   }
 
-  const allMemberEntries = buildEntriesFromIds(allMemberIds, nameMap, privateMap, roleMap);
-  const eventMemberEntries = buildEntriesFromIds(eventMemberIds, nameMap, privateMap, roleMap);
+  const rosterEntries = buildEntriesFromIds(eventMemberIds, nameMap, privateMap, roleMap);
 
-  let templateBuffer: Buffer | null = null;
-  let templateError: unknown = null;
-  for (const templateName of rosterTemplateCandidates) {
-    const filePath = path.join(process.cwd(), rosterDir, templateName);
-    try {
-      templateBuffer = await readFile(filePath);
-      break;
-    } catch (error) {
-      templateError = error;
-    }
-  }
-  if (!templateBuffer) {
-    console.error(templateError);
-    return NextResponse.json({ error: "Template file not found." }, { status: 404 });
+  let templateBuffer: Buffer;
+  try {
+    templateBuffer = await readFile(rosterTemplatePath);
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json({ error: "Roster template is unavailable." }, { status: 500 });
   }
 
   let outputBuffer: Buffer;
   try {
-    outputBuffer = await buildRosterWorkbook(templateBuffer, allMemberEntries, eventMemberEntries);
+    outputBuffer = await buildRosterWorkbook(templateBuffer, rosterEntries);
   } catch (error) {
     console.error(error);
-    if (error instanceof Error && error.message.startsWith("Template capacity exceeded:")) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
     return NextResponse.json({ error: "Failed to generate roster file." }, { status: 500 });
   }
 

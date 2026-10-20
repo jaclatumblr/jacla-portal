@@ -297,7 +297,7 @@ export default function EventTimeTableViewPage() {
         const eventDate = (event.date ?? "").replaceAll("-", "");
         const filename = `${event.name ?? "event"}_TT_${eventDate || "export"}`.replace(/[\\/:*?"<>|]/g, "_");
 
-        downloadExcelWorkbook(`${filename}.xlsx`, [
+        await downloadExcelWorkbook(`${filename}.xlsx`, [
           {
             name: "Sheet1",
             headers: ["#", "\u9805\u76EE", "\u30E1\u30F3\u30D0\u30FC\u6570", "\u66F2\u6570", "\u958B\u59CB", "\u7D42\u4E86", "\u7A2E\u5225", "\u533A\u5206"],

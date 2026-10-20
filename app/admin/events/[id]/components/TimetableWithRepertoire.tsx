@@ -6,6 +6,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/lib/toast";
+import {
+  defaultVoxSetlistLayout,
+  normalizeVoxSetlistLayout,
+} from "@/lib/voxSetlistLayout";
 import { SlotManager } from "./SlotManager";
 import { RepertoireSection } from "./RepertoireSection";
 import type { Band, BandMember, EventRow, EventSlot, Song } from "../types";
@@ -50,8 +54,15 @@ export function TimetableWithRepertoire({
         throw new Error("Failed to get access token.");
       }
 
-      // The frontend no longer sends the layout from localStorage. 
-      // It relies on the backend's defaultVoxSetlistLayout.
+      const storedLayout = localStorage.getItem(`voxSetlistLayout:v4:${eventId}`);
+      let layout = defaultVoxSetlistLayout;
+      if (storedLayout) {
+        try {
+          layout = normalizeVoxSetlistLayout(JSON.parse(storedLayout));
+        } catch {
+          // Export with the default layout when a stale local value cannot be parsed.
+        }
+      }
 
       const response = await fetch(`/api/admin/match-vox-setlist-template`, {
         method: "POST",
@@ -61,6 +72,7 @@ export function TimetableWithRepertoire({
         },
         body: JSON.stringify({
           eventId,
+          layout,
         }),
       });
       if (!response.ok) {

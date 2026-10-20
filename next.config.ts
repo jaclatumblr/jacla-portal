@@ -3,7 +3,9 @@ import { execSync } from "child_process";
 
 const resolveGitTag = () => {
   try {
-    return execSync("git describe --tags --abbrev=0").toString().trim();
+    return execSync("git describe --tags --abbrev=0", {
+      stdio: ["ignore", "pipe", "ignore"],
+    }).toString().trim();
   } catch {
     return "";
   }
@@ -19,6 +21,9 @@ const baseVersion = envBaseVersion || gitTagVersion || "1.000";
 const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_BASE_VERSION: baseVersion,
+  },
+  outputFileTracingIncludes: {
+    "/api/admin/member-roster-template": ["./assets/templates/member-roster-template.xlsx"],
   },
 };
 

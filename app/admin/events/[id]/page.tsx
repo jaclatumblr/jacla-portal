@@ -12,6 +12,7 @@ import { useIsAdmin } from "@/lib/useIsAdmin";
 import { useIsAdministrator } from "@/lib/useIsAdministrator";
 import { useAdminEventData } from "./hooks/useAdminEventData";
 import { EventEditForm } from "./components/EventEditForm";
+import { ExportBandMembershipButton } from "./components/ExportBandMembershipButton";
 import { TimetableWithRepertoire } from "./components/TimetableWithRepertoire";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -81,12 +82,19 @@ export default function AdminEventDetailPage() {
             backHref="/admin"
             backLabel="管理画面に戻る"
             actions={
-              <Badge
-                variant={statusBadge(event.status) as "default" | "secondary" | "outline"}
-                className="px-3 py-1 text-sm"
-              >
-                {statusLabel(event.status)}
-              </Badge>
+              <div className="flex flex-wrap items-center gap-2">
+                <ExportBandMembershipButton
+                  eventId={eventId}
+                  eventName={event.name}
+                  eventDate={event.date}
+                />
+                <Badge
+                  variant={statusBadge(event.status) as "default" | "secondary" | "outline"}
+                  className="px-3 py-1 text-sm"
+                >
+                  {statusLabel(event.status)}
+                </Badge>
+              </div>
             }
           />
 

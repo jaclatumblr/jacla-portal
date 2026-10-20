@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "@/lib/icons";
+import { Chrome, Link2, Loader2 } from "@/lib/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/lib/toast";
+import { isGmailAddress } from "@/lib/authEmail";
 import { AvatarUploader } from "./AvatarUploader";
 import { DiscordConnectSection } from "./DiscordConnectSection";
 import { RoleSelector } from "./RoleSelector";
@@ -25,6 +27,7 @@ export function ProfileForm({ isEdit, nextUrl }: ProfileFormProps) {
   const { session } = useAuth();
   const router = useRouter();
   const [saving, setSaving] = useState(false);
+  const [linkingIdentity, setLinkingIdentity] = useState(false);
   const normalizeStudentId = (value: string) => value.trim().toUpperCase();
 
   const profileHook = useProfileData();
@@ -38,6 +41,27 @@ export function ProfileForm({ isEdit, nextUrl }: ProfileFormProps) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, discordInitialId, discordInitialUsername]);
+
+  const linkedGoogleEmails = useMemo(() => {
+    const identities = session?.user.identities ?? [];
+    const emails: string[] = [];
+
+    for (const identity of identities) {
+      if (identity.provider !== "google") continue;
+      const data = identity.identity_data as Record<string, unknown> | undefined;
+      const emailCandidates = [data?.email, data?.preferred_email, data?.email_address];
+      const email = emailCandidates.find(
+        (value): value is string => typeof value === "string" && value.trim().length > 0
+      );
+      if (!email) continue;
+      const normalized = email.trim().toLowerCase();
+      if (emails.some((entry) => entry.toLowerCase() === normalized)) continue;
+      emails.push(email.trim());
+    }
+
+    return emails;
+  }, [session]);
+  const hasPersonalGmail = linkedGoogleEmails.some((email) => isGmailAddress(email));
 
   if (loading) {
     return (
@@ -57,6 +81,31 @@ export function ProfileForm({ isEdit, nextUrl }: ProfileFormProps) {
       </div>
     );
   }
+
+  const handleLinkPersonalGmail = async () => {
+    setLinkingIdentity(true);
+
+    const { error } = await supabase.auth.linkIdentity({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/me/profile/edit`,
+        queryParams: {
+          prompt: "select_account",
+        },
+      },
+    });
+
+    if (error) {
+      console.error(error);
+      const lowerMessage = error.message.toLowerCase();
+      toast.error(
+        lowerMessage.includes("linking") || lowerMessage.includes("disabled")
+          ? "個人Gmail連携を開始できませんでした。Supabase AuthのManual linking設定を確認してください。"
+          : "個人Gmail連携を開始できませんでした。"
+      );
+      setLinkingIdentity(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -471,6 +520,60 @@ export function ProfileForm({ isEdit, nextUrl }: ProfileFormProps) {
       {isEdit && (
         <section>
           <DiscordConnectSection discordHook={discordHook} nextUrl={nextUrl} />
+        </section>
+      )}
+
+      {isEdit && (
+        <section className="space-y-4 rounded-xl border border-border bg-muted/20 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex gap-3">
+              <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Link2 className="h-4 w-4" />
+              </span>
+              <div className="space-y-1">
+                <h3 className="text-sm font-semibold">卒業後ログイン用Gmail</h3>
+                <p className="text-sm text-muted-foreground">
+                  卒業後に大学アカウントが失効してもログインできるよう、個人Gmailをこのアカウントに連携できます。
+                </p>
+              </div>
+            </div>
+            <Badge variant={hasPersonalGmail ? "success" : "outline"}>
+              {hasPersonalGmail ? "連携済み" : "未連携"}
+            </Badge>
+          </div>
+
+          {linkedGoogleEmails.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {linkedGoogleEmails.map((email) => (
+                <Badge
+                  key={email}
+                  variant={isGmailAddress(email) ? "success" : "secondary"}
+                >
+                  {email}
+                </Badge>
+              ))}
+            </div>
+          )}
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleLinkPersonalGmail}
+              disabled={linkingIdentity}
+              className="w-full sm:w-auto"
+            >
+              {linkingIdentity ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Chrome className="h-4 w-4" />
+              )}
+              個人Gmailを連携
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Googleのアカウント選択画面で、卒業後も使う個人Gmailを選んでください。
+            </p>
+          </div>
         </section>
       )}
 

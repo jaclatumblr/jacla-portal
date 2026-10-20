@@ -11,6 +11,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/lib/toast";
 import {
+    defaultVoxSetlistLayout,
+    normalizeVoxSetlistLayout,
+} from "@/lib/voxSetlistLayout";
+import {
     EventRow,
     statusOptions,
     eventTypeOptions,
@@ -159,7 +163,7 @@ export function EventEditForm({ event, onRefresh }: EventEditFormProps) {
             const downloadUrl = window.URL.createObjectURL(blob);
             const link = document.createElement("a");
             const contentDisposition = response.headers.get("content-disposition") ?? "";
-            const utf8NameMatch = contentDisposition.match(/filename\\*=UTF-8''([^;]+)/i);
+            const utf8NameMatch = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
             const decodedName = utf8NameMatch?.[1]
                 ? decodeURIComponent(utf8NameMatch[1])
                 : "event-member-roster.xlsx";
@@ -168,12 +172,12 @@ export function EventEditForm({ event, onRefresh }: EventEditFormProps) {
             document.body.appendChild(link);
             link.click();
             link.remove();
-            window.URL.revokeObjectURL(downloadUrl);
+            window.setTimeout(() => window.URL.revokeObjectURL(downloadUrl), 1000);
 
-            toast.success("Roster template exported.");
+            toast.success("ライブ出演者名簿を出力しました。");
         } catch (error) {
             console.error(error);
-            toast.error("Failed to export roster template.");
+            toast.error("ライブ出演者名簿の出力に失敗しました。");
         } finally {
             setExportingRoster(false);
         }
@@ -188,8 +192,15 @@ export function EventEditForm({ event, onRefresh }: EventEditFormProps) {
                 throw new Error("Failed to get access token.");
             }
 
-            // The frontend no longer sends the layout from localStorage.
-            // It relies on the backend's defaultVoxSetlistLayout.
+            const storedLayout = localStorage.getItem(`voxSetlistLayout:v4:${event.id}`);
+            let layout = defaultVoxSetlistLayout;
+            if (storedLayout) {
+                try {
+                    layout = normalizeVoxSetlistLayout(JSON.parse(storedLayout));
+                } catch {
+                    // Export with the default layout when a stale local value cannot be parsed.
+                }
+            }
 
             const response = await fetch(`/api/admin/match-vox-setlist-template`, {
                 method: "POST",
@@ -199,6 +210,7 @@ export function EventEditForm({ event, onRefresh }: EventEditFormProps) {
                 },
                 body: JSON.stringify({
                     eventId: event.id,
+                    layout,
                 }),
             });
             if (!response.ok) {
@@ -469,7 +481,7 @@ export function EventEditForm({ event, onRefresh }: EventEditFormProps) {
                                 ) : (
                                     <Download className="w-4 h-4 mr-2" />
                                 )}
-                                Export roster template
+                                ライブ出演者名簿を出力
                             </Button>
                             <Button
                                 type="button"

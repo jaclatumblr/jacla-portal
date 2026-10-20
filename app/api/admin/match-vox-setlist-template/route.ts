@@ -16,6 +16,7 @@ import {
   normalizeVoxSetlistLayout,
   type VoxSetlistLayout,
 } from "@/lib/voxSetlistLayout";
+import { readStagePlotData } from "@/lib/stagePlot";
 
 export const runtime = "nodejs";
 
@@ -24,14 +25,13 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 
 const templateCandidates = ["Match Voxsetlist20250118.pdf"];
-const docsDir = "資料";
 const maxSongsPerBand = 10;
 
 const fontCandidates = [
   "C:/Windows/Fonts/GOTHIC.TTF",
   "C:/Windows/Fonts/NotoSansJP-VF.ttf",
-  path.join(process.cwd(), docsDir, "NotoSansJP-VF.ttf"),
-  path.join(process.cwd(), docsDir, "NotoSansJP-Regular.ttf"),
+  path.join(process.cwd(), "資料", "NotoSansJP-VF.ttf"),
+  path.join(process.cwd(), "資料", "NotoSansJP-Regular.ttf"),
 ];
 
 type SupabaseErrorLike = { code?: string | null; message?: string | null };
@@ -68,6 +68,7 @@ type BandMemberRow = {
   position_y?: number | null;
   order_index?: number | null;
   is_mc?: boolean | null;
+  monitor_note?: string | null;
   profiles?:
     | {
         display_name?: string | null;
@@ -94,11 +95,13 @@ type PreparedBand = {
   appearanceOrder: number | null;
   appearanceTotal: number;
   plannedStartTime: string;
+  plannedEndTime: string;
   soundNote: string;
   lightingNote: string;
   stagePlotSummary: string;
   stagePlotItems: Array<{ label: string; x: number; y: number }>;
   memberPlotItems: Array<{ label: string; x: number; y: number }>;
+  carryEquipment: string[];
   songs: Array<{
     title: string;
     paNote: string;
@@ -106,6 +109,7 @@ type PreparedBand = {
     entryType: "song" | "mc";
     durationSec: number | null;
     orderIndex: number;
+    lightingStrobe: string;
   }>;
 };
 
@@ -125,8 +129,7 @@ const formatDuration = (durationSec: number | null) => {
 const formatEventDate = (value: string) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  const pad = (v: number) => String(v).padStart(2, "0");
-  return `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())}`;
+  return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;
 };
 
 const formatTimeHHMM = (value: string | null | undefined) => {
@@ -154,9 +157,9 @@ const loadFirstExistingBuffer = async (fileCandidates: string[]) => {
   for (const candidate of fileCandidates) {
     const targetPath = candidate.includes(":")
       ? candidate
-      : path.join(process.cwd(), docsDir, candidate);
+      : path.join(process.cwd(), "資料", candidate);
     try {
-      return await readFile(targetPath);
+      return await readFile(/*turbopackIgnore: true*/ targetPath);
     } catch (error) {
       foundError = error;
     }
@@ -264,7 +267,7 @@ const embedBestFont = async (outputDoc: PDFDocument, templateBuffer: Buffer) => 
 
   for (const candidate of fontCandidates) {
     try {
-      const fileBuffer = await readFile(candidate);
+      const fileBuffer = await readFile(/*turbopackIgnore: true*/ candidate);
       const embedded = await outputDoc.embedFont(fileBuffer, { subset: false });
       if (hasUsableJapaneseGlyphs(embedded)) {
         return embedded;
@@ -292,7 +295,14 @@ const embedBestFont = async (outputDoc: PDFDocument, templateBuffer: Buffer) => 
 const toAsciiFallback = (text: string) => text.replace(/[^\x20-\x7E]/g, "").trim();
 
 const encodeSafeText = (font: PDFFont, rawText: string) => {
-  const text = rawText.trim();
+  const supported = new Set(font.getCharacterSet());
+  const text = Array.from(rawText.normalize("NFC"))
+    .filter((character) => {
+      const codePoint = character.codePointAt(0);
+      return codePoint != null && supported.has(codePoint);
+    })
+    .join("")
+    .trim();
   if (!text) return "";
   try {
     font.encodeText(text);
@@ -331,6 +341,47 @@ const fitText = (font: PDFFont, rawText: string, fontSize: number, maxWidth: num
   return text;
 };
 
+const wrapText = (
+  font: PDFFont,
+  rawText: string,
+  fontSize: number,
+  maxWidth: number,
+  maxLines: number
+) => {
+  const source = encodeSafeText(font, rawText.replace(/\r?\n/g, " ").trim());
+  if (!source || maxLines < 1) return [] as string[];
+
+  const characters = Array.from(source);
+  const lines: string[] = [];
+  let current = "";
+  let consumed = 0;
+
+  for (const character of characters) {
+    const candidate = `${current}${character}`;
+    if (current && font.widthOfTextAtSize(candidate, fontSize) > maxWidth) {
+      lines.push(current.trimEnd());
+      if (lines.length >= maxLines) break;
+      current = character.trimStart();
+    } else {
+      current = candidate;
+    }
+    consumed += 1;
+  }
+
+  if (current && lines.length < maxLines) lines.push(current.trimEnd());
+
+  if (consumed < characters.length && lines.length > 0) {
+    const ellipsis = "...";
+    let last = lines[lines.length - 1];
+    while (last && font.widthOfTextAtSize(`${last}${ellipsis}`, fontSize) > maxWidth) {
+      last = last.slice(0, -1);
+    }
+    lines[lines.length - 1] = last ? `${last}${ellipsis}` : "";
+  }
+
+  return lines;
+};
+
 const drawTextInCell = (
   page: PDFPage,
   font: PDFFont,
@@ -360,6 +411,42 @@ const drawTextInCell = (
     size,
     font,
     color: rgb(0, 0, 0),
+  });
+  page.drawText(fitted, {
+    x: drawX + 0.22,
+    y: options.y,
+    size,
+    font,
+    color: rgb(0, 0, 0),
+  });
+};
+
+const drawEventDate = (
+  page: PDFPage,
+  font: PDFFont,
+  value: string,
+  field: VoxSetlistLayout["fields"]["eventDate"]
+) => {
+  const parts = value.split("/");
+  if (parts.length !== 3) {
+    drawTextInCell(page, font, value, field);
+    return;
+  }
+
+  const positions = [
+    { x: field.x, width: 40 },
+    { x: field.x + 66, width: 25 },
+    { x: field.x + 117, width: 27 },
+  ];
+  parts.forEach((part, index) => {
+    const position = positions[index];
+    drawTextInCell(page, font, part, {
+      x: position.x,
+      y: field.y,
+      maxWidth: position.width,
+      size: field.size,
+      align: "right",
+    });
   });
 };
 
@@ -414,9 +501,9 @@ const drawCustomLayers = (
 
 const formatLightingChoice = (value: string | null | undefined) => {
   if (!value) return "";
-  if (value === "o") return "spot:on";
-  if (value === "x") return "spot:off";
-  if (value === "auto") return "spot:auto";
+  if (value === "o") return "あり";
+  if (value === "x") return "なし";
+  if (value === "auto") return "おまかせ";
   return value;
 };
 
@@ -424,11 +511,8 @@ const clampPercent = (value: number) => Math.min(100, Math.max(0, value));
 
 const parseStagePlotItems = (raw: unknown) => {
   if (!raw || typeof raw !== "object") return [] as Array<{ label: string; x: number; y: number }>;
-
-  const record = raw as { items?: unknown };
-  if (!Array.isArray(record.items)) return [] as Array<{ label: string; x: number; y: number }>;
-
-  return (record.items as StagePlotItem[])
+  const plot = readStagePlotData(raw as Record<string, unknown>).plots[0];
+  return ((plot?.items ?? []) as StagePlotItem[])
     .map((item) => {
       const label = (item?.label ?? "").trim();
       if (!label) return null;
@@ -471,23 +555,110 @@ const parseStagePlotSummary = (raw: unknown) => {
   return `${labels.slice(0, 12).join(" / ")} ... (+${labels.length - 12})`;
 };
 
-const drawBandNotes = (
+const drawSetPlot = (
   page: PDFPage,
   font: PDFFont,
   layout: VoxSetlistLayout,
-  lightingNote: string,
-  soundNote: string,
-  stageSummary: string
+  stageItems: PreparedBand["stagePlotItems"],
+  memberItems: PreparedBand["memberPlotItems"]
 ) => {
-  drawTextInCell(page, font, `照明要望: ${lightingNote || "-"}`, {
-    ...layout.notes.lighting,
+  const config = layout.setPlot;
+  const points = [...stageItems, ...memberItems].slice(0, config.maxPoints);
+
+  points.forEach((point) => {
+    const x = config.x + (clampPercent(point.x) / 100) * config.width;
+    const normalizedY = clampPercent(point.y) / 100;
+    const y = config.invertY
+      ? config.y + (1 - normalizedY) * config.height
+      : config.y + normalizedY * config.height;
+
+    page.drawCircle({
+      x,
+      y,
+      size: Math.max(1.5, config.pointSize),
+      borderWidth: 0.8,
+      borderColor: rgb(0, 0, 0),
+    });
+
+    if (config.drawLabels) {
+      drawTextInCell(page, font, point.label, {
+        x: Math.max(config.x, Math.min(x + 4, config.x + config.width - 58)),
+        y: Math.max(config.y + 2, Math.min(y - 2, config.y + config.height - 7)),
+        maxWidth: 58,
+        size: 7.5,
+      });
+    }
   });
-  drawTextInCell(page, font, `PA要望: ${soundNote || "-"}`, {
-    ...layout.notes.pa,
+};
+
+const drawEquipmentSelections = (
+  page: PDFPage,
+  stageItems: PreparedBand["stagePlotItems"]
+) => {
+  const labels = stageItems.map((item) => item.label.trim().toLowerCase());
+  const hasMarshall = labels.some((label) => label.includes("marshall"));
+  const hasJc = labels.some((label) => /(^|[^a-z])jc([^a-z]|$)/i.test(label) || label.includes("jc-120"));
+  const hasBassAmp = labels.some(
+    (label) =>
+      label.includes("bass amp") ||
+      label.includes("bassamp") ||
+      /(^|\s)ba\.?\s*amp($|\s)/i.test(label) ||
+      label === "ba." ||
+      label.includes("ベースアンプ") ||
+      label.includes("gallien") ||
+      label.includes("gk800")
+  );
+
+  const drawSelectionCircle = (y: number) => {
+    page.drawCircle({
+      x: 493,
+      y,
+      size: 4,
+      borderWidth: 1.25,
+      borderColor: rgb(0, 0, 0),
+    });
+  };
+
+  if (hasMarshall) drawSelectionCircle(616);
+  if (hasJc) drawSelectionCircle(588);
+  if (hasBassAmp) drawSelectionCircle(561);
+};
+
+const drawCarryEquipment = (
+  page: PDFPage,
+  font: PDFFont,
+  equipment: string[]
+) => {
+  const lines = equipment.flatMap((item) => wrapText(font, item, 7, 54, 3)).slice(0, 12);
+  lines.forEach((line, index) => {
+    drawTextInCell(page, font, line, {
+      x: 506,
+      y: 622 - index * 10,
+      maxWidth: 55,
+      size: 7,
+    });
   });
-  drawTextInCell(page, font, `セット図: ${stageSummary || "-"}`, {
-    ...layout.notes.stageSummary,
-  });
+};
+
+const drawFooterSelections = (page: PDFPage, songs: PreparedBand["songs"]) => {
+  const strobeValues = songs.map((song) => song.lightingStrobe).filter(Boolean);
+  const strobeAllowed = strobeValues.some((value) => value === "o" || value === "auto");
+  const strobeDenied = strobeValues.length > 0 && strobeValues.every((value) => value === "x");
+
+  const drawSelectionEllipse = (x: number, xScale: number) => {
+    page.drawEllipse({
+      x,
+      y: 91,
+      xScale,
+      yScale: 7,
+      borderWidth: 1.2,
+      borderColor: rgb(0, 0, 0),
+    });
+  };
+
+  if (strobeAllowed) drawSelectionEllipse(98, 12);
+  if (strobeDenied) drawSelectionEllipse(123, 12);
+  drawSelectionEllipse(222, 20);
 };
 
 const drawBandPage = (
@@ -498,15 +669,13 @@ const drawBandPage = (
   eventDate: string,
   band: PreparedBand,
   pageIndex: number,
-  totalPages: number
+  songOffset = 0,
+  continuationPage = 1
 ) => {
   const songs = band.songs
     .slice()
     .sort((a, b) => a.orderIndex - b.orderIndex)
-    .slice(0, maxSongsPerBand);
-
-  const totalSec = songs.reduce((sum, song) => sum + (song.durationSec ?? 0), 0);
-  const totalDuration = formatDuration(totalSec);
+    .slice(songOffset, songOffset + maxSongsPerBand);
 
   // Keep template visual style by avoiding broad white overlays.
 
@@ -514,46 +683,63 @@ const drawBandPage = (
   if (layout.showEventName) {
     drawTextInCell(page, font, eventName, { ...layout.fields.eventName });
   }
-  drawTextInCell(page, font, eventDate, { ...layout.fields.eventDate });
+  drawEventDate(page, font, eventDate, layout.fields.eventDate);
 
   drawTextInCell(page, font, band.name, { ...layout.fields.bandName });
-  const orderText =
-    band.appearanceOrder != null
-      ? `${band.appearanceOrder}/${Math.max(1, band.appearanceTotal)}`
-      : `${pageIndex}/${totalPages}`;
-  drawTextInCell(page, font, orderText, { ...layout.fields.pageLabel });
   drawTextInCell(page, font, String(band.appearanceOrder ?? pageIndex), { ...layout.fields.setOrder });
-  drawTextInCell(page, font, totalDuration, { ...layout.fields.totalDuration });
-  drawTextInCell(page, font, band.plannedStartTime, { ...layout.fields.plannedStartTime });
+  drawTextInCell(page, font, band.plannedStartTime, { ...layout.fields.totalDuration });
+  drawTextInCell(page, font, band.plannedEndTime, { ...layout.fields.plannedStartTime });
 
-  const rowY = [383, 358, 334, 309, 284, 259, 235, 210, 186, 162];
+  const pageCount = Math.max(1, Math.ceil(band.songs.length / maxSongsPerBand));
+  drawTextInCell(page, font, `${continuationPage}/${pageCount}`, layout.fields.pageLabel);
+
+  const rowY = [405, 381, 356, 332, 307, 283, 258, 234, 209, 185, 160, 136];
+
+  const drawLinesInTableCell = (
+    lines: string[],
+    rowIndex: number,
+    options: { x: number; maxWidth: number; size: number; align?: "left" | "center" }
+  ) => {
+    const baseY = rowY[rowIndex];
+    if (baseY == null || lines.length === 0) return;
+    const offsets = lines.length === 1 ? [0] : [5.5, -6.5];
+    lines.slice(0, 2).forEach((line, lineIndex) => {
+      drawTextInCell(page, font, line, {
+        x: options.x,
+        y: baseY + offsets[lineIndex],
+        maxWidth: options.maxWidth,
+        size: options.size,
+        align: options.align,
+      });
+    });
+  };
+
+  let songNumber = band.songs.slice().sort((a, b) => a.orderIndex - b.orderIndex)
+    .slice(0, songOffset).filter((song) => song.entryType !== "mc").length;
   songs.forEach((song, index) => {
+    if (index >= maxSongsPerBand || rowY[index] == null) return;
+    const titleLines = wrapText(
+      font,
+      song.title || (song.entryType === "mc" ? "MC" : ""),
+      8.5,
+      112,
+      2
+    );
+    const lightingLines = wrapText(font, song.lightingNote, 8, 160, 2);
+    const paLines = wrapText(font, song.paNote, 8, 135, 2);
     const y = rowY[index];
-    drawTextInCell(page, font, String(index + 1), {
+
+    const orderLabel = song.entryType === "mc" ? "MC" : String(++songNumber);
+    drawTextInCell(page, font, orderLabel, {
       x: 31,
       y,
       maxWidth: 52,
       size: 10,
       align: "center",
     });
-    drawTextInCell(page, font, song.title || (song.entryType === "mc" ? "MC" : ""), {
-      x: 86,
-      y,
-      maxWidth: 112,
-      size: 10,
-    });
-    drawTextInCell(page, font, song.lightingNote, {
-      x: 204,
-      y,
-      maxWidth: 160,
-      size: 9,
-    });
-    drawTextInCell(page, font, song.paNote, {
-      x: 366,
-      y,
-      maxWidth: 135,
-      size: 9,
-    });
+    drawLinesInTableCell(titleLines, index, { x: 86, maxWidth: 112, size: 8.5 });
+    drawLinesInTableCell(lightingLines, index, { x: 204, maxWidth: 160, size: 8 });
+    drawLinesInTableCell(paLines, index, { x: 366, maxWidth: 135, size: 8 });
     drawTextInCell(page, font, formatDuration(song.durationSec), {
       x: 504,
       y,
@@ -563,24 +749,29 @@ const drawBandPage = (
     });
   });
 
-  if (band.songs.length > maxSongsPerBand) {
-    drawTextInCell(page, font, `+${band.songs.length - maxSongsPerBand}曲`, {
-      x: 370,
-      y: 141,
-      maxWidth: 190,
-      size: 9,
-      align: "right",
+  const drawNote = (value: string, field: typeof layout.notes.pa) => {
+    const lines = wrapText(font, value, field.size, field.maxWidth, 2);
+    lines.forEach((line, index) => {
+      const lineHeight = field.size + 2;
+      drawTextInCell(page, font, line, { ...field, y: field.y + (lines.length - 1) * lineHeight / 2 - index * lineHeight });
     });
-  }
+  };
+  drawNote(band.lightingNote ? `照明要望: ${band.lightingNote}` : "", layout.notes.lighting);
+  drawNote(band.soundNote ? `PA要望: ${band.soundNote}` : "", layout.notes.pa);
+  drawNote(band.stagePlotSummary ? `セット図: ${band.stagePlotSummary}` : "", layout.notes.stageSummary);
 
-  drawBandNotes(
-    page,
-    font,
-    layout,
-    band.lightingNote,
-    band.soundNote,
-    band.stagePlotSummary
-  );
+  drawSetPlot(page, font, layout, band.stagePlotItems, band.memberPlotItems);
+  drawEquipmentSelections(page, band.stagePlotItems);
+  drawCarryEquipment(page, font, band.carryEquipment);
+  drawFooterSelections(page, band.songs);
+
+  drawTextInCell(page, font, String(band.memberPlotItems.length), {
+    x: 448,
+    y: 87,
+    maxWidth: 28,
+    size: 10,
+    align: "center",
+  });
 
   // Draw user-defined overlay layers on top of everything.
   drawCustomLayers(page, font, layout);
@@ -611,7 +802,6 @@ const buildPdf = async (
     return page;
   };
 
-  const totalPages = Math.max(1, bands.length);
   if (bands.length === 0) {
     const page = createPageWithTemplate();
     drawTextInCell(page, font, eventName, {
@@ -635,8 +825,12 @@ const buildPdf = async (
     });
   } else {
     for (let index = 0; index < bands.length; index += 1) {
-      const page = createPageWithTemplate();
-      drawBandPage(page, font, layout, eventName, eventDate, bands[index], index + 1, totalPages);
+      const band = bands[index];
+      const pageCount = Math.max(1, Math.ceil(band.songs.length / maxSongsPerBand));
+      for (let part = 0; part < pageCount; part += 1) {
+        const page = createPageWithTemplate();
+        drawBandPage(page, font, layout, eventName, eventDate, band, index + 1, part * maxSongsPerBand, part + 1);
+      }
     }
   }
 
@@ -785,7 +979,7 @@ async function handleRequest(request: Request, method: "GET" | "POST") {
 
   let slotMetaByBand = new Map<
     string,
-    { order: number | null; total: number; startTime: string }
+    { order: number | null; total: number; startTime: string; endTime: string }
   >();
   if (bandIds.length > 0) {
     const { data: slotData, error: slotError } = await adminClient
@@ -830,21 +1024,25 @@ async function handleRequest(request: Request, method: "GET" | "POST") {
     });
 
     const total = orderedPicked.length;
-    slotMetaByBand = orderedPicked.reduce<Map<string, { order: number | null; total: number; startTime: string }>>(
+    slotMetaByBand = orderedPicked.reduce<
+      Map<string, { order: number | null; total: number; startTime: string; endTime: string }>
+    >(
       (map, [bandId, slot], index) => {
         map.set(bandId, {
-          order: slot.order_in_event ?? index + 1,
+          order: index + 1,
           total,
           startTime: formatTimeHHMM(slot.start_time ?? null),
+          endTime: formatTimeHHMM(slot.end_time ?? null),
         });
         return map;
       },
-      new Map<string, { order: number | null; total: number; startTime: string }>()
+      new Map<string, { order: number | null; total: number; startTime: string; endTime: string }>()
     );
   }
 
   let songsByBand = new Map<string, PreparedBand["songs"]>();
   let memberPointsByBand = new Map<string, Array<{ label: string; x: number; y: number }>>();
+  let carryEquipmentByBand = new Map<string, string[]>();
   if (bandIds.length > 0) {
     const { data: songData, error: songError } = await adminClient
       .from("songs")
@@ -869,13 +1067,19 @@ async function handleRequest(request: Request, method: "GET" | "POST") {
       const title = (typedRow.title ?? "").trim();
       const durationSec = typedRow.duration_sec ?? null;
       const paNote = (typedRow.memo ?? "").trim();
-      const lightingParts = [
-        formatLightingChoice(typedRow.lighting_spot),
-        typedRow.lighting_strobe ? `strobe:${typedRow.lighting_strobe}` : "",
-        typedRow.lighting_moving ? `moving:${typedRow.lighting_moving}` : "",
-        typedRow.lighting_color ? `color:${typedRow.lighting_color}` : "",
-      ].filter((part) => part.length > 0);
-      const lightingNote = lightingParts.join(" ");
+      const lightingValues = [
+        ["スポット", formatLightingChoice(typedRow.lighting_spot)],
+        ["ストロボ", formatLightingChoice(typedRow.lighting_strobe)],
+        ["ムービング", formatLightingChoice(typedRow.lighting_moving)],
+        ["色", formatLightingChoice(typedRow.lighting_color)],
+      ] as const;
+      const selectedLighting = lightingValues.filter(([, value]) => value && value !== "おまかせ");
+      const hasAutomaticLighting = lightingValues.some(([, value]) => value === "おまかせ");
+      const lightingNote = selectedLighting.length > 0
+        ? selectedLighting.map(([label, value]) => `${label}:${value}`).join(" / ")
+        : hasAutomaticLighting
+          ? "おまかせ"
+          : "";
       const hasVisibleContent =
         title.length > 0 || paNote.length > 0 || lightingNote.length > 0 || durationSec != null;
       if (!hasVisibleContent) {
@@ -889,6 +1093,7 @@ async function handleRequest(request: Request, method: "GET" | "POST") {
         entryType,
         durationSec,
         orderIndex: typedRow.order_index ?? Number.MAX_SAFE_INTEGER,
+        lightingStrobe: typedRow.lighting_strobe ?? "",
       });
       map.set(bandId, bucket);
       return map;
@@ -897,7 +1102,7 @@ async function handleRequest(request: Request, method: "GET" | "POST") {
     const { data: memberData, error: memberError } = await adminClient
       .from("band_members")
       .select(
-        "band_id, instrument, position_x, position_y, order_index, is_mc, profiles(display_name, real_name, part)"
+        "band_id, instrument, position_x, position_y, order_index, is_mc, monitor_note, profiles(display_name, real_name, part)"
       )
       .in("band_id", bandIds)
       .order("order_index", { ascending: true });
@@ -916,21 +1121,49 @@ async function handleRequest(request: Request, method: "GET" | "POST") {
       map.set(entry.bandId, current);
       return map;
     }, new Map<string, Array<{ label: string; x: number; y: number }>>());
+
+    carryEquipmentByBand = ((memberData ?? []) as BandMemberRow[]).reduce<Map<string, string[]>>(
+      (map, member) => {
+        const bandId = member.band_id?.trim() ?? "";
+        const note = member.monitor_note?.trim() ?? "";
+        if (!bandId || !note) return map;
+        const values = note
+          .split(/[\r\n,、]+/)
+          .map((value) => value.trim())
+          .filter(Boolean);
+        const current = map.get(bandId) ?? [];
+        values.forEach((value) => {
+          if (!current.includes(value)) current.push(value);
+        });
+        map.set(bandId, current);
+        return map;
+      },
+      new Map<string, string[]>()
+    );
   }
 
-  const preparedBands: PreparedBand[] = bands.map((band) => ({
-    id: band.id,
-    name: band.name,
-    appearanceOrder: slotMetaByBand.get(band.id)?.order ?? null,
-    appearanceTotal: slotMetaByBand.get(band.id)?.total ?? bands.length,
-    plannedStartTime: slotMetaByBand.get(band.id)?.startTime ?? "",
-    soundNote: band.soundNote,
-    lightingNote: band.lightingNote,
-    stagePlotSummary: band.stagePlotSummary,
-    stagePlotItems: band.stagePlotItems,
-    memberPlotItems: memberPointsByBand.get(band.id) ?? [],
-    songs: (songsByBand.get(band.id) ?? []).sort((a, b) => a.orderIndex - b.orderIndex),
-  }));
+  const preparedBands: PreparedBand[] = bands
+    .map((band) => ({
+      id: band.id,
+      name: band.name,
+      appearanceOrder: slotMetaByBand.get(band.id)?.order ?? null,
+      appearanceTotal: slotMetaByBand.get(band.id)?.total ?? bands.length,
+      plannedStartTime: slotMetaByBand.get(band.id)?.startTime ?? "",
+      plannedEndTime: slotMetaByBand.get(band.id)?.endTime ?? "",
+      soundNote: band.soundNote,
+      lightingNote: band.lightingNote,
+      stagePlotSummary: band.stagePlotSummary,
+      stagePlotItems: band.stagePlotItems,
+      memberPlotItems: memberPointsByBand.get(band.id) ?? [],
+      carryEquipment: carryEquipmentByBand.get(band.id) ?? [],
+      songs: (songsByBand.get(band.id) ?? []).sort((a, b) => a.orderIndex - b.orderIndex),
+    }))
+    .sort((left, right) => {
+      if (left.appearanceOrder == null && right.appearanceOrder == null) return 0;
+      if (left.appearanceOrder == null) return 1;
+      if (right.appearanceOrder == null) return -1;
+      return left.appearanceOrder - right.appearanceOrder;
+    });
 
   preparedBands.forEach((band, index) => {
     if (band.appearanceOrder == null) {

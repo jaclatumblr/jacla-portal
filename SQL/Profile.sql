@@ -516,7 +516,18 @@ stable
 security definer
 set search_path = public
 as $$
-  select profile_id, enrollment_year, birth_date from public.profile_private;
+  select
+    pp.profile_id,
+    pp.enrollment_year,
+    case
+      when pp.profile_id = auth.uid()
+        or public.is_admin_or_supervisor(auth.uid())
+        or public.is_pa_leader(auth.uid())
+        or public.is_lighting_leader(auth.uid())
+      then pp.birth_date
+      else null::date
+    end as birth_date
+  from public.profile_private pp;
 $$;
 
 revoke execute on function public.get_profile_enrollment_years() from public;

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { requireAdminApiAuth } from "@/lib/adminApiAuth";
 import { isAccountStatus } from "@/lib/accountLifecycle";
+import { isMissingPortalAccounts } from "@/lib/accountSchema";
 const client = () => createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } });
 
 export async function GET(request: Request) {
@@ -20,7 +21,12 @@ export async function GET(request: Request) {
   else if (status !== "all") query = query.eq("status", status);
   if (search) query = query.ilike("profiles.display_name", `%${search.replace(/[\\%_]/g, "\\$&")}%`);
   const { data, error } = await query;
-  if (error) return NextResponse.json({ error: "アカウント一覧を取得できません。DBの設定を確認してください。" }, { status: 503 });
+  if (error) return NextResponse.json({
+    error: isMissingPortalAccounts(error)
+      ? "在籍管理の初期設定が未完了です。DB設定の反映までは、部員一覧・権限管理をご利用ください。"
+      : "アカウント一覧を取得できません。DBの設定を確認してください。",
+    code: isMissingPortalAccounts(error) ? "ACCOUNT_LIFECYCLE_SETUP_REQUIRED" : "ACCOUNT_LIST_UNAVAILABLE",
+  }, { status: 503 });
   const accounts = (data ?? []).slice(0, 100).map((row) => {
     const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
     const { profiles: _profiles, ...account } = row;

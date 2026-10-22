@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsAdministrator } from "@/lib/useIsAdministrator";
 import { useCanViewStudentId } from "@/lib/useCanViewStudentId";
+import { fetchDirectoryProfiles } from "@/lib/directoryProfiles";
 import { toast } from "@/lib/toast";
 import type {
     Member,
@@ -42,21 +43,10 @@ export function useMembers(): UseMembersResult {
         (async () => {
             setLoading(true);
 
-            const profilesPromise = isAdministrator
-                ? supabase
-                    .from("profiles")
-                    .select(
-                        "id, display_name, real_name, email, part, crew, leader, discord, discord_username, discord_id, avatar_url, portal_accounts!inner(status)"
-                    )
-                    .eq("portal_accounts.status", "active")
-                    .order("display_name", { ascending: true })
-                : supabase
-                    .from("profiles")
-                    .select(
-                        "id, display_name, real_name, part, crew, leader, discord, discord_username, discord_id, avatar_url, portal_accounts!inner(status)"
-                    )
-                    .eq("portal_accounts.status", "active")
-                    .order("display_name", { ascending: true });
+            const profileColumns = isAdministrator
+                ? "id, display_name, real_name, email, part, crew, leader, discord, discord_username, discord_id, avatar_url"
+                : "id, display_name, real_name, part, crew, leader, discord, discord_username, discord_id, avatar_url";
+            const profilesPromise = fetchDirectoryProfiles<ProfileRow>(supabase, profileColumns, true);
 
             const [profilesRes, bandsRes, leadersRes, positionsRes, enrollmentRes, partsRes] =
                 await Promise.all([

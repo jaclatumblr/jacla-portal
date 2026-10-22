@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Isolated route and account-access regression tests. */
 const {test}=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');const vm=require('node:vm');const ts=require('typescript');
-function load(file,imports={},globals={}){const exports={};const code=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText;vm.runInNewContext(code,{exports,require:name=>imports[name]??require(name),Buffer,Request,Response,URL,URLSearchParams,AbortSignal,AbortController,setTimeout,clearTimeout,console,process:{env:{NEXT_PUBLIC_SUPABASE_URL:'https://db.test',NEXT_PUBLIC_SUPABASE_ANON_KEY:'anon',SUPABASE_SERVICE_ROLE_KEY:'service',CRON_SECRET:'cron-test'}},...globals});return exports;}
+function load(file,imports={},globals={}){const exports={};const code=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText;vm.runInNewContext(code,{exports,require:name=>imports[name]??(name === "@/lib/accountSchema" ? load("lib/accountSchema.ts") : require(name)),Buffer,Request,Response,URL,URLSearchParams,AbortSignal,AbortController,setTimeout,clearTimeout,console,process:{env:{NEXT_PUBLIC_SUPABASE_URL:'https://db.test',NEXT_PUBLIC_SUPABASE_ANON_KEY:'anon',SUPABASE_SERVICE_ROLE_KEY:'service',CRON_SECRET:'cron-test'}},...globals});return exports;}
 const A='10000000-0000-0000-0000-000000000001',B='10000000-0000-0000-0000-000000000002',SID='20000000-0000-0000-0000-000000000001';
 const token='signed.'+Buffer.from(JSON.stringify({session_id:SID})).toString('base64url')+'.verified';
 const request=(path,method='GET',body)=>new Request('https://portal.test'+path,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},...(body!==undefined?{body:JSON.stringify(body)}:{})});
@@ -34,7 +34,7 @@ test('account management validates changes and prevents self-deactivation',async
 });
 test('background access checks never record activity, while foreground use does',async()=>{
  let touches=0;
- const imports={'@/lib/accountAccess':{requireActivePortalAccount:async()=>null},'@supabase/supabase-js':{createClient:()=>({auth:{getUser:async()=>({data:{user:{id:A}},error:null})},rpc:async()=>{touches++;return {error:null};}})}};
+ const imports={'@/lib/accountAccess':{requireActivePortalAccount:async()=>null,checkPortalAccountAccess:async()=>({response:null,lifecycleInstalled:true})},'@supabase/supabase-js':{createClient:()=>({auth:{getUser:async()=>({data:{user:{id:A}},error:null})},rpc:async()=>{touches++;return {error:null};}})}};
  const api=load('app/api/account/activity/route.ts',imports);
  assert.equal((await api.GET(request('/api/account/activity'))).status,200);assert.equal(touches,0);
  assert.equal((await api.POST(request('/api/account/activity','POST'))).status,200);assert.equal(touches,1);

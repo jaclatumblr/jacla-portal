@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/contexts/AuthContext";
+import { fetchDirectoryProfiles } from "@/lib/directoryProfiles";
 import { toast } from "@/lib/toast";
 import type { ProfileRow, ProfilePartRow } from "../types";
 
@@ -30,7 +31,7 @@ export function useProfiles(): UseProfilesResult {
         (async () => {
             setLoading(true);
             const [profilesRes, partsRes] = await Promise.all([
-                supabase.from("profiles").select("id, display_name, real_name, part, leader, portal_accounts!inner(status)").eq("portal_accounts.status", "active"),
+                fetchDirectoryProfiles<ProfileRow>(supabase, "id, display_name, real_name, part, leader"),
                 supabase.from("profile_parts").select("profile_id, part, is_primary"),
             ]);
 

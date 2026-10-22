@@ -1,6 +1,6 @@
 ﻿import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { requireActivePortalAccount } from "@/lib/accountAccess";
+import { checkPortalAccountAccess } from "@/lib/accountAccess";
 
 async function handle(request: Request, recordActivity: boolean) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -12,13 +12,13 @@ async function handle(request: Request, recordActivity: boolean) {
     const client = createClient(url, key, { auth: { persistSession: false }, global: { headers: { Authorization: `Bearer ${token}` } } });
     const { data, error } = await client.auth.getUser(token);
     if (error || !data.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    const accessError = await requireActivePortalAccount(data.user.id, token);
-    if (accessError) return accessError;
-    if (recordActivity) {
+    const access = await checkPortalAccountAccess(data.user.id, token);
+    if (access.response) return access.response;
+    if (recordActivity && access.lifecycleInstalled) {
       const { error: activityError } = await client.rpc("portal_touch_activity");
       if (activityError) return NextResponse.json({ error: "Activity update failed" }, { status: activityError.code === "PT403" ? 403 : 503 });
     }
-    return NextResponse.json({ status: "active" }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ status: "active", lifecycleInstalled: access.lifecycleInstalled }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return NextResponse.json({ error: "Account check unavailable" }, { status: 503 });
   }

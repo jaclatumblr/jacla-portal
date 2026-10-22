@@ -15,7 +15,7 @@ function load(file, { imports = {}, globals = {}, expose = "", transform = (s) =
   }).outputText;
   const exports = {};
   vm.runInNewContext(output, {
-    exports, require: (name) => name in imports ? imports[name] : require(name),
+    exports, require: (name) => name in imports ? imports[name] : name === "@/lib/accountAccess" ? { requireActivePortalAccount: async () => null } : require(name),
     process, Buffer, console, AbortController, TextDecoder, TextEncoder, setTimeout, clearTimeout, queueMicrotask,
     ...globals,
   }, { filename: file });

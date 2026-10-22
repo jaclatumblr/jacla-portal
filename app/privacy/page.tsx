@@ -10,7 +10,7 @@ export default function PrivacyPage() {
           <h1 className="text-2xl font-bold">プライバシーポリシー</h1>
           <div className="text-xs text-muted-foreground">
             <p>施行日: 2026-01-26</p>
-            <p>最終改定日: 2026-04-09</p>
+            <p>最終改定日: 2026-10-22</p>
           </div>
           <p className="text-sm text-muted-foreground">
             本ポリシーは、東京工科大学 総合音楽部 Jacla（以下「運営」）
@@ -93,13 +93,16 @@ export default function PrivacyPage() {
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-lg font-semibold">6. 保管期間</h2>
+            <h2 className="text-lg font-semibold">6. 保管期間・卒業後の記録</h2>
             <p>
               取得した情報は、本サービスの運営に必要な期間に限り保管し、不要となった場合は適切に削除します。
             </p>
             <p>
               ただし、認証に利用していた大学アカウントが失効した場合や、退部・卒業等によりログインできなくなった場合でも、
               イベント記録、提出物、変更履歴その他の運営上必要なデータは、引き継ぎ・監査・履歴保持のため継続保管することがあります。
+              卒業・退部・休眠の状態になった場合は、通常の部員一覧から外れ、利用を停止します。
+              バンド内の名前・所属・担当パートなどの活動履歴は引き続き保持します。
+              状態変更のみで連絡先等の個人情報がすべて削除されるわけではありません。不要な個人情報の整理・削除は運営へご相談ください。
               現時点では、大学アカウントから個人メール等への自動移行機能は提供していません。
             </p>
           </section>

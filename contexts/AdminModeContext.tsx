@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { readLocalValue, writeLocalValue } from "@/lib/browserStorage";
 import { fetchLeaderRoles } from "@/lib/leaderRoles";
 
 export type AdministratorMode = "administrator" | "general";
@@ -38,8 +39,11 @@ export function AdminModeProvider({ children }: { children: ReactNode }) {
   const { session, loading: authLoading } = useAuth();
   const userId = session?.user.id ?? null;
   const [mode, setModeState] = useState<AdministratorMode>("administrator");
-  const [actualIsAdministrator, setActualIsAdministrator] = useState(false);
+  const [storedIsAdministrator, setActualIsAdministrator] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  const [owner, setOwner] = useState<string | null>(null);
+  const actualIsAdministrator = !authLoading && owner === userId && !loading && storedIsAdministrator;
 
   useEffect(() => {
     if (authLoading) return;
@@ -54,6 +58,7 @@ export function AdminModeProvider({ children }: { children: ReactNode }) {
     }
 
     setLoading(true);
+    setOwner(null);
 
     (async () => {
       try {
@@ -70,7 +75,7 @@ export function AdminModeProvider({ children }: { children: ReactNode }) {
         }
 
         if (typeof window !== "undefined") {
-          setModeState(normalizeMode(window.localStorage.getItem(getStorageKey(userId))));
+          setModeState(normalizeMode(readLocalValue(getStorageKey(userId))));
         } else {
           setModeState("administrator");
         }
@@ -81,6 +86,7 @@ export function AdminModeProvider({ children }: { children: ReactNode }) {
         setModeState("administrator");
       } finally {
         if (!cancelled) {
+          setOwner(userId);
           setLoading(false);
         }
       }
@@ -93,7 +99,7 @@ export function AdminModeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!userId || !actualIsAdministrator || typeof window === "undefined") return;
-    window.localStorage.setItem(getStorageKey(userId), mode);
+    writeLocalValue(getStorageKey(userId), mode);
   }, [actualIsAdministrator, mode, userId]);
 
   useEffect(() => {
@@ -122,15 +128,15 @@ export function AdminModeProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AdminModeContextType>(
     () => ({
-      mode,
+      mode: actualIsAdministrator ? mode : "administrator",
       actualIsAdministrator,
       canToggleMode: actualIsAdministrator,
       suppressPrivilegedAccess: actualIsAdministrator && mode === "general",
-      loading: authLoading || (userId ? loading : false),
+      loading: authLoading || (userId ? loading || owner !== userId : false),
       setMode,
       toggleMode,
     }),
-    [actualIsAdministrator, authLoading, loading, mode, setMode, toggleMode, userId]
+    [actualIsAdministrator, authLoading, loading, mode, owner, setMode, toggleMode, userId]
   );
 
   return <AdminModeContext.Provider value={value}>{children}</AdminModeContext.Provider>;

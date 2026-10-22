@@ -1,4 +1,5 @@
-﻿import { NextResponse } from "next/server";
+import { requireActivePortalAccount } from "@/lib/accountAccess";
+import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -271,6 +272,9 @@ export async function GET(request: Request) {
   if (userError || !userData.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const accessError = await requireActivePortalAccount(userData.user.id, token);
+  if (accessError) return accessError;
+
 
   let leaders: string[] = [];
   const { data: leaderRows, error: leaderError } = await adminClient

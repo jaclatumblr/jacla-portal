@@ -339,12 +339,15 @@ export default function ProfilePage() {
             title={displayName}
             description="プロフィール情報を確認・編集できます。"
             actions={
+              <>
+              <Link href="/me/appearance"><Button variant="outline">テーマ変更</Button></Link>
               <Link href={editHref}>
                 <Button variant="outline" className="bg-transparent w-full sm:w-auto">
                   <Edit className="w-4 h-4 mr-2" />
                   編集
                 </Button>
               </Link>
+              </>
             }
             meta={
               <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6">

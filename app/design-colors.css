@@ -1,0 +1,56 @@
+/* User color overrides semantic accents, preserving each preset's geometry. */
+html:root[data-design][data-custom-color] {
+  --user-accent: var(--custom-color-light);
+  --user-on-accent: #ffffff;
+  --user-background: var(--custom-color-light-background);
+  --user-card: var(--custom-color-light-card);
+  --user-soft: var(--custom-color-light-soft);
+  --user-border: var(--custom-color-light-border);
+  --background: var(--user-background);
+  --card: var(--user-card);
+  --popover: var(--user-card);
+  --muted: var(--user-soft);
+  --border: var(--user-border);
+  --input: var(--user-border);
+  --surface: var(--user-card);
+  --surface-secondary: var(--user-soft);
+  --surface-tertiary: var(--user-soft);
+  --preset-bg: var(--user-background);
+  --preset-card: var(--user-card);
+  --preset-soft: var(--user-soft);
+  --preset-border: var(--user-border);
+  --design-nav-surface: var(--user-background);
+  --md-sys-color-surface-container: var(--user-card);
+  --md-sys-color-surface-container-high: var(--user-soft);
+  --md-sys-color-surface-container-highest: var(--user-soft);
+  --primary: var(--user-accent);
+  --primary-foreground: var(--user-on-accent);
+  --secondary: var(--user-accent);
+  --secondary-foreground: var(--user-on-accent);
+  --ring: var(--user-accent);
+  --preset-primary: var(--user-accent);
+  --preset-on-primary: var(--user-on-accent);
+  --surface-selected: color-mix(in srgb, var(--user-accent) 10%, var(--card));
+  --surface-selected-hover: color-mix(in srgb, var(--user-accent) 14%, var(--card));
+  --surface-hover: color-mix(in srgb, var(--user-accent) 5%, var(--card));
+  --surface-active: color-mix(in srgb, var(--user-accent) 8%, var(--card));
+  --accent: var(--surface-selected);
+  --accent-foreground: var(--primary);
+  --preset-accent: var(--surface-selected);
+  --md-sys-color-secondary-container: var(--surface-selected);
+  --md-sys-color-on-secondary-container: var(--primary);
+}
+html:root[data-design][data-custom-color].dark {
+  --user-accent: var(--custom-color-dark);
+  --user-on-accent: #141414;
+  --user-background: var(--custom-color-dark-background);
+  --user-card: var(--custom-color-dark-card);
+  --user-soft: var(--custom-color-dark-soft);
+  --user-border: var(--custom-color-dark-border);
+}
+html[data-custom-color] [data-design-navigation] :is(a, button) { color: var(--foreground); }
+html[data-custom-color] [data-design-navigation] :is(a, button):hover { background-color: var(--surface-hover); }
+html[data-custom-color] [data-design-navigation] a[aria-current="page"] {
+  background-color: var(--surface-selected); color: var(--primary); border-color: transparent;
+}
+html[data-custom-color] [data-design-navigation] :is(p, [data-slot="avatar-fallback"]) { color: var(--foreground); }

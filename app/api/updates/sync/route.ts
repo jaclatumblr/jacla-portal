@@ -1,3 +1,4 @@
+import { requireActivePortalAccount } from "@/lib/accountAccess";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { execSync } from "child_process";
@@ -92,6 +93,7 @@ const canManageUpdates = async (token: string) => {
   const { data, error } = await authClient.auth.getUser(token);
   if (error || !data?.user?.id) return false;
   const userId = data.user.id;
+  if (await requireActivePortalAccount(userId, token)) return false;
 
   const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
     auth: { persistSession: false },

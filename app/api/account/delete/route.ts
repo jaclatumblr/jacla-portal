@@ -1,3 +1,4 @@
+import { requireActivePortalAccount } from "@/lib/accountAccess";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -35,12 +36,19 @@ export async function POST(request: Request) {
   if (userError || !userData.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const accessError = await requireActivePortalAccount(userData.user.id, token);
+  if (accessError) return accessError;
+
 
   const actorId = userData.user.id;
-  const body = (await request.json().catch(() => ({}))) as {
+  const body = (await request.json().catch(() => null)) as {
     targetUserId?: string;
-  };
-  const targetUserId = body.targetUserId || actorId;
+  } | null;
+  if (!body || typeof body !== "object" || Array.isArray(body)
+    || (body.targetUserId !== undefined && (typeof body.targetUserId !== "string" || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(body.targetUserId)))) {
+    return NextResponse.json({ error: "Invalid deletion request." }, { status: 400 });
+  }
+  const targetUserId = body.targetUserId ?? actorId;
 
   if (targetUserId !== actorId) {
     const { data: leadersData, error: leadersError } = await adminClient
@@ -79,6 +87,10 @@ export async function POST(request: Request) {
       );
     }
   }
+
+  const { data: account, error: accountError } = await adminClient.from("portal_accounts").select("status").eq("profile_id", targetUserId).maybeSingle();
+  if (accountError) return NextResponse.json({ error: "Failed to verify account status." }, { status: 503 });
+  if (account && account.status !== "active") return NextResponse.json({ error: "卒業・退部・休眠の活動履歴は削除できません。在籍・アカウント管理を利用してください。" }, { status: 409 });
 
   await Promise.all([
     adminClient

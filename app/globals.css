@@ -1,4 +1,7 @@
 @import "tailwindcss";
+@import "./design-presets.css";
+@import "./design-colors.css";
+@import "./home-background.css";
 
 @custom-variant dark (&:is(.dark *));
 

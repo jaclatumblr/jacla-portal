@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AccountLifecycleNotice } from "@/components/AccountLifecycleNotice";
 import {
   Activity,
   ArrowRight,
@@ -72,6 +73,7 @@ export default function AdminPage() {
 
           <section className="py-8 md:py-12">
             <div className="container mx-auto px-4 sm:px-6">
+              {isAdmin && <div className="mx-auto max-w-4xl"><AccountLifecycleNotice /></div>}
               <div className="max-w-4xl mx-auto grid sm:grid-cols-2 gap-4 md:gap-6">
                 {isAdmin && (
                   <Link href="/admin/events" className="group">
@@ -92,6 +94,13 @@ export default function AdminPage() {
                   </Link>
                 )}
 
+                {isAdmin && (
+                  <Link href="/admin/accounts" className="rounded-lg border border-border bg-card/50 p-6 transition-colors hover:border-primary/50">
+                    <Shield className="mb-4 h-8 w-8 text-primary" />
+                    <h3 className="mb-2 text-lg font-bold">在籍・アカウント管理</h3>
+                    <p className="text-sm text-muted-foreground">卒業・退部・休眠への変更と復帰。バンドの活動履歴は残ります。</p>
+                  </Link>
+                )}
                 {canAccessRoles && (
                   <Link href="/admin/roles" className="group">
                     <div className="relative h-40 md:h-48 p-4 md:p-6 bg-card/50 border border-border rounded-lg hover:border-primary/50 transition-all">

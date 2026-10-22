@@ -1,3 +1,4 @@
+import { requireActivePortalAccount } from "@/lib/accountAccess";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -36,10 +37,17 @@ export async function POST(request: Request) {
   if (userError || !userData.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const accessError = await requireActivePortalAccount(userData.user.id, token);
+  if (accessError) return accessError;
 
-  const body = (await request.json().catch(() => ({}))) as {
+
+  const body = (await request.json().catch(() => null)) as {
     profileIds?: string[];
-  };
+  } | null;
+  if (!body || typeof body !== "object" || Array.isArray(body) || !Array.isArray(body.profileIds)
+    || body.profileIds.some((value) => typeof value !== "string" || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(value.trim()))) {
+    return NextResponse.json({ error: "Invalid profileIds." }, { status: 400 });
+  }
 
   const profileIds = Array.from(
     new Set(

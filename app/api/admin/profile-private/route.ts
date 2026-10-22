@@ -1,3 +1,4 @@
+import { requireActivePortalAccount } from "@/lib/accountAccess";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { formatPhoneNumber } from "@/lib/phone";
@@ -39,15 +40,24 @@ export async function POST(request: Request) {
   if (userError || !userData.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const accessError = await requireActivePortalAccount(userData.user.id, token);
+  if (accessError) return accessError;
 
-  const body = (await request.json().catch(() => ({}))) as {
+
+  const body = (await request.json().catch(() => null)) as {
     profileId?: string;
     studentId?: string | null;
     enrollmentYear?: number | null;
     birthDate?: string | null;
     phoneNumber?: string | null;
     gender?: string | null;
-  };
+  } | null;
+  if (!body || typeof body !== "object" || Array.isArray(body) || typeof body.profileId !== "string"
+    || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(body.profileId)
+    || [body.studentId, body.birthDate, body.phoneNumber, body.gender].some((value) => value != null && typeof value !== "string")
+    || (body.enrollmentYear != null && (!Number.isInteger(body.enrollmentYear) || body.enrollmentYear < 1000 || body.enrollmentYear > 9999))) {
+    return NextResponse.json({ error: "Invalid profile request." }, { status: 400 });
+  }
 
   const profileId = (body.profileId ?? "").trim();
   if (!profileId) {

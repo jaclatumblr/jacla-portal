@@ -78,16 +78,20 @@ export function PageHeader({
   const toneStyle = toneMap[tone];
   const sizeStyle = sizeMap[size];
   return (
-    <section className={cn("relative overflow-hidden border-b border-border/80 bg-surface", sizeStyle.section)}>
-      <div className="absolute inset-0 bg-gradient-to-b from-surface to-background" />
-      <div className={cn("absolute inset-x-0 top-0 h-24 bg-gradient-to-b to-transparent", toneStyle.band)} />
+    <section data-slot="page-header" className={cn("relative overflow-hidden border-b border-border/80 bg-surface", sizeStyle.section)}>
+      <div data-slot="page-header-decoration" className="absolute inset-0 bg-gradient-to-b from-surface to-background" />
+      <div data-slot="page-header-decoration" className={cn("absolute inset-x-0 top-0 h-24 bg-gradient-to-b to-transparent", toneStyle.band)} />
       <div
+        data-slot="page-header-decoration"
         className={cn(
           "absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent to-transparent",
           toneStyle.line
         )}
       />
       <div className="relative z-10 container mx-auto px-4 sm:px-6">
+        <nav data-slot="page-breadcrumb" aria-label="現在位置">
+          <Link href="/">Jacla</Link><span aria-hidden="true">/</span><span aria-current="page">{title}</span>
+        </nav>
         {backHref && (
           <Link
             href={backHref}
@@ -98,11 +102,12 @@ export function PageHeader({
           </Link>
         )}
 
-        <div className={cn(sizeStyle.content, "max-w-6xl pt-[calc(var(--mobile-topbar-height,0px)/4)] md:pt-0")}>
+        <div data-slot="page-header-content" className={cn(sizeStyle.content, "max-w-6xl pt-[calc(var(--mobile-topbar-height,0px)/4)] md:pt-0")}>
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div className="space-y-3">
               {kicker && (
                 <span
+                  data-slot="page-kicker"
                   className={cn(
                     "inline-flex items-center rounded-md border px-2.5 py-1 text-[11px] font-semibold",
                     toneStyle.badge

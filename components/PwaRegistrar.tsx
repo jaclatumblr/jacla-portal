@@ -2,16 +2,22 @@
 
 import { useEffect } from "react";
 import { useTheme } from "next-themes";
+import { useDesignPreset } from "@/contexts/DesignPresetContext";
+import { useDesignColor } from "@/contexts/DesignColorContext";
+import { designColorPalette } from "@/lib/designColors";
 import { PWA_APPLE_STATUS_BAR_STYLES, PWA_THEME_COLORS } from "@/lib/pwaTheme";
 
 const SERVICE_WORKER_URL = "/sw.js";
 
 export function PwaRegistrar() {
   const { resolvedTheme } = useTheme();
+  const { preset } = useDesignPreset();
+  const { color } = useDesignColor();
 
   useEffect(() => {
     const theme = resolvedTheme === "dark" ? "dark" : "light";
-    const themeColor = PWA_THEME_COLORS[theme];
+    const customPalette = color ? designColorPalette(color) : null;
+    const themeColor = customPalette ? (theme === "dark" ? customPalette.darkBackground : customPalette.lightBackground) : preset === "original" ? PWA_THEME_COLORS[theme] : getComputedStyle(document.documentElement).getPropertyValue("--preset-bg").trim() || PWA_THEME_COLORS[theme];
     const appleStatusBarStyle = PWA_APPLE_STATUS_BAR_STYLES[theme];
 
     let themeColorMeta = document.querySelector(
@@ -38,7 +44,7 @@ export function PwaRegistrar() {
     }
 
     appleStatusBarMeta.content = appleStatusBarStyle;
-  }, [resolvedTheme]);
+  }, [resolvedTheme, preset, color]);
 
   useEffect(() => {
     if (process.env.NODE_ENV !== "production") return;

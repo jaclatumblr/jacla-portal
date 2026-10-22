@@ -1,5 +1,7 @@
 "use client";
 
+import { safeInternalPath } from "@/lib/safeRedirect";
+
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { useAccountDeletion } from "./hooks/useAccountDeletion";
@@ -18,7 +20,7 @@ function OnboardingContent({ mode, defaultNext }: OnboardingContentProps) {
   const { deleting, handleDeleteAccount } = useAccountDeletion();
 
   // Redirect destination after completion
-  const nextTarget = defaultNext || searchParams.get("next") || "/";
+  const nextTarget = safeInternalPath(defaultNext || searchParams.get("next"));
 
   return (
     <div className="w-full max-w-4xl space-y-8 animate-in fade-in duration-700 slide-in-from-bottom-4">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -17,6 +17,7 @@ import {
   MessageSquare,
   Music,
   Settings,
+  Palette,
   User,
   Users,
   X,
@@ -25,6 +26,8 @@ import { cn } from "@/lib/utils";
 import { safeSignOut, supabase } from "@/lib/supabaseClient";
 import { useRoleFlags } from "@/lib/useRoleFlags";
 import { useAuth } from "@/contexts/AuthContext";
+import { useDesignPreset } from "@/contexts/DesignPresetContext";
+import { readSessionValue, writeSessionValue } from "@/lib/browserStorage";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -49,6 +52,7 @@ const navItems = [
 const bottomNavItems = [
   { id: "profile", href: "/me/profile", label: "アカウント", icon: User },
   { id: "bands", href: "/me/bands", label: "マイバンド", icon: Music },
+  { id: "appearance", href: "/me/appearance", label: "テーマ変更", icon: Palette },
 ];
 
 const utilityNavItems = bottomNavItems;
@@ -69,7 +73,6 @@ const navAdminActiveClass =
   "border border-sky-300/70 bg-sky-100/50 text-sky-800 shadow-sm dark:border-violet-500/35 dark:bg-violet-500/15 dark:text-violet-50";
 const navAdminIdleClass =
   "text-sky-700 hover:bg-sky-100/40 hover:text-sky-800 dark:text-violet-200 dark:hover:bg-violet-500/10 dark:hover:text-violet-50";
-const navDividerClass = "border-sky-200/70 dark:border-violet-800/70";
 const navToggleHoverClass =
   "border-sky-200/80 text-sky-700 hover:bg-sky-100/40 dark:border-violet-800/80 dark:text-violet-100 dark:hover:bg-violet-500/10";
 const navLogoutClass =
@@ -79,10 +82,12 @@ export function SideNav() {
   const asideRef = useRef<HTMLElement | null>(null);
   const bodyOverflowRef = useRef<string | null>(null);
   const lastRouteChangeRef = useRef(0);
-  const [isExpanded, setIsExpanded] = useState(() => {
+  const [hoverExpanded, setIsExpanded] = useState(() => {
     if (typeof window === "undefined") return false;
-    return window.sessionStorage.getItem("sidenavExpanded") === "1";
+    return readSessionValue("sidenavExpanded") === "1";
   });
+  const { preset } = useDesignPreset();
+  const isExpanded = preset !== "original" || hoverExpanded;
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
@@ -145,7 +150,7 @@ export function SideNav() {
     if (isAdmin) return;
     if (typeof window === "undefined") return;
     const storageKey = `crewNoticeShown:${userId}`;
-    if (window.sessionStorage.getItem(storageKey)) return;
+    if (readSessionValue(storageKey)) return;
     let cancelled = false;
 
     (async () => {
@@ -164,7 +169,7 @@ export function SideNav() {
       const crewValue = (data as { crew?: string | null } | null)?.crew ?? "User";
       if (crewValue === "User") {
         toast.info("jobが未設定です。PAか照明を選択してください。");
-        window.sessionStorage.setItem(storageKey, "1");
+        writeSessionValue(storageKey, "1");
       }
     })();
 
@@ -184,12 +189,13 @@ export function SideNav() {
     session?.user.email ||
     "アカウント";
 
-  const updateExpanded = (value: boolean) => {
+  const updateExpanded = useCallback((value: boolean) => {
+    if (preset !== "original") return;
     setIsExpanded(value);
     if (typeof window !== "undefined") {
-      window.sessionStorage.setItem("sidenavExpanded", value ? "1" : "0");
+      writeSessionValue("sidenavExpanded", value ? "1" : "0");
     }
-  };
+  }, [preset]);
 
   const isAsideHovering = () => {
     const el = asideRef.current;
@@ -220,7 +226,7 @@ export function SideNav() {
       window.removeEventListener(THEME_TRANSITION_START_EVENT, handleThemeTransitionStart);
       window.removeEventListener(THEME_TRANSITION_END_EVENT, handleThemeTransitionEnd);
     };
-  }, []);
+  }, [updateExpanded]);
 
   useLayoutEffect(() => {
     const syncHover = () => {
@@ -229,7 +235,7 @@ export function SideNav() {
     };
     const id = window.setTimeout(syncHover, 220);
     return () => window.clearTimeout(id);
-  }, []);
+  }, [updateExpanded]);
 
   // ルートが変わったらモバイルメニューだけ閉じる
   useEffect(() => {
@@ -253,7 +259,7 @@ export function SideNav() {
       updateExpanded(el.matches(":hover"));
     });
     return () => window.cancelAnimationFrame(id);
-  }, [pathname]);
+  }, [pathname, updateExpanded]);
 
   const handleLogout = async () => {
     await safeSignOut();
@@ -335,6 +341,7 @@ export function SideNav() {
       {/* モバイル用トップバー */}
       <div
         data-theme-sync="1"
+        data-design-navigation="true"
         ref={topbarRef}
         className={cn(
           "md:hidden fixed top-0 left-0 right-0 z-[60] flex h-[calc(3.5rem+env(safe-area-inset-top))] items-center justify-between border-b bg-background/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-xl",
@@ -448,6 +455,8 @@ export function SideNav() {
       {/* デスクトップサイドバー */}
       <aside
         data-theme-sync="1"
+        data-design-navigation="true"
+        data-slot="desktop-navigation"
         ref={asideRef}
         role="navigation"
         aria-label="メインナビゲーション"
@@ -476,7 +485,7 @@ export function SideNav() {
         )}
       >
         {/* ロゴ */}
-        <div className={cn("px-4 py-3 border-b flex items-center h-16", navDividerClass)}>
+        <div data-slot="nav-brand" className="px-4 py-3 flex items-center h-16">
           <Link href="/" className="flex items-center gap-3 w-full">
             <div className="w-10 h-10 flex items-center justify-center shrink-0">
               <Image
@@ -500,7 +509,7 @@ export function SideNav() {
         </div>
 
         {/* メインナビゲーション */}
-        <nav aria-label="メインメニュー" className="flex-1 py-3 px-3 space-y-0.5 overflow-y-auto no-scrollbar">
+        <nav data-slot="nav-main" aria-label="メインメニュー" className="flex-1 py-3 px-3 space-y-0.5 overflow-y-auto no-scrollbar">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive =
@@ -510,6 +519,7 @@ export function SideNav() {
               <Link
                 key={item.id}
                 href={item.href}
+                aria-current={isActive ? "page" : undefined}
                 className={cn(
                   "flex items-center gap-2 px-3 py-2.5 rounded-lg transition-all duration-200 group relative",
                   isActive ? navItemActiveClass : navItemIdleClass
@@ -519,6 +529,7 @@ export function SideNav() {
                   <Icon className="w-6 h-6" />
                 </div>
                 <span
+                  data-slot="nav-label"
                   className={cn(
                     "flex-1 font-medium text-[13px] whitespace-nowrap transition-all duration-300",
                     isExpanded ? "opacity-100" : "opacity-0 w-0 overflow-hidden"
@@ -542,7 +553,7 @@ export function SideNav() {
         </nav>
 
         {/* 補助ナビゲーション */}
-        <div className={cn("py-2 px-3 border-t space-y-2", navDividerClass)}>
+        <div data-slot="nav-utilities" className="py-2 px-3 space-y-2">
           <div className="space-y-1">
             {utilityNavItems.map((item) => {
               const Icon = item.icon;
@@ -553,6 +564,7 @@ export function SideNav() {
                 <Link
                   key={item.id}
                   href={item.href}
+                  aria-current={isActive ? "page" : undefined}
                   className={cn(
                     "flex items-center gap-2 px-3 py-2.5 rounded-lg transition-all duration-200 group relative",
                     isActive ? navItemActiveClass : navItemIdleClass
@@ -562,6 +574,7 @@ export function SideNav() {
                     <Icon className="w-6 h-6" />
                   </div>
                   <span
+                    data-slot="nav-label"
                     className={cn(
                       "flex-1 font-medium text-[13px] whitespace-nowrap transition-all duration-300",
                       isExpanded ? "opacity-100" : "opacity-0 w-0 overflow-hidden"
@@ -588,6 +601,7 @@ export function SideNav() {
           {canAccessAdmin && (
             <Link
               href="/admin"
+              aria-current={pathname.startsWith("/admin") ? "page" : undefined}
               className={cn(
                 "flex items-center gap-2 px-3 py-2.5 rounded-lg transition-all duration-200 group relative",
                 pathname.startsWith("/admin") ? navAdminActiveClass : navAdminIdleClass
@@ -597,6 +611,7 @@ export function SideNav() {
                 <Settings className="w-6 h-6" />
               </div>
               <span
+                data-slot="nav-label"
                 className={cn(
                   "flex-1 font-medium text-[13px] whitespace-nowrap transition-all duration-300",
                   isExpanded ? "opacity-100" : "opacity-0 w-0 overflow-hidden"
@@ -646,6 +661,7 @@ export function SideNav() {
               <LogOut className="w-6 h-6" />
             </div>
             <span
+              data-slot="nav-label"
               className={cn(
                 "font-medium text-[13px] whitespace-nowrap transition-all duration-300",
                 isExpanded ? "opacity-100" : "opacity-0 w-0 overflow-hidden"
@@ -666,12 +682,13 @@ export function SideNav() {
           </button>
         </div>
 
-        <div className="absolute bottom-0 left-0 right-0 h-px bg-sky-200/70 dark:bg-violet-800/70" />
       </aside>
 
       {/* モバイルメニュー */}
       <aside
         data-theme-sync="1"
+        data-design-navigation="true"
+        data-slot="mobile-navigation"
         className={cn(
           "md:hidden fixed inset-0 z-50 flex flex-col bg-background/98 backdrop-blur-xl transition-all duration-300",
           isMobileMenuOpen ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none"
@@ -707,6 +724,7 @@ export function SideNav() {
                 <Link
                   key={item.id}
                   href={item.href}
+                  aria-current={isActive ? "page" : undefined}
                   onClick={() => setIsMobileMenuOpen(false)}
                   className={cn(
                     "flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200",
@@ -720,12 +738,7 @@ export function SideNav() {
             })}
           </div>
 
-          <div
-            className={cn(
-              "space-y-1 rounded-xl border bg-surface-secondary/70 p-4",
-              navDividerClass
-            )}
-          >
+          <div className="space-y-1 rounded-xl bg-surface-secondary/70 p-4">
             <p className="mb-2 text-xs text-sky-600/80 dark:text-violet-200/70">アカウント / 管理</p>
             <div className="grid grid-cols-2 gap-2">
               {utilityNavItems.map((item) => {
@@ -737,6 +750,7 @@ export function SideNav() {
                   <Link
                     key={item.id}
                     href={item.href}
+                    aria-current={isActive ? "page" : undefined}
                     onClick={() => setIsMobileMenuOpen(false)}
                     className={cn(
                       "flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200",
@@ -752,6 +766,7 @@ export function SideNav() {
               {canAccessAdmin && (
                 <Link
                   href="/admin"
+                  aria-current={pathname.startsWith("/admin") ? "page" : undefined}
                   onClick={() => setIsMobileMenuOpen(false)}
                   className={cn(
                     "flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200",
@@ -781,7 +796,6 @@ export function SideNav() {
           </button>
         </div>
 
-        <div className="absolute bottom-0 left-0 right-0 h-px bg-sky-200/70 dark:bg-violet-800/70" />
       </aside>
     </>
   );

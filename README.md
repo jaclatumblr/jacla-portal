@@ -479,3 +479,9 @@ npm run build
 ---
 
 **© 2026 Tokyo University of Technology - 総合音楽部 Jacla All rights reserved.**
+
+### 在籍・卒業・休眠の管理
+
+管理画面 `/admin/accounts` で、卒業・退部・休眠への変更と復帰ができます。バンドの所属と名前は保持します。導入時は先に `SQL/AccountLifecycle.sql` の適用とVercelの `CRON_SECRET` 設定が必要です。
+
+動作、移行手順、保持する情報、テスト方法は [在籍・アカウント管理](docs/account-lifecycle.md) を参照してください。

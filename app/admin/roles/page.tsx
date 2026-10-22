@@ -1022,6 +1022,7 @@ export default function AdminRolesPage() {
         <SideNav />
 
         <main className="flex-1 md:ml-20">
+          {canEditFullRoles && <div className="px-6 pt-4 text-sm"><Link href="/admin/accounts" className="text-primary hover:underline">在籍・卒業・休眠の管理へ</Link></div>}
           <PageHeader
             kicker="Admin"
             title="ユーザー管理"

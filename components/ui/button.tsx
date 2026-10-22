@@ -43,6 +43,9 @@ function Button({
   return (
     <Comp
       data-slot="button"
+      data-variant={variant ?? "default"}
+      data-size={size ?? "default"}
+      data-fixed-height={className && /(?:^|\s)(?:[\w-]+:)*h-/.test(className) ? "true" : undefined}
       className={cn(buttonVariants({ variant, size }), className)}
       {...props}
     />

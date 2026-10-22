@@ -12,21 +12,35 @@ function AuthCallbackContent() {
 
   useEffect(() => {
     let cancelled = false;
+    let generation = 0;
+    let receivedEvent = false;
+    let activeUser: string | null = null;
+    const pending = new Set<number>();
     const errorDescription = searchParams.get("error_description");
 
     if (errorDescription) {
       router.replace(
-        `/login?error=${encodeURIComponent(decodeURIComponent(errorDescription))}`
+        `/login?error=${encodeURIComponent(errorDescription)}`
       );
       return;
     }
 
     const timeoutId = window.setTimeout(() => {
       if (cancelled) return;
+      cancelled = true;
+      generation++;
       router.replace(
         `/login?error=${encodeURIComponent("ログイン情報を確認できませんでした。")}`
       );
     }, 8000);
+
+    const finish = (path: string) => {
+      if (cancelled) return;
+      cancelled = true;
+      generation++;
+      window.clearTimeout(timeoutId);
+      router.replace(path);
+    };
 
     const isAdminUser = async (userId: string) => {
       const { data: leadersData, error: leadersError } = await supabase
@@ -53,55 +67,74 @@ function AuthCallbackContent() {
     };
 
     const handleSession = async (session: Session | null) => {
-      if (!session) return;
+      if (!session || cancelled) return;
+      const current = generation;
+      const stale = () => cancelled || current !== generation;
       const email = getUserEmail(session.user ?? null);
       if (hasAllowedEmail(session.user ?? null)) {
-        router.replace("/");
+        finish("/");
         return;
       }
       if (isGmailAddress(email) && session.user?.id) {
         const isAdmin = await isAdminUser(session.user.id);
+        if (stale()) return;
         if (isAdmin) {
-          router.replace("/");
+          finish("/");
           return;
         }
       }
+      if (stale()) return;
       await safeSignOut();
-      router.replace(`/login?error=${encodeURIComponent(emailPolicyMessage)}`);
+      if (stale()) return;
+      finish(`/login?error=${encodeURIComponent(emailPolicyMessage)}`);
     };
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (cancelled) return;
-      if (session) {
-        window.clearTimeout(timeoutId);
-        void handleSession(session);
-      }
+      receivedEvent = true;
+      if (activeUser === session?.user.id) return;
+      activeUser = session?.user.id ?? null;
+      generation++;
+      if (!session) return;
+      const scheduledGeneration = generation;
+      const timer = window.setTimeout(() => {
+        pending.delete(timer);
+        if (cancelled || scheduledGeneration !== generation) return;
+        void handleSession(session).catch(() => {
+          if (!cancelled && scheduledGeneration === generation) finish("/login?error=Authentication%20failed");
+        });
+      }, 0);
+      pending.add(timer);
     });
 
     (async () => {
       const { data, error } = await supabase.auth.getSession();
-      if (cancelled) return;
+      if (cancelled || receivedEvent) return;
 
       if (error) {
         console.error(error);
         window.clearTimeout(timeoutId);
-        router.replace(`/login?error=${encodeURIComponent("ログインに失敗しました。")}`);
+        finish(`/login?error=${encodeURIComponent("ログインに失敗しました。")}`);
         return;
       }
 
       if (data.session) {
-        window.clearTimeout(timeoutId);
+        activeUser = data.session.user.id;
         await handleSession(data.session);
         return;
       }
 
       // onAuthStateChange で拾えない場合に備えて待つ
-    })();
+    })().catch(() => {
+      if (!cancelled && !receivedEvent) finish("/login?error=Authentication%20failed");
+    });
 
     return () => {
       cancelled = true;
+      generation++;
+      pending.forEach((timer) => window.clearTimeout(timer));
       subscription.unsubscribe();
       window.clearTimeout(timeoutId);
     };

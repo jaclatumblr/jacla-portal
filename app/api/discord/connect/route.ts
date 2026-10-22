@@ -1,10 +1,14 @@
+import { requireActivePortalAccount } from "@/lib/accountAccess";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createHmac, randomBytes } from "crypto";
+import { safeInternalPath } from "@/lib/safeRedirect";
+import { discordStateCookie, discordCookieOptions } from "@/lib/discordOAuth";
 import { getBaseUrl } from "@/lib/baseUrl";
 
 type ConnectPayload = {
   sub: string;
+  sid: string;
   next: string;
   iat: number;
   nonce: string;
@@ -39,16 +43,20 @@ export async function POST(request: Request) {
   if (userError || !userData.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const accessError = await requireActivePortalAccount(userData.user.id, token);
+  if (accessError) return accessError;
+
 
   const body = (await request.json().catch(() => ({}))) as { next?: string };
-  const next = typeof body.next === "string" && body.next ? body.next : "/me/profile/edit";
+  const next = safeInternalPath(body?.next, "/me/profile/edit");
   const redirectUri = `${getBaseUrl()}/auth/discord/callback`;
 
   const payload: ConnectPayload = {
     sub: userData.user.id,
+    sid: JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8")).session_id,
     next,
     iat: Date.now(),
-    nonce: randomBytes(8).toString("hex"),
+    nonce: randomBytes(32).toString("hex"),
   };
   const encoded = base64UrlEncode(JSON.stringify(payload));
   const signature = sign(encoded, clientSecret);
@@ -63,7 +71,10 @@ export async function POST(request: Request) {
     prompt: "consent",
   });
 
-  return NextResponse.json({ url: `${discordAuthorizeUrl}?${params.toString()}` });
+  const response = NextResponse.json({ url: `${discordAuthorizeUrl}?${params.toString()}` });
+  response.cookies.set(discordStateCookie, state, { ...discordCookieOptions, secure: getBaseUrl().startsWith("https:") });
+  response.headers.set("Cache-Control", "no-store");
+  return response;
 }
 
 function sign(value: string, secret: string) {

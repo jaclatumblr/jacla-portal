@@ -36,6 +36,7 @@ language plpgsql
 as $$
 begin
   if auth.uid() is null then
+    if tg_op = 'DELETE' then return old; end if;
     return new;
   end if;
 

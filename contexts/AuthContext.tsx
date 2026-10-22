@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import type { Session } from "@supabase/supabase-js";
+import { readSessionValue, writeSessionValue } from "@/lib/browserStorage";
 
 type AuthContextType = {
   session: Session | null;
@@ -21,54 +22,82 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    const logLoginHistory = async (nextSession: Session | null) => {
-      if (!nextSession?.user?.id) return;
-      if (typeof window === "undefined") return;
-      const token = nextSession.access_token;
-      const storageKey = token ? `loginLogged:${token}` : null;
-      if (storageKey && window.sessionStorage.getItem(storageKey)) return;
-
-      const userAgent = typeof navigator !== "undefined" ? navigator.userAgent : "";
-      const { error } = await supabase.from("login_history").insert([
-        {
-          user_id: nextSession.user.id,
-          email: nextSession.user.email ?? null,
-          user_agent: userAgent,
-        },
-      ]);
-      if (error) {
-        console.error("login_history insert failed", error);
-        return;
+    let authVersion = 0;
+    let activeUserId: string | null = null;
+    const pendingLogs = new Set<string>();
+    const completedLogs = new Set<string>();
+    const timers = new Set<ReturnType<typeof setTimeout>>();
+    // Older versions used an access token as the marker key. Remove those
+    // legacy copies without reading or logging their contents.
+    try {
+      for (let index = window.sessionStorage.length - 1; index >= 0; index--) {
+        const key = window.sessionStorage.key(index);
+        if (key?.startsWith("loginLogged:") && key.slice("loginLogged:".length).includes(".")) window.sessionStorage.removeItem(key);
       }
-      if (storageKey) {
-        window.sessionStorage.setItem(storageKey, "1");
+    } catch { /* Login must also work with browser storage disabled. */ }
+    const logLoginHistory = async (nextSession: Session | null) => {
+      if (cancelled || !nextSession?.user?.id || activeUserId !== nextSession.user.id) return;
+      const storageKey = `loginLogged:${nextSession.user.id}:${nextSession.expires_at ?? "session"}`;
+      if (readSessionValue(storageKey) || pendingLogs.has(storageKey) || completedLogs.has(storageKey)) return;
+      pendingLogs.add(storageKey);
+
+      try {
+        const userAgent = typeof navigator !== "undefined" ? navigator.userAgent : "";
+        const { error } = await supabase.from("login_history").insert([
+          {
+            user_id: nextSession.user.id,
+            email: nextSession.user.email ?? null,
+            user_agent: userAgent,
+          },
+        ]);
+        if (error) {
+          console.error("login_history insert failed", error);
+          return;
+        }
+        completedLogs.add(storageKey);
+        writeSessionValue(storageKey, "1");
+      } finally {
+        pendingLogs.delete(storageKey);
       }
     };
 
     // Load session on first mount.
-    supabase.auth.getSession().then(({ data, error }) => {
+    const initialVersion = authVersion;
+    void supabase.auth.getSession().then(({ data, error }) => {
       if (error) {
         console.error("getSession error:", error);
       }
-      if (!cancelled) {
+      if (!cancelled && authVersion === initialVersion) {
+        activeUserId = data.session?.user.id ?? null;
         setSession(data.session ?? null);
         setLoading(false);
       }
+    }).catch(() => {
+      if (!cancelled && authVersion === initialVersion) setLoading(false);
     });
 
     // Track auth state changes and log login history.
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, newSession) => {
-      console.log("auth state change:", event, newSession);
+      if (cancelled) return;
+      authVersion += 1;
+      activeUserId = newSession?.user.id ?? null;
       setSession(newSession);
+      setLoading(false);
       if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
-        void logLoginHistory(newSession);
+        // Run Supabase queries outside the synchronous auth callback.
+        const timer = setTimeout(() => {
+          timers.delete(timer);
+          void logLoginHistory(newSession).catch(() => { console.error("login_history insert failed"); });
+        }, 0);
+        timers.add(timer);
       }
     });
 
     return () => {
       cancelled = true;
+      timers.forEach(clearTimeout);
       subscription.unsubscribe();
     };
   }, []);

@@ -1,0 +1,136 @@
+/* One composition across presets: readable copy and a cropped portrait. */
+html[data-design] [data-slot="home-hero"] {
+  isolation: isolate;
+  min-height: 300px;
+  justify-content: flex-start;
+  padding: 28px 24px;
+  border: 0;
+  background: var(--background);
+}
+[data-slot="home-hero"] .home-hero-atmosphere {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 90% 65%, color-mix(in oklab, var(--primary) 12%, transparent), transparent 65%);
+}
+html[data-design] [data-slot="home-introduction"] {
+  z-index: auto;
+  width: 100%;
+  max-width: 640px;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+}
+html[data-design] [data-slot="home-brand"] {
+  display: block;
+  margin: 0 0 12px;
+}
+html[data-design] [data-slot="home-brand"] img {
+  width: clamp(140px, 15vw, 220px);
+  max-width: 100%;
+  height: auto;
+  margin: 0;
+}
+html[data-design] [data-slot="home-introduction"] > p {
+  max-width: 440px;
+  margin: 0 0 20px;
+  font-size: 14px;
+  line-height: 1.9;
+  text-wrap: pretty;
+}
+html[data-design] [data-slot="home-actions"] {
+  position: relative;
+  z-index: 30;
+  justify-content: flex-start;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+[data-slot="home-hero"] .home-background-art {
+  position: absolute;
+  z-index: 20;
+  pointer-events: none;
+  user-select: none;
+  top: 16%;
+  bottom: -1px;
+  right: -120px;
+  width: 340px;
+  overflow: hidden;
+  opacity: .13;
+  -webkit-mask-image: linear-gradient(to bottom, #000 72%, transparent);
+  mask-image: linear-gradient(to bottom, #000 72%, transparent);
+}
+[data-slot="home-hero"] .home-character-bounce {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 85%;
+}
+[data-slot="home-hero"] .home-character-trigger {
+  position: absolute;
+  top: 10%;
+  left: 24%;
+  width: 70%;
+  height: 40%;
+  padding: 0;
+  border: 0;
+  border-radius: 40%;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+[data-slot="home-hero"] .home-character-trigger:disabled { pointer-events: none; }
+[data-slot="home-hero"] .home-character-trigger:focus-visible {
+  outline: 2px dashed var(--ring);
+  outline-offset: -4px;
+}
+[data-slot="home-hero"] .home-character-image {
+  position: absolute;
+  top: 0;
+  left: -28%;
+  width: 140%;
+  max-width: none;
+  height: auto;
+}
+@keyframes homeCharacterPeek {
+  0% { opacity: 0; transform: translateY(100%) rotate(-3deg); }
+  25% { opacity: 1; }
+  65% { opacity: 1; transform: translateY(-12px) rotate(1deg); }
+  82% { opacity: 1; transform: translateY(5px) rotate(-.4deg); }
+  100% { opacity: 1; transform: translateY(0) rotate(0); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-slot="home-hero"] .home-character-image {
+    opacity: 0;
+    transform: translateY(100%);
+    transform-origin: 50% 65%;
+  }
+  [data-slot="home-hero"] .home-character-image[data-revealed="true"] {
+    animation: homeCharacterPeek 1150ms cubic-bezier(.22, 1, .36, 1) 180ms both;
+  }
+}
+@media (min-width: 640px) {
+  html[data-design] [data-slot="home-hero"] { padding: 28px 40px; }
+  html[data-design] [data-slot="home-actions"] > :is(a, button) { width: auto; }
+}
+@media (min-width: 1024px) {
+  html[data-design] [data-slot="home-hero"] {
+    min-height: clamp(300px, 38svh, 360px);
+    padding: 32px clamp(40px, 5vw, 104px);
+  }
+  html[data-design] [data-slot="home-introduction"] { width: 54%; }
+  [data-slot="home-hero"] .home-background-art {
+    top: -12%;
+    right: -2%;
+    width: 49%;
+    max-width: 460px;
+    opacity: .82;
+  }
+  .dark [data-slot="home-hero"] .home-background-art { opacity: .68; }
+  [data-slot="home-hero"] .home-character-image { width: 130%; left: -24%; }
+  [data-slot="home-hero"] .home-character-trigger { top: 4%; height: 88%; }
+}
+@media print {
+  [data-slot="home-hero"] :is(.home-background-art, .home-hero-atmosphere) { display: none; }
+}

@@ -5,6 +5,7 @@ import { ArrowLeft, ArrowRight, Shield, User } from "@/lib/icons";
 import { AdministratorModeToggle } from "@/components/AdministratorModeToggle";
 import { Badge } from "@/components/ui/badge";
 import { useAdminMode } from "@/contexts/AdminModeContext";
+import { readLocalValue, writeLocalValue } from "@/lib/browserStorage";
 import { cn } from "@/lib/utils";
 
 const STORAGE_KEY = "administrator-mode-dock-open";
@@ -19,7 +20,7 @@ export function AdministratorModeDock() {
     if (typeof window === "undefined") return undefined;
 
     const frame = window.requestAnimationFrame(() => {
-      const saved = window.localStorage.getItem(STORAGE_KEY);
+      const saved = readLocalValue(STORAGE_KEY);
       setIsOpen(saved !== "0");
       setHydrated(true);
     });
@@ -29,7 +30,7 @@ export function AdministratorModeDock() {
 
   useEffect(() => {
     if (!hydrated || typeof window === "undefined") return;
-    window.localStorage.setItem(STORAGE_KEY, isOpen ? "1" : "0");
+    writeLocalValue(STORAGE_KEY, isOpen ? "1" : "0");
   }, [hydrated, isOpen]);
 
   if (!canToggleMode) return null;

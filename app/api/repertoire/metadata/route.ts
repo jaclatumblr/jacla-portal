@@ -1,7 +1,9 @@
+import { requireActivePortalAccount } from "@/lib/accountAccess";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { lookup } from "node:dns/promises";
-import net from "node:net";
+import net, { type LookupFunction } from "node:net";
+import { Agent } from "undici";
 
 export const runtime = "nodejs";
 
@@ -95,9 +97,16 @@ const isPrivateIpv4 = (host: string) => {
 const isPrivateIpv6 = (host: string) => {
   const normalized = normalizeHost(host);
   if (normalized.startsWith("::ffff:")) {
-    return isPrivateIpv4(normalized.slice("::ffff:".length));
+    const mapped = normalized.slice("::ffff:".length);
+    const hex = mapped.match(/^([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+    if (hex) {
+      const high = parseInt(hex[1], 16), low = parseInt(hex[2], 16);
+      return isPrivateIpv4([high >> 8, high & 255, low >> 8, low & 255].join("."));
+    }
+    return isPrivateIpv4(mapped);
   }
-  return privateHostPatterns.some((pattern) => pattern.test(normalized));
+  // Only globally routed unicast IPv6; deny local/compatible/translation ranges.
+  return !/^[23][0-9a-f]{3}:/i.test(normalized) || privateHostPatterns.some((pattern) => pattern.test(normalized));
 };
 
 const isPrivateHost = (host: string) => {
@@ -107,6 +116,21 @@ const isPrivateHost = (host: string) => {
   if (net.isIP(normalized) === 6 && isPrivateIpv6(normalized)) return true;
   return false;
 };
+
+// Validate the actual connection's DNS lookup as well as the early URL check.
+// Otherwise an attacker can change a public DNS answer to a private IP between them.
+const publicLookup: LookupFunction = (hostname, options, callback) => {
+  void lookup(hostname, { all: true }).then((addresses) => {
+    const selected = options.family ? addresses.filter((entry) => entry.family === Number(options.family)) : addresses;
+    if (!selected.length || addresses.some((entry) => isPrivateHost(entry.address))) {
+      callback(new Error("Blocked host resolution"), "", 4);
+      return;
+    }
+    if (options.all) callback(null, selected);
+    else callback(null, selected[0].address, selected[0].family);
+  }).catch((error: Error) => callback(error, "", 4));
+};
+const metadataAgent = new Agent({ connect: { lookup: publicLookup } });
 
 const assertPublicUrl = async (url: string) => {
   const parsed = new URL(url);
@@ -186,7 +210,8 @@ const verifyAuthenticated = async (request: Request) => {
     auth: { persistSession: false },
   });
   const { data, error } = await authClient.auth.getUser(token);
-  return !error && Boolean(data.user);
+  if (error || !data.user) return false;
+  return !(await requireActivePortalAccount(data.user.id, token));
 };
 
 const fetchWithTimeout = async (url: string, init: RequestInit = {}) => {
@@ -194,12 +219,14 @@ const fetchWithTimeout = async (url: string, init: RequestInit = {}) => {
   const timeoutId = setTimeout(() => controller.abort(), fetchTimeoutMs);
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   try {
-    const res = await fetch(url, {
+    const requestInit: RequestInit & { dispatcher: Agent } = {
       ...init,
+      dispatcher: metadataAgent,
       signal: controller.signal,
       cache: "no-store",
       redirect: "error",
-    });
+    };
+    const res = await fetch(url, requestInit);
     const declaredSize = Number(res.headers.get("content-length"));
     if (Number.isFinite(declaredSize) && declaredSize > maxResponseBytes) {
       controller.abort();
@@ -272,9 +299,9 @@ const extractHtmlMetadata = (html: string) => {
 };
 
 const extractYouTubeDuration = (html: string) => {
-  const lengthMatch = html.match(/"lengthSeconds":"(\\d+)"/);
+  const lengthMatch = html.match(/"lengthSeconds"\s*:\s*"(\d+)"/);
   if (lengthMatch) return parseDurationSeconds(lengthMatch[1]);
-  const approxMatch = html.match(/"approxDurationMs":"(\\d+)"/);
+  const approxMatch = html.match(/"approxDurationMs"\s*:\s*"(\d+)"/);
   if (approxMatch) {
     const ms = Number.parseInt(approxMatch[1], 10);
     return Number.isNaN(ms) ? null : Math.round(ms / 1000);
@@ -283,7 +310,7 @@ const extractYouTubeDuration = (html: string) => {
 };
 
 const extractSpotifyDuration = (html: string) => {
-  const match = html.match(/"duration_ms":(\\d+)/);
+  const match = html.match(/"duration_ms"\s*:\s*(\d+)/);
   if (!match) return null;
   const ms = Number.parseInt(match[1], 10);
   return Number.isNaN(ms) ? null : Math.round(ms / 1000);
@@ -291,8 +318,8 @@ const extractSpotifyDuration = (html: string) => {
 
 const extractAppleMusicDuration = (html: string) => {
   const match =
-    html.match(/"durationInMillis":(\\d+)/) ??
-    html.match(/"durationInMs":(\\d+)/);
+    html.match(/"durationInMillis"\s*:\s*(\d+)/) ??
+    html.match(/"durationInMs"\s*:\s*(\d+)/);
   if (match) {
     const ms = Number.parseInt(match[1], 10);
     return Number.isNaN(ms) ? null : Math.round(ms / 1000);

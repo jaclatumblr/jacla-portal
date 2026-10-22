@@ -1,3 +1,5 @@
+
+import { isSafeInternalPath } from "@/lib/safeRedirect";
 export type ExternalLinkBadgeVariant = "default" | "secondary" | "outline" | "warning" | "info";
 export type ExternalLinkSectionIcon = "globe" | "school" | "library" | "image" | "link" | "file";
 export type ExternalLinkSectionLayout = "links" | "groups";
@@ -36,7 +38,7 @@ export type ExternalLinkPageContent = {
 };
 
 export const isInternalExternalLinkHref = (href: string) =>
-  href.startsWith("/") && !href.startsWith("//");
+  isSafeInternalPath(href);
 
 const badgeVariantSet = new Set<ExternalLinkBadgeVariant>([
   "default",

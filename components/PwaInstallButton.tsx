@@ -9,6 +9,25 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
 };
 
+const INSTALL_STORAGE_KEY = "jacla:pwa:installed";
+
+const rememberInstallation = (installed: boolean) => {
+  try {
+    if (installed) window.localStorage.setItem(INSTALL_STORAGE_KEY, "1");
+    else window.localStorage.removeItem(INSTALL_STORAGE_KEY);
+  } catch {
+    // Installation detection also works when browser storage is unavailable.
+  }
+};
+
+const hasInstallationRecord = () => {
+  try {
+    return window.localStorage.getItem(INSTALL_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+};
+
 const isIosBrowser = () => {
   if (typeof navigator === "undefined") return false;
   return /iphone|ipad|ipod/i.test(navigator.userAgent);
@@ -30,33 +49,56 @@ export function PwaInstallButton() {
   const [isInstalled, setIsInstalled] = useState(false);
   const [isIos, setIsIos] = useState(false);
   const [installing, setInstalling] = useState(false);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    setIsIos(isIosBrowser());
-    setIsInstalled(isStandaloneMode());
+    let cancelled = false;
+    const syncInstallation = () => {
+      const standalone = isStandaloneMode();
+      if (standalone) rememberInstallation(true);
+      setIsInstalled(standalone || hasInstallationRecord());
+    };
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setIsIos(isIosBrowser());
+      syncInstallation();
+      setReady(true);
+    });
 
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
+      // A fresh prompt means the browser allows installation again.
+      rememberInstallation(false);
+      setIsInstalled(isStandaloneMode());
       setInstallEvent(event as BeforeInstallPromptEvent);
     };
 
     const handleAppInstalled = () => {
       setInstallEvent(null);
+      rememberInstallation(true);
       setIsInstalled(true);
       toast.success("App installed.");
     };
 
     const mediaQuery = window.matchMedia?.("(display-mode: standalone)");
-    const handleDisplayModeChange = () => setIsInstalled(isStandaloneMode());
+    const handleDisplayModeChange = syncInstallation;
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === INSTALL_STORAGE_KEY || event.key === null) syncInstallation();
+    };
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
     window.addEventListener("appinstalled", handleAppInstalled);
     mediaQuery?.addEventListener?.("change", handleDisplayModeChange);
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("focus", syncInstallation);
 
     return () => {
+      cancelled = true;
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
       window.removeEventListener("appinstalled", handleAppInstalled);
       mediaQuery?.removeEventListener?.("change", handleDisplayModeChange);
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("focus", syncInstallation);
     };
   }, []);
 
@@ -72,6 +114,7 @@ export function PwaInstallButton() {
         await installEvent.prompt();
         const choice = await installEvent.userChoice;
         if (choice.outcome === "accepted") {
+          rememberInstallation(true);
           setIsInstalled(true);
         } else {
           toast.info("Install prompt dismissed.");
@@ -94,17 +137,15 @@ export function PwaInstallButton() {
     toast.info("Install prompt is not available yet. Open the production build and try again.");
   };
 
-  const label = isInstalled
-    ? "Installed"
-    : installEvent
+  if (!ready || isInstalled) return null;
+
+  const label = installEvent
       ? "Install App"
       : isIos
         ? "Add to Home Screen"
         : "Install";
 
-  const toneClass = isInstalled
-    ? "border-secondary/35 bg-secondary/10 text-secondary"
-    : "border-border bg-background/80 text-foreground hover:border-primary hover:text-primary";
+  const toneClass = "border-border bg-background/80 text-foreground hover:border-primary hover:text-primary";
 
   return (
     <button

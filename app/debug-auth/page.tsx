@@ -1,34 +1,11 @@
 // app/debug-auth/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
-
-type SessionInfo = {
-  userId: string | null;
-  email: string | null;
-} | null;
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function DebugAuthPage() {
-  const [sessionInfo, setSessionInfo] = useState<SessionInfo>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    (async () => {
-      const { data, error } = await supabase.auth.getSession();
-      console.log("DebugAuth session:", data.session, "error:", error);
-
-      if (data.session) {
-        setSessionInfo({
-          userId: data.session.user.id,
-          email: data.session.user.email ?? null,
-        });
-      } else {
-        setSessionInfo(null);
-      }
-      setLoading(false);
-    })();
-  }, []);
+  const { session, loading } = useAuth();
+  const sessionInfo = session ? { userId: session.user.id, email: session.user.email ?? null } : null;
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-background p-4">

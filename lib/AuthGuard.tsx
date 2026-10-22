@@ -55,6 +55,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
         const isAdmin = await isAdminUser(session.user.id);
         if (isAdmin) return;
       }
+      if (cancelled) return;
       await safeSignOut();
       if (cancelled) return;
       router.replace(`/login?error=${encodeURIComponent(emailPolicyMessage)}`);

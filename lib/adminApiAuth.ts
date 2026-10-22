@@ -1,3 +1,4 @@
+import { requireActivePortalAccount } from "@/lib/accountAccess";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -52,6 +53,9 @@ export async function requireAdminApiAuth(request: Request): Promise<AdminApiAut
       response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
     };
   }
+
+  const accessError = await requireActivePortalAccount(userData.user.id, token);
+  if (accessError) return { authorized: false, response: accessError };
 
   let leaders: string[] = [];
   const { data: leaderRows, error: leaderError } = await adminClient

@@ -1,3 +1,4 @@
+import { requireActivePortalAccount } from "@/lib/accountAccess";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -42,18 +43,25 @@ export async function POST(request: Request) {
   if (userError || !userData.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const accessError = await requireActivePortalAccount(userData.user.id, token);
+  if (accessError) return accessError;
 
-  const body = (await request.json().catch(() => ({}))) as {
+
+  const body = (await request.json().catch(() => null)) as {
     category?: string;
     message?: string;
-  };
+  } | null;
+  if (!body || typeof body !== "object" || Array.isArray(body) || typeof body.message !== "string"
+    || (body.category !== undefined && typeof body.category !== "string")) {
+    return NextResponse.json({ error: "Invalid feedback request." }, { status: 400 });
+  }
   const message = (body.message ?? "").trim();
   if (!message) {
     return NextResponse.json({ error: "Message is required." }, { status: 400 });
   }
 
   const rawCategory = (body.category ?? "other").trim() || "other";
-  const category = categoryLabels[rawCategory] ? rawCategory : "other";
+  const category = Object.hasOwn(categoryLabels, rawCategory) ? rawCategory : "other";
 
   const profileId = userData.user.id;
   const email = userData.user.email ?? null;

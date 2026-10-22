@@ -46,14 +46,16 @@ export function useMembers(): UseMembersResult {
                 ? supabase
                     .from("profiles")
                     .select(
-                        "id, display_name, real_name, email, part, crew, leader, discord, discord_username, discord_id, avatar_url"
+                        "id, display_name, real_name, email, part, crew, leader, discord, discord_username, discord_id, avatar_url, portal_accounts!inner(status)"
                     )
+                    .eq("portal_accounts.status", "active")
                     .order("display_name", { ascending: true })
                 : supabase
                     .from("profiles")
                     .select(
-                        "id, display_name, real_name, part, crew, leader, discord, discord_username, discord_id, avatar_url"
+                        "id, display_name, real_name, part, crew, leader, discord, discord_username, discord_id, avatar_url, portal_accounts!inner(status)"
                     )
+                    .eq("portal_accounts.status", "active")
                     .order("display_name", { ascending: true });
 
             const [profilesRes, bandsRes, leadersRes, positionsRes, enrollmentRes, partsRes] =

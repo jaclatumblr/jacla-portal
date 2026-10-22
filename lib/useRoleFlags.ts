@@ -21,6 +21,7 @@ export function useRoleFlags(): RoleFlagsResult {
   const { session, loading: authLoading } = useAuth();
   const { suppressPrivilegedAccess, loading: modeLoading } = useAdminMode();
   const userId = session?.user.id;
+  const [owner, setOwner] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [flags, setFlags] = useState(() => ({
@@ -39,6 +40,7 @@ export function useRoleFlags(): RoleFlagsResult {
     let cancelled = false;
 
     (async () => {
+      setOwner(null);
       setLoading(true);
       setError(null);
       let leaders: string[] = [];
@@ -48,6 +50,8 @@ export function useRoleFlags(): RoleFlagsResult {
         if (cancelled) return;
         console.error(leaderError);
         setError("権限情報の取得に失敗しました。");
+        setOwner(userId);
+        setFlags({ isAdministrator: false, isSupervisor: false, isPaLeader: false, isLightingLeader: false, isPartLeader: false, isAdmin: false, canAccessAdmin: false });
         setLoading(false);
         return;
       }
@@ -72,6 +76,7 @@ export function useRoleFlags(): RoleFlagsResult {
         canAccessAdmin,
       });
       setError(null);
+      setOwner(userId);
       setLoading(false);
     })();
 
@@ -81,7 +86,7 @@ export function useRoleFlags(): RoleFlagsResult {
   }, [authLoading, userId]);
 
   return {
-    ...(suppressPrivilegedAccess
+    ...(suppressPrivilegedAccess || authLoading || !userId || owner !== userId || loading
       ? {
           isAdministrator: false,
           isSupervisor: false,
@@ -92,7 +97,7 @@ export function useRoleFlags(): RoleFlagsResult {
           canAccessAdmin: false,
         }
       : flags),
-    loading: authLoading || modeLoading || (userId ? loading : false),
-    error: userId ? error : null,
+    loading: authLoading || modeLoading || (userId ? loading || owner !== userId : false),
+    error: userId && owner === userId ? error : null,
   };
 }

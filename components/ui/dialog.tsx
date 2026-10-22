@@ -106,6 +106,7 @@ function DialogContent({
             {/* Content */}
             <div
                 role="dialog"
+                data-slot="dialog-content"
                 aria-modal="true"
                 aria-labelledby={title ? "dialog-title" : undefined}
                 aria-describedby={description ? "dialog-description" : undefined}
@@ -127,7 +128,7 @@ function DialogContent({
                 )}
 
                 {title && (
-                    <h2 id="dialog-title" className="text-lg font-semibold text-foreground mb-2">
+                    <h2 data-slot="dialog-title" id="dialog-title" className="text-lg font-semibold text-foreground mb-2">
                         {title}
                     </h2>
                 )}
@@ -166,7 +167,7 @@ function DialogTitle({
     className?: string;
 }) {
     return (
-        <h2 className={cn("text-lg font-semibold text-foreground", className)}>
+        <h2 data-slot="dialog-title" className={cn("text-lg font-semibold text-foreground", className)}>
             {children}
         </h2>
     );

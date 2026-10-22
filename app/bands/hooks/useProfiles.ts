@@ -30,7 +30,7 @@ export function useProfiles(): UseProfilesResult {
         (async () => {
             setLoading(true);
             const [profilesRes, partsRes] = await Promise.all([
-                supabase.from("profiles").select("id, display_name, real_name, part, leader"),
+                supabase.from("profiles").select("id, display_name, real_name, part, leader, portal_accounts!inner(status)").eq("portal_accounts.status", "active"),
                 supabase.from("profile_parts").select("profile_id, part, is_primary"),
             ]);
 

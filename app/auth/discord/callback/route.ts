@@ -1,18 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { createHmac, timingSafeEqual } from "crypto";
+import { verifyDiscordState, discordStateCookie, discordCookieOptions } from "@/lib/discordOAuth";
+import { safeInternalPath } from "@/lib/safeRedirect";
 import { getBaseUrl } from "@/lib/baseUrl";
-
-type ConnectPayload = {
-  sub: string;
-  next?: string;
-  iat: number;
-  nonce: string;
-};
 
 const tokenUrl = "https://discord.com/api/oauth2/token";
 const userUrl = "https://discord.com/api/users/@me";
-const stateTtlMs = 10 * 60 * 1000;
+
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -35,100 +29,86 @@ export async function GET(request: Request) {
     return NextResponse.redirect(errorRedirect);
   }
 
-  const payload = verifyState(state, clientSecret);
+  const cookie = request.headers.get("cookie")?.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${discordStateCookie}=`))?.slice(discordStateCookie.length + 1);
+  if (cookie !== state) return NextResponse.redirect(errorRedirect);
+  const finish = (destination: URL) => {
+    const response = NextResponse.redirect(destination);
+    response.cookies.set(discordStateCookie, "", { ...discordCookieOptions, maxAge: 0, secure: baseUrl.startsWith("https:") });
+    response.headers.set("Cache-Control", "no-store");
+    return response;
+  };
+  const payload = verifyDiscordState(state, clientSecret);
   if (!payload) {
-    return NextResponse.redirect(errorRedirect);
+    return finish(errorRedirect);
   }
 
-  if (Date.now() - payload.iat > stateTtlMs) {
-    return NextResponse.redirect(errorRedirect);
-  }
-
-  const redirectUri = `${baseUrl}/auth/discord/callback`;
-  const tokenRes = await fetch(tokenUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      grant_type: "authorization_code",
-      code,
-      redirect_uri: redirectUri,
-    }),
-  });
-
-  if (!tokenRes.ok) {
-    return NextResponse.redirect(errorRedirect);
-  }
-
-  const tokenData = (await tokenRes.json().catch(() => ({}))) as {
-    access_token?: string;
-  };
-  const accessToken = tokenData.access_token;
-  if (!accessToken) {
-    return NextResponse.redirect(errorRedirect);
-  }
-
-  const userRes = await fetch(userUrl, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  if (!userRes.ok) {
-    return NextResponse.redirect(errorRedirect);
-  }
-
-  const discordUser = (await userRes.json().catch(() => ({}))) as {
-    id?: string;
-    username?: string;
-    global_name?: string | null;
-  };
-  if (!discordUser.id) {
-    return NextResponse.redirect(errorRedirect);
-  }
-
-  const username = discordUser.global_name || discordUser.username || null;
-
-  const adminClient = createClient(supabaseUrl, serviceKey, {
-    auth: { persistSession: false },
-  });
-  const { error } = await adminClient
-    .from("profiles")
-    .update({
-      discord_id: discordUser.id,
-      discord_username: username,
-      discord: username,
-    })
-    .eq("id", payload.sub);
-  if (error) {
-    return NextResponse.redirect(errorRedirect);
-  }
-
-  const nextPath =
-    payload.next && payload.next.startsWith("/") && !payload.next.startsWith("//")
-      ? payload.next
-      : "/me/profile/edit";
-  return NextResponse.redirect(buildRedirect(baseUrl, nextPath, "connected"));
-}
-
-function verifyState(state: string, secret: string): ConnectPayload | null {
-  const [payloadEncoded, signature] = state.split(".");
-  if (!payloadEncoded || !signature) return null;
-  const expected = sign(payloadEncoded, secret);
-  if (
-    signature.length !== expected.length ||
-    !timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
-  ) {
-    return null;
-  }
   try {
-    const json = Buffer.from(payloadEncoded, "base64url").toString("utf8");
-    return JSON.parse(json) as ConnectPayload;
-  } catch {
-    return null;
-  }
-}
+    const redirectUri = `${baseUrl}/auth/discord/callback`;
+    const tokenRes = await fetch(tokenUrl, {
+      signal: AbortSignal.timeout(8000), cache: "no-store",
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: redirectUri,
+      }),
+    });
 
-function sign(value: string, secret: string) {
-  return createHmac("sha256", secret).update(value).digest("base64url");
+    if (!tokenRes.ok) {
+      return finish(errorRedirect);
+    }
+
+    const tokenData = (await tokenRes.json().catch(() => ({}))) as {
+      access_token?: string;
+    };
+    const accessToken = tokenData?.access_token;
+    if (typeof accessToken !== "string" || !accessToken) {
+      return finish(errorRedirect);
+    }
+
+    const userRes = await fetch(userUrl, {
+      signal: AbortSignal.timeout(8000), cache: "no-store",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!userRes.ok) {
+      return finish(errorRedirect);
+    }
+
+    const discordUser = (await userRes.json().catch(() => ({}))) as {
+      id?: string;
+      username?: string;
+      global_name?: string | null;
+    };
+    if (!discordUser || typeof discordUser.id !== "string" || !/^\d{1,30}$/.test(discordUser.id)) {
+      return finish(errorRedirect);
+    }
+
+    const username = typeof discordUser.global_name === "string" ? discordUser.global_name : typeof discordUser.username === "string" ? discordUser.username : null;
+
+    const adminClient = createClient(supabaseUrl, serviceKey, {
+      auth: { persistSession: false },
+    });
+    const { data: hasAccess, error: accountError } = await adminClient.rpc("portal_user_has_access", { p_user_id: payload.sub, p_session_id: payload.sid });
+    if (accountError || hasAccess !== true) return finish(errorRedirect);
+    const { error } = await adminClient
+      .from("profiles")
+      .update({
+        discord_id: discordUser.id,
+        discord_username: username,
+        discord: username,
+      })
+      .eq("id", payload.sub);
+    if (error) {
+      return finish(errorRedirect);
+    }
+
+    return finish(buildRedirect(baseUrl, safeInternalPath(payload.next, "/me/profile/edit"), "connected"));
+  } catch {
+    return finish(errorRedirect);
+  }
 }
 
 function buildRedirect(baseUrl: string, path: string, status: string) {

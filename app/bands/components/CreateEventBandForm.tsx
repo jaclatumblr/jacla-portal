@@ -148,8 +148,8 @@ export function CreateEventBandForm({
             </div>
           )}
           <div className="space-y-1.5">
-            <label className="text-sm font-medium">バンド名</label>
             <Input
+              label="バンド名"
               value={bandName}
               onChange={(e) => setBandName(e.target.value)}
               placeholder="例: Jacla Special"
@@ -157,8 +157,8 @@ export function CreateEventBandForm({
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-sm font-medium">あなたの担当パート</label>
             <Input
+              label="あなたの担当パート"
               value={instrument ?? selfPart}
               onChange={(e) => setInstrument(e.target.value)}
               placeholder="例: Gt., Vo."

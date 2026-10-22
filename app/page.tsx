@@ -3,15 +3,18 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowLeft, ArrowRight, Bell, Calendar, ChevronDown, Clock, Guitar, Lightbulb, MapPin, Music, Pin, Users } from "@/lib/icons";
+import { ArrowLeft, ArrowRight, Bell, Calendar, Clock, Guitar, Lightbulb, MapPin, Music, Pin, Users } from "@/lib/icons";
 import { AuthGuard } from "@/lib/AuthGuard";
 import { PwaInstallButton } from "@/components/PwaInstallButton";
+import { HomeCharacter } from "@/components/HomeCharacter";
+import { NextHomeEvent } from "@/components/NextHomeEvent";
+import { Button } from "@/components/ui/button";
 import { SideNav } from "@/components/SideNav";
 import { supabase } from "@/lib/supabaseClient";
 import { formatTimeText } from "@/lib/time";
+import { homeCalendarSelection, homeEventStatusLabel, nextHomeEvent, type HomeEventSummary } from "@/lib/homeEvents";
 
 type AnnouncementSummary = { id: string; title: string; content: string; date: string; category: string; isPinned: boolean };
-type HomeEventSummary = { id: string; name: string; date: string; venue: string | null; status: string; openTime: string | null; startTime: string | null };
 type CalendarDay = { key: string; dayNumber: number; inCurrentMonth: boolean; isToday: boolean; eventCount: number };
 
 const WEEKDAY_LABELS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
@@ -31,7 +34,6 @@ function shiftMonth(date: Date, amount: number) { return new Date(date.getFullYe
 function isSameMonthDate(left: Date, right: Date) { return left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth(); }
 function formatMonthLabel(date: Date) { return new Intl.DateTimeFormat("ja-JP", { year: "numeric", month: "long" }).format(date); }
 function formatDayLabel(value: string) { return new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric", weekday: "short" }).format(parseDateValue(value)); }
-function formatStatusLabel(status: string) { if (status === "draft") return "Draft"; if (status === "recruiting") return "Open"; if (status === "fixed") return "Fixed"; if (status === "closed") return "Closed"; return status; }
 function statusBadgeTone(status: string) { if (status === "recruiting") return "border-primary/30 bg-primary/10 text-primary"; if (status === "fixed") return "border-secondary/30 bg-secondary/10 text-secondary"; if (status === "closed") return "border-border bg-muted/70 text-muted-foreground"; return "border-border bg-card text-foreground"; }
 function formatEventTimeLabel(event: HomeEventSummary) { const openText = formatTimeText(event.openTime); const startText = formatTimeText(event.startTime); if (openText && startText) return `${openText} - ${startText}`; return startText ?? openText ?? "Time TBD"; }
 function buildCalendarDays(month: Date, eventCountByDate: Record<string, number>) {
@@ -56,8 +58,16 @@ export default function HomePage() {
   const [announcementsLoading, setAnnouncementsLoading] = useState(true);
   const [calendarEvents, setCalendarEvents] = useState<HomeEventSummary[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
+  const [eventsError, setEventsError] = useState<string | null>(null);
+  const [eventsAttempt, setEventsAttempt] = useState(0);
+  const [todayKey, setTodayKey] = useState(() => formatDateKey(new Date()));
   const [calendarMonth, setCalendarMonth] = useState(() => createMonthStart(new Date()));
-  const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
+  const [requestedDateKey, setSelectedDateKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setTodayKey(formatDateKey(new Date())), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,57 +94,40 @@ export default function HomePage() {
     let cancelled = false;
     (async () => {
       setEventsLoading(true);
-      const { data, error } = await supabase
-        .from("events")
-        .select("id, name, date, venue, status, open_time, start_time")
-        .not("date", "is", null)
-        .order("date", { ascending: true })
-        .order("start_time", { ascending: true });
-      if (cancelled) return;
-      if (error) {
-        console.error(error);
-        setCalendarEvents([]);
-      } else {
+      setEventsError(null);
+      try {
+        const { data, error } = await supabase
+          .from("events")
+          .select("id, name, date, venue, status, open_time, start_time")
+          .not("date", "is", null)
+          .order("date", { ascending: true })
+          .order("start_time", { ascending: true });
+        if (cancelled) return;
+        if (error) throw error;
         setCalendarEvents((data ?? []).map((row) => {
           const entry = row as { id: string; name: string; date: string; venue?: string | null; status?: string | null; open_time?: string | null; start_time?: string | null };
           return { id: entry.id, name: entry.name, date: entry.date, venue: entry.venue ?? null, status: entry.status ?? "", openTime: entry.open_time ?? null, startTime: entry.start_time ?? null };
         }));
+      } catch (error) {
+        if (cancelled) return;
+        console.error(error);
+        setCalendarEvents([]);
+        setEventsError("イベントを読み込めませんでした。");
+      } finally {
+        if (!cancelled) setEventsLoading(false);
       }
-      setEventsLoading(false);
     })();
     return () => { cancelled = true; };
-  }, []);
-
-  useEffect(() => {
-    const visibleDateKeys = Array.from(new Set(calendarEvents.filter((event) => isSameMonthDate(parseDateValue(event.date), calendarMonth)).map((event) => event.date))).sort();
-    const today = new Date();
-    const todayKey = formatDateKey(today);
-    const isCurrentMonthView = isSameMonthDate(calendarMonth, today);
-
-    if (isCurrentMonthView) {
-      setSelectedDateKey((current) =>
-        current && isSameMonthDate(parseDateValue(current), calendarMonth) ? current : todayKey
-      );
-      return;
-    }
-
-    if (visibleDateKeys.length === 0) {
-      setSelectedDateKey(null);
-      return;
-    }
-
-    setSelectedDateKey((current) => {
-      if (current && visibleDateKeys.includes(current)) return current;
-      return visibleDateKeys[0];
-    });
-  }, [calendarEvents, calendarMonth]);
+  }, [eventsAttempt]);
 
   const eventCountByDate = calendarEvents.reduce<Record<string, number>>((acc, event) => { acc[event.date] = (acc[event.date] ?? 0) + 1; return acc; }, {});
   const calendarDays = buildCalendarDays(calendarMonth, eventCountByDate);
   const visibleMonthEvents = calendarEvents.filter((event) => isSameMonthDate(parseDateValue(event.date), calendarMonth));
   const visibleEventsByDate = visibleMonthEvents.reduce<Record<string, HomeEventSummary[]>>((acc, event) => { acc[event.date] ??= []; acc[event.date].push(event); return acc; }, {});
   const visibleDateKeys = Object.keys(visibleEventsByDate).sort();
+  const selectedDateKey = homeCalendarSelection(visibleDateKeys, requestedDateKey, todayKey);
   const selectedDayEvents = selectedDateKey ? visibleEventsByDate[selectedDateKey] ?? [] : [];
+  const upcomingEvent = nextHomeEvent(calendarEvents, todayKey);
 
   return (
     <AuthGuard>
@@ -143,87 +136,97 @@ export default function HomePage() {
         <main className="flex flex-1 flex-col bg-background md:ml-20">
           <section
             id="home"
-            className="order-1 relative flex min-h-[calc(100svh-var(--mobile-topbar-height,0px))] items-center justify-center overflow-hidden px-4 sm:px-6 md:min-h-screen"
+            data-slot="home-hero"
+            className="relative flex items-center overflow-hidden"
           >
-            <div className="absolute inset-0 bg-gradient-to-br from-background via-background to-primary/14" />
-            <div
-              aria-hidden="true"
-              className="hero-aurora-drift absolute inset-[-20%] opacity-85"
-              style={{
-                backgroundImage: `radial-gradient(circle at 18% 24%, color-mix(in oklab, var(--primary) 28%, transparent) 0, transparent 38%),
-                  radial-gradient(circle at 78% 30%, color-mix(in oklab, var(--secondary) 24%, transparent) 0, transparent 32%),
-                  radial-gradient(circle at 56% 76%, color-mix(in oklab, var(--primary) 20%, transparent) 0, transparent 40%)`,
-              }}
-            />
-            <div aria-hidden="true" className="hero-orb-float absolute left-[8%] top-[16%] h-[24rem] w-[24rem] rounded-full bg-primary/12 blur-3xl" />
-            <div aria-hidden="true" className="hero-orb-float-delayed absolute bottom-[8%] right-[6%] h-[30rem] w-[30rem] rounded-full bg-secondary/12 blur-3xl" />
-            <div aria-hidden="true" className="hero-orb-pulse absolute left-1/2 top-1/2 h-[21rem] w-[21rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/10 blur-3xl" />
-            <div
-              aria-hidden="true"
-              className="hero-beam-drift absolute inset-[-14%] opacity-80"
-              style={{
-                backgroundImage: `linear-gradient(122deg, transparent 28%, color-mix(in oklab, var(--primary) 16%, transparent) 46%, transparent 64%),
-                  linear-gradient(302deg, transparent 34%, color-mix(in oklab, var(--secondary) 15%, transparent) 50%, transparent 68%)`,
-              }}
-            />
-            <div className="hero-grid-drift absolute inset-0 mix-blend-multiply dark:mix-blend-normal">
-              <div
-                className="h-full w-full opacity-[0.22] dark:opacity-[0.14]"
-                style={{
-                  backgroundImage: `linear-gradient(var(--hero-grid-minor) 1.25px, transparent 1.25px),
-                              linear-gradient(90deg, var(--hero-grid-minor) 1.25px, transparent 1.25px)`,
-                  backgroundSize: "92px 92px",
-                }}
-              />
-              <div
-                className="absolute inset-0 opacity-[0.2] dark:opacity-[0.12]"
-                style={{
-                  backgroundImage: `linear-gradient(var(--hero-grid-major) 1.6px, transparent 1.6px),
-                              linear-gradient(90deg, var(--hero-grid-major) 1.6px, transparent 1.6px)`,
-                  backgroundSize: "368px 368px",
-                }}
-              />
-            </div>
+            <div className="home-hero-atmosphere" aria-hidden="true" />
 
-            <div className="relative z-10 py-16 text-center sm:py-20 md:py-24">
-              <div className="mb-6 md:mb-8">
+            <HomeCharacter />
+
+            <div data-slot="home-introduction" className="relative z-10 py-16 text-center sm:py-20 md:py-24">
+              <h1 data-slot="home-brand">
                 <Image
                   src="/images/jacla-logo.png"
-                  alt="Jacla logo"
+                  alt="総合音楽部 Jacla"
                   width={200}
                   height={120}
-                  className="mx-auto w-32 object-contain sm:w-40 md:w-[200px]"
+                  className="object-contain"
                   priority
                 />
-              </div>
-              <h1 className="mb-4 text-4xl font-bold tracking-tight sm:text-5xl md:text-7xl">
-                <span className="text-foreground">総合音楽部</span>
-                <span className="mt-2 block text-primary">Jacla</span>
               </h1>
               <p className="mx-auto mb-6 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg md:mb-8 md:text-xl">
-                部員専用ポータルサイト。<br />
-                イベント、連絡、編成づくりをひとつの場所にまとめています。
+                部員専用ポータルサイト。
               </p>
-              <div className="flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
-                <Link href="#calendar" className="w-full rounded bg-primary px-8 py-3 text-center font-medium text-primary-foreground transition-colors hover:bg-primary/90 sm:w-auto">
+              <div data-slot="home-actions" className="flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
+                <Button asChild className="h-auto w-full rounded bg-primary px-8 py-3 text-center text-base font-medium text-primary-foreground transition-colors hover:bg-primary/90 sm:w-auto"><Link href="#calendar">
                   カレンダーを見る
-                </Link>
-                <Link href="/bands" className="w-full rounded border border-border px-8 py-3 text-center font-medium text-foreground transition-colors hover:border-primary hover:text-primary sm:w-auto">
+                </Link></Button>
+                <Button asChild variant="outline" className="h-auto w-full rounded border border-border px-8 py-3 text-center text-base font-medium text-foreground transition-colors hover:border-primary hover:text-primary sm:w-auto"><Link href="/bands">
                   バンドを組む
-                </Link>
+                </Link></Button>
                 <PwaInstallButton />
               </div>
             </div>
 
-            <div className="pointer-events-none absolute left-1/2 flex -translate-x-1/2 flex-col items-center gap-2 animate-bounce" style={{ bottom: "calc(env(safe-area-inset-bottom) + clamp(1.25rem, 4vh, 2.5rem))" }}>
-              <span className="text-xs tracking-widest text-muted-foreground">SCROLL</span>
-              <ChevronDown className="h-5 w-5 text-muted-foreground" />
-            </div>
-
-            <div className="absolute left-8 top-8 hidden h-16 w-16 border-l-2 border-t-2 border-primary/30 sm:block" />
-            <div className="absolute bottom-8 right-8 hidden h-16 w-16 border-b-2 border-r-2 border-primary/30 sm:block" />
           </section>
-          <section id="calendar" className="order-3 relative overflow-hidden py-10 md:py-14">
+          <NextHomeEvent event={upcomingEvent} loading={eventsLoading} error={eventsError} today={todayKey} onRetry={() => setEventsAttempt((attempt) => attempt + 1)} />
+          <section id="announcements" className="relative bg-card/30 py-8 md:py-10">
+            <div className="relative z-10 container mx-auto px-4 sm:px-6">
+              <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <span className="font-mono text-xs tracking-[0.3em] text-primary">ANNOUNCEMENTS</span>
+                  <h2 className="mt-2 text-2xl font-bold sm:text-3xl">お知らせ</h2>
+                </div>
+                <Link href="/announcements" className="flex items-center gap-2 text-sm font-medium text-primary transition-colors hover:text-primary/80">
+                  すべて見る
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+
+              <div className="grid max-w-4xl gap-4 md:gap-6">
+                {announcementsLoading ? (
+                  <div className="text-sm text-muted-foreground">読み込み中...</div>
+                ) : announcements.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">お知らせはまだありません。</div>
+                ) : (
+                  announcements.map((announcement) => {
+                    const tone = announcement.category === "緊急"
+                      ? "bg-destructive/10 text-destructive"
+                      : announcement.category === "イベント"
+                        ? "bg-secondary/10 text-secondary"
+                        : announcement.category === "募集"
+                          ? "bg-orange-500/10 text-orange-500"
+                          : "bg-muted text-muted-foreground";
+
+                    return (
+                      <Link
+                        key={announcement.id}
+                        href={`/announcements/${announcement.id}`}
+                        className={`group relative block rounded-lg border bg-card p-4 transition-all duration-300 hover:border-primary/30 md:p-6 ${announcement.isPinned ? "border-primary/50" : "border-border"}`}
+                        aria-label={`お知らせ: ${announcement.title}`}
+                      >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
+                          <div className="flex shrink-0 items-center gap-2">
+                            {announcement.isPinned && <Pin className="h-4 w-4 text-primary" />}
+                            <span className={`rounded px-2 py-1 text-xs ${tone}`}>{announcement.category}</span>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="mb-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+                              <h3 className="font-bold text-foreground">{announcement.title}</h3>
+                              <span className="font-mono text-xs text-muted-foreground">{announcement.date}</span>
+                            </div>
+                            <p className="line-clamp-2 text-sm text-muted-foreground">{announcement.content}</p>
+                          </div>
+                        </div>
+                      </Link>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </section>
+
+          <section id="calendar" className="relative overflow-hidden py-10 md:py-14">
             <div className="absolute inset-0 bg-gradient-to-b from-background via-card/30 to-background" />
             <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
 
@@ -325,7 +328,7 @@ export default function HomePage() {
                           <Link key={event.id} href={`/events/${event.id}`} className="group block rounded-2xl border border-border/80 bg-background/70 p-4 transition hover:border-primary/40 hover:bg-primary/[0.04]">
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
-                                <span className={`inline-flex rounded-full border px-2 py-1 text-[11px] font-semibold ${statusBadgeTone(event.status)}`}>{formatStatusLabel(event.status)}</span>
+                                <span className={`inline-flex rounded-full border px-2 py-1 text-[11px] font-semibold ${statusBadgeTone(event.status)}`}>{homeEventStatusLabel(event.status)}</span>
                                 <h4 className="mt-3 truncate text-base font-semibold transition-colors group-hover:text-primary">{event.name}</h4>
                               </div>
                               <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" />
@@ -367,63 +370,7 @@ export default function HomePage() {
               </div>
             </div>
           </section>
-          <section id="announcements" className="order-2 relative bg-card/30 py-16 md:py-24">
-            <div className="relative z-10 container mx-auto px-4 sm:px-6">
-              <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between md:mb-12">
-                <div>
-                  <span className="font-mono text-xs tracking-[0.3em] text-primary">ANNOUNCEMENTS</span>
-                  <h2 className="mt-4 text-3xl font-bold sm:text-4xl md:text-5xl">お知らせ</h2>
-                </div>
-                <Link href="/announcements" className="flex items-center gap-2 text-sm font-medium text-primary transition-colors hover:text-primary/80">
-                  すべて見る
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </div>
-
-              <div className="grid max-w-4xl gap-4 md:gap-6">
-                {announcementsLoading ? (
-                  <div className="text-sm text-muted-foreground">読み込み中...</div>
-                ) : announcements.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">お知らせはまだありません。</div>
-                ) : (
-                  announcements.map((announcement) => {
-                    const tone = announcement.category === "緊急"
-                      ? "bg-destructive/10 text-destructive"
-                      : announcement.category === "イベント"
-                        ? "bg-secondary/10 text-secondary"
-                        : announcement.category === "募集"
-                          ? "bg-orange-500/10 text-orange-500"
-                          : "bg-muted text-muted-foreground";
-
-                    return (
-                      <Link
-                        key={announcement.id}
-                        href={`/announcements/${announcement.id}`}
-                        className={`group relative block rounded-lg border bg-card p-4 transition-all duration-300 hover:border-primary/30 md:p-6 ${announcement.isPinned ? "border-primary/50" : "border-border"}`}
-                        aria-label={`お知らせ: ${announcement.title}`}
-                      >
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
-                          <div className="flex shrink-0 items-center gap-2">
-                            {announcement.isPinned && <Pin className="h-4 w-4 text-primary" />}
-                            <span className={`rounded px-2 py-1 text-xs ${tone}`}>{announcement.category}</span>
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="mb-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
-                              <h3 className="font-bold text-foreground">{announcement.title}</h3>
-                              <span className="font-mono text-xs text-muted-foreground">{announcement.date}</span>
-                            </div>
-                            <p className="line-clamp-2 text-sm text-muted-foreground">{announcement.content}</p>
-                          </div>
-                        </div>
-                      </Link>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-          </section>
-
-          <section id="features" className="order-4 relative min-h-screen py-16 md:py-24">
+          <section id="features" className="relative min-h-screen py-16 md:py-24">
             <div className="absolute inset-0 bg-gradient-to-b from-background via-card/50 to-background" />
             <div className="relative z-10 container mx-auto px-4 sm:px-6">
               <div className="mb-12 text-center md:mb-16">

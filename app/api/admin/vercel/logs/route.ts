@@ -53,9 +53,9 @@ export async function GET(request: NextRequest) {
     const deploymentId = searchParams.get("deploymentId");
     const since = searchParams.get("since");
 
-    if (!deploymentId) {
+    if (!deploymentId || !/^[A-Za-z0-9_-]{1,200}$/.test(deploymentId) || (since !== null && !/^\d{1,16}$/.test(since))) {
         return NextResponse.json(
-            { error: "deploymentId is required" },
+            { error: "Invalid deploymentId or since" },
             { status: 400 }
         );
     }

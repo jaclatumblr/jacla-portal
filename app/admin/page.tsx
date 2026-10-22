@@ -94,13 +94,6 @@ export default function AdminPage() {
                   </Link>
                 )}
 
-                {isAdmin && (
-                  <Link href="/admin/accounts" className="rounded-lg border border-border bg-card/50 p-6 transition-colors hover:border-primary/50">
-                    <Shield className="mb-4 h-8 w-8 text-primary" />
-                    <h3 className="mb-2 text-lg font-bold">在籍・アカウント管理</h3>
-                    <p className="text-sm text-muted-foreground">卒業・退部・休眠への変更と復帰。バンドの活動履歴は残ります。</p>
-                  </Link>
-                )}
                 {canAccessRoles && (
                   <Link href="/admin/roles" className="group">
                     <div className="relative h-40 md:h-48 p-4 md:p-6 bg-card/50 border border-border rounded-lg hover:border-primary/50 transition-all">
@@ -109,7 +102,7 @@ export default function AdminPage() {
                         <Shield className="w-6 md:w-8 h-6 md:h-8 text-primary mb-3 md:mb-4" />
                         <h3 className="text-base md:text-lg font-bold mb-2">ユーザー管理</h3>
                         <p className="text-xs md:text-sm text-muted-foreground flex-1">
-                          Administrator/Supervisor は全権限、PA/照明長は job のみ編集
+                          {isAdmin ? "権限管理と、在籍・卒業・休眠の管理" : "PA/照明長の担当設定"}
                         </p>
                         <div className="flex items-center gap-2 text-primary text-sm opacity-0 group-hover:opacity-100 transition-opacity">
                           <span>開く</span>

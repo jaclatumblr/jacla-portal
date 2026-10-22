@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/PageHeader";
+import { UserManagementTabs } from "@/components/UserManagementTabs";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { formatPhoneNumber } from "@/lib/phone";
@@ -1022,7 +1023,6 @@ export default function AdminRolesPage() {
         <SideNav />
 
         <main className="flex-1 md:ml-20">
-          {canEditFullRoles && <div className="px-6 pt-4 text-sm"><Link href="/admin/accounts" className="text-primary hover:underline">在籍・卒業・休眠の管理へ</Link></div>}
           <PageHeader
             kicker="Admin"
             title="ユーザー管理"
@@ -1030,6 +1030,7 @@ export default function AdminRolesPage() {
             backHref="/admin"
             backLabel="管理トップに戻る"
           />
+          <UserManagementTabs activeTab="roles" canManageAccounts={canEditFullRoles} />
 
           <section className="pb-12 md:pb-16">
             <div className="container mx-auto px-4 sm:px-6 space-y-8 md:space-y-10">

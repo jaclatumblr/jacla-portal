@@ -96,7 +96,7 @@ export function SideNav() {
   const themeTransitionLockRef = useRef(false);
   const pathname = usePathname();
   const router = useRouter();
-  const { canAccessAdmin, isAdmin, loading: roleLoading } = useRoleFlags();
+  const { canAccessAdmin, canViewHandover, isAdmin, loading: roleLoading } = useRoleFlags();
   const { session } = useAuth();
   const userId = session?.user.id;
   const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
@@ -598,7 +598,7 @@ export function SideNav() {
 
           </div>
 
-          {canAccessAdmin && (
+          {(canAccessAdmin || canViewHandover) && (
             <Link
               href="/admin"
               aria-current={pathname.startsWith("/admin") ? "page" : undefined}
@@ -763,7 +763,7 @@ export function SideNav() {
                 );
               })}
 
-              {canAccessAdmin && (
+              {(canAccessAdmin || canViewHandover) && (
                 <Link
                   href="/admin"
                   aria-current={pathname.startsWith("/admin") ? "page" : undefined}

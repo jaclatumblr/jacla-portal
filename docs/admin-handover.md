@@ -27,6 +27,10 @@
 
 ### 権限の基本
 
+この引き継ぎ書は、Administrator・Supervisor・PA長（PA Leader）・照明長（Lighting Leader）・会計（Treasurer）が閲覧できます。会計の役職だけでは、イベント・ユーザー・お知らせなどの管理権限は付きません。
+
+サイトの公開中に、ログインとプロフィール登録を完了した状態で閲覧できます。クローズ中は共通のサイト制限が優先され、Administrator・Supervisor以外は閲覧できません。PA長・照明長は、役職名の表示だけでなく、それぞれPA Leader・Lighting Leaderのロールが設定されている必要があります。
+
 | ロール・役職 | 主な扱い |
 | --- | --- |
 | Administrator | 管理操作を行うロール。一般ユーザーとして確認するGeneralモードへの切り替えも可能 |

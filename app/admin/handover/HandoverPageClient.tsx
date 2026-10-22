@@ -9,17 +9,17 @@ import { SideNav } from "@/components/SideNav";
 import { PageHeader } from "@/components/PageHeader";
 
 export function HandoverPageClient({ content }: { content: string }) {
-  const { isAdmin, loading, error } = useRoleFlags();
+  const { canViewHandover, loading, error } = useRoleFlags();
   const sections = content.split("\n").filter((line) => line.startsWith("## ")).map((line) => line.slice(3).trim());
   const sectionId = (title: string) => `section-${sections.indexOf(title) + 1}`;
 
-  if (loading || !isAdmin) {
+  if (loading || !canViewHandover) {
     return (
       <AuthGuard>
         <main className="flex min-h-screen items-center justify-center bg-background px-6">
           <div className="space-y-3 text-center">
             <p className="text-sm text-muted-foreground">
-              {loading ? "権限を確認しています..." : error ?? "管理者のみアクセスできます。"}
+              {loading ? "権限を確認しています..." : error ?? "引き継ぎ書は管理者・PA長・照明長・会計のみ閲覧できます。"}
             </p>
             {!loading && <Link href="/admin" className="text-sm text-primary underline underline-offset-4">管理ダッシュボードに戻る</Link>}
           </div>

@@ -25,6 +25,7 @@ export default function AdminPage() {
     isPaLeader,
     isLightingLeader,
     canAccessAdmin,
+    canViewHandover,
     loading: roleLoading,
   } = useRoleFlags();
   const canAccessRoles = isAdmin || isPaLeader || isLightingLeader;
@@ -39,7 +40,7 @@ export default function AdminPage() {
     );
   }
 
-  if (!canAccessAdmin) {
+  if (!canAccessAdmin && !canViewHandover) {
     return (
       <AuthGuard>
         <div className="min-h-screen flex items-center justify-center bg-background px-6">
@@ -75,7 +76,7 @@ export default function AdminPage() {
             <div className="container mx-auto px-4 sm:px-6">
               {isAdmin && <div className="mx-auto max-w-4xl"><AccountLifecycleNotice /></div>}
               <div className="max-w-4xl mx-auto grid sm:grid-cols-2 gap-4 md:gap-6">
-                {isAdmin && (
+                {canViewHandover && (
                   <Link href="/admin/handover" className="group">
                     <div className="h-40 md:h-48 p-4 md:p-6 bg-card/50 border border-border rounded-lg hover:border-primary/50 transition-all">
                       <div className="h-full flex flex-col">
@@ -127,7 +128,7 @@ export default function AdminPage() {
                   </Link>
                 )}
 
-                <Link href="/admin/announcements" className="group">
+                {canAccessAdmin && <Link href="/admin/announcements" className="group">
                   <div className="relative h-40 md:h-48 p-4 md:p-6 bg-card/50 border border-border rounded-lg hover:border-primary/50 transition-all">
                     <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-lg" />
                     <div className="relative h-full flex flex-col">
@@ -142,7 +143,7 @@ export default function AdminPage() {
                       </div>
                     </div>
                   </div>
-                </Link>
+                </Link>}
 
                 {isAdmin && (
                   <Link href="/admin/forms" className="group">

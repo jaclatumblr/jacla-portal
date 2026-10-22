@@ -45,7 +45,7 @@ function hookHarness(file, exportName) {
  const fetchLeaderRoles=id=>new Promise((resolve,reject)=>requests.push({id,resolve,reject}));
  const storage=load('lib/browserStorage.ts',{}, {window:{get localStorage(){throw Error('blocked');}}});
  const compiled=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,jsx:ts.JsxEmit.ReactJSX}}).outputText;
- const exports={};const imports={react,'@/contexts/AuthContext':{useAuth:()=>({session:user?{user:{id:user}}:null,loading:false})},'@/contexts/AdminModeContext':{useAdminMode:()=>({suppressPrivilegedAccess:false,loading:false})},'@/lib/leaderRoles':{fetchLeaderRoles},'@/lib/browserStorage':storage};
+ const exports={};const imports={react,'@/contexts/AuthContext':{useAuth:()=>({session:user?{user:{id:user}}:null,loading:false})},'@/contexts/AdminModeContext':{useAdminMode:()=>({suppressPrivilegedAccess:false,loading:false})},'@/lib/leaderRoles':{fetchLeaderRoles},'@/lib/browserStorage':storage,'@/lib/supabaseClient':{supabase:{from(){throw Error('Unexpected position lookup in role isolation test');}}}};
  vm.runInNewContext(compiled,{exports,require:name=>imports[name]??require(name),window:{addEventListener(){},removeEventListener(){}},console:{error(){}}});
  return {requests,setUser:value=>user=value,render(){cursor=0;const result=exports[exportName]({children:null});while(jobs.length)jobs.shift()();return result.props?.value??result;}};
 }

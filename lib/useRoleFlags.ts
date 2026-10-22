@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAdminMode } from "@/contexts/AdminModeContext";
 import { fetchLeaderRoles } from "@/lib/leaderRoles";
+import { supabase } from "@/lib/supabaseClient";
 
 type RoleFlagsResult = {
   isAdministrator: boolean;
@@ -13,6 +14,7 @@ type RoleFlagsResult = {
   isPartLeader: boolean;
   isAdmin: boolean;
   canAccessAdmin: boolean;
+  canViewHandover: boolean;
   loading: boolean;
   error: string | null;
 };
@@ -32,6 +34,7 @@ export function useRoleFlags(): RoleFlagsResult {
     isPartLeader: false,
     isAdmin: false,
     canAccessAdmin: false,
+    canViewHandover: false,
   }));
 
   useEffect(() => {
@@ -51,7 +54,7 @@ export function useRoleFlags(): RoleFlagsResult {
         console.error(leaderError);
         setError("権限情報の取得に失敗しました。");
         setOwner(userId);
-        setFlags({ isAdministrator: false, isSupervisor: false, isPaLeader: false, isLightingLeader: false, isPartLeader: false, isAdmin: false, canAccessAdmin: false });
+        setFlags({ isAdministrator: false, isSupervisor: false, isPaLeader: false, isLightingLeader: false, isPartLeader: false, isAdmin: false, canAccessAdmin: false, canViewHandover: false });
         setLoading(false);
         return;
       }
@@ -65,6 +68,24 @@ export function useRoleFlags(): RoleFlagsResult {
       const isPartLeader = leaders.includes("Part Leader");
       const isAdmin = isAdministrator || isSupervisor;
       const canAccessAdmin = isAdmin || isPaLeader || isLightingLeader;
+      let canViewHandover = canAccessAdmin;
+      if (!canViewHandover) {
+        try {
+          const { data, error: positionError } = await supabase
+            .from("profile_positions")
+            .select("position")
+            .eq("profile_id", userId)
+            .eq("position", "Treasurer");
+          if (positionError) {
+            console.error(positionError);
+          } else {
+            canViewHandover = (data ?? []).some((row) => row.position === "Treasurer");
+          }
+        } catch (positionError) {
+          console.error(positionError);
+        }
+      }
+      if (cancelled) return;
 
       setFlags({
         isAdministrator,
@@ -74,6 +95,7 @@ export function useRoleFlags(): RoleFlagsResult {
         isPartLeader,
         isAdmin,
         canAccessAdmin,
+        canViewHandover,
       });
       setError(null);
       setOwner(userId);
@@ -95,6 +117,7 @@ export function useRoleFlags(): RoleFlagsResult {
           isPartLeader: false,
           isAdmin: false,
           canAccessAdmin: false,
+          canViewHandover: false,
         }
       : flags),
     loading: authLoading || modeLoading || (userId ? loading || owner !== userId : false),

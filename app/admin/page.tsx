@@ -76,6 +76,20 @@ export default function AdminPage() {
               {isAdmin && <div className="mx-auto max-w-4xl"><AccountLifecycleNotice /></div>}
               <div className="max-w-4xl mx-auto grid sm:grid-cols-2 gap-4 md:gap-6">
                 {isAdmin && (
+                  <Link href="/admin/handover" className="group">
+                    <div className="h-40 md:h-48 p-4 md:p-6 bg-card/50 border border-border rounded-lg hover:border-primary/50 transition-all">
+                      <div className="h-full flex flex-col">
+                        <ClipboardList className="w-6 md:w-8 h-6 md:h-8 text-primary mb-3 md:mb-4" />
+                        <h3 className="text-base md:text-lg font-bold mb-2">管理者向け引き継ぎ書</h3>
+                        <p className="text-xs md:text-sm text-muted-foreground flex-1">基本操作・困ったときの対応・担当交代の確認事項</p>
+                        <div className="flex items-center gap-2 text-primary text-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                          <span>開く</span><ArrowRight className="w-4 h-4" />
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                )}
+                {isAdmin && (
                   <Link href="/admin/events" className="group">
                     <div className="relative h-40 md:h-48 p-4 md:p-6 bg-card/50 border border-border rounded-lg hover:border-primary/50 transition-all">
                       <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-lg" />

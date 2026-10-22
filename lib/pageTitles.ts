@@ -21,6 +21,7 @@ const exactTitles: Record<string, string> = {
   "/lighting/instructions": "照明ガイド",
   "/lighting/equipment": "照明機材",
   "/admin": "管理",
+  "/admin/handover": "管理者向け引き継ぎ書",
   "/admin/accounts": "在籍・アカウント管理",
   "/admin/roles": "ユーザー管理",
   "/admin/events": "イベント管理",

@@ -3,7 +3,7 @@ html[data-design] [data-slot="home-hero"] {
   isolation: isolate;
   min-height: 300px;
   justify-content: flex-start;
-  padding: 28px 24px;
+  padding: 190px 24px 28px;
   border: 0;
   background: var(--background);
 }
@@ -52,14 +52,14 @@ html[data-design] [data-slot="home-actions"] {
   z-index: 20;
   pointer-events: none;
   user-select: none;
-  top: 16%;
+  top: -40px;
   bottom: -1px;
-  right: -120px;
-  width: 340px;
+  right: -40px;
+  width: 280px;
   overflow: hidden;
-  opacity: .13;
-  -webkit-mask-image: linear-gradient(to bottom, #000 72%, transparent);
-  mask-image: linear-gradient(to bottom, #000 72%, transparent);
+  opacity: 1;
+  -webkit-mask-image: linear-gradient(to bottom, #000 220px, transparent 360px);
+  mask-image: linear-gradient(to bottom, #000 220px, transparent 360px);
 }
 [data-slot="home-hero"] .home-character-bounce {
   position: absolute;
@@ -111,7 +111,7 @@ html[data-design] [data-slot="home-actions"] {
   }
 }
 @media (min-width: 640px) {
-  html[data-design] [data-slot="home-hero"] { padding: 28px 40px; }
+  html[data-design] [data-slot="home-hero"] { padding: 190px 40px 28px; }
   html[data-design] [data-slot="home-actions"] > :is(a, button) { width: auto; }
 }
 @media (min-width: 1024px) {
@@ -121,13 +121,14 @@ html[data-design] [data-slot="home-actions"] {
   }
   html[data-design] [data-slot="home-introduction"] { width: 54%; }
   [data-slot="home-hero"] .home-background-art {
-    top: -12%;
+    top: -20%;
     right: -2%;
     width: 49%;
     max-width: 460px;
-    opacity: .82;
+    opacity: 1;
+    -webkit-mask-image: linear-gradient(to bottom, #000 72%, transparent);
+    mask-image: linear-gradient(to bottom, #000 72%, transparent);
   }
-  .dark [data-slot="home-hero"] .home-background-art { opacity: .68; }
   [data-slot="home-hero"] .home-character-image { width: 130%; left: -24%; }
   [data-slot="home-hero"] .home-character-trigger { top: 4%; height: 88%; }
 }

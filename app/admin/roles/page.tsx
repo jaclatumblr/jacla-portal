@@ -219,15 +219,16 @@ export default function AdminRolesPage() {
     : false;
   const roleFlags = useMemo(() => {
     const roleSet = new Set(leaderRoles);
-    const primaryLeader = selectedProfile?.leader ?? null;
-    const hasRole = (role: string) => roleSet.has(role) || primaryLeader === role;
+    // The saved primary role is only an initial value. Using it here would
+    // re-enable chief positions after their role is unchecked in this draft.
+    const hasRole = (role: string) => roleSet.has(role);
     return {
       isAdministrator: hasRole("Administrator"),
       isSupervisor: hasRole("Supervisor"),
       isPaLeader: hasRole("PA Leader"),
       isLightingLeader: hasRole("Lighting Leader"),
     };
-  }, [leaderRoles, selectedProfile?.leader]);
+  }, [leaderRoles]);
   const allowedPositions = useMemo(() => {
     const allowed = new Set<string>();
     allowed.add("Public Relations");
@@ -730,8 +731,9 @@ export default function AdminRolesPage() {
     );
     const desiredSet = new Set(desiredRoles);
     const editableRoles = desiredRoles.filter((role) => role !== "Administrator");
-    const primaryLeader =
-      leaderPriority.find((role) => desiredSet.has(role)) ?? "none";
+    const primaryLeader = targetIsAdministrator
+      ? "Administrator"
+      : leaderPriority.find((role) => desiredSet.has(role)) ?? "none";
 
     const { data: currentRoles, error: rolesError } = await supabase
       .from("profile_leaders")
@@ -774,6 +776,20 @@ export default function AdminRolesPage() {
       if (deleteError) {
         console.error(deleteError);
         toast.error("ロールの保存に失敗しました。");
+        setSaving(false);
+        return;
+      }
+    }
+
+    // A legacy member may only have profiles.leader, with no profile_leaders
+    // row to delete. In that case no sync trigger fires: persist the cleared
+    // primary role explicitly instead of only changing the local display.
+    if (!targetIsAdministrator) {
+      const primaryRes = await supabase.from("profiles")
+        .update({ leader: primaryLeader }).eq("id", selectedId).select("id").maybeSingle();
+      if (primaryRes.error || !primaryRes.data) {
+        console.error(primaryRes.error);
+        toast.error("代表ロールの保存に失敗しました。再読み込みして確認してください。");
         setSaving(false);
         return;
       }
@@ -1335,7 +1351,7 @@ export default function AdminRolesPage() {
                             {positionOptions.map((option) => {
                               const isAuto = autoPositions.has(option.value);
                               const isAllowed = allowedPositions.has(option.value);
-                              const checked = isAuto || positions.includes(option.value);
+                              const checked = isAllowed && (isAuto || positions.includes(option.value));
                               const disabled = positionsLoading || isAuto || !isAllowed || !canEditFullRoles;
                               return (
                                 <label key={option.value} className="flex items-center gap-2 text-sm">
@@ -1360,6 +1376,7 @@ export default function AdminRolesPage() {
                           </div>
                           <p className="text-xs text-muted-foreground">
                             権限が無い役職や、他ユーザーが設定済みの役職は選択できません。
+                            PA長・照明長を解除する場合は、上のPA Leader・Lighting Leaderのチェックを外して保存してください。
                           </p>
                         </div>
 

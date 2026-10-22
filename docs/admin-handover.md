@@ -5,14 +5,14 @@
 
 この資料は、イベント・ユーザー・お知らせなどの基本的な管理手順をまとめたものです。GitHubリポジトリの実装を基に作成しています。本番環境の設定・導入状況は未確認のため、引き継ぎ時に実際の画面で確認してください。
 
-## 1. 引き継ぎ時に記入する情報
+## 1. 基本的情報
 
 | 項目 | 記入欄 |
 | --- | --- |
 | 技術的な問題の連絡先 | 矢内：[shirone.astral@gmail.com](mailto:shirone.astral@gmail.com) |
-| GitHubリポジトリ | https://github.com/jaclatumblr/jacla-portal |
-| Vercelのチーム・プロジェクト | https://vercel.com/jaclas-projects/jacla-portal |
-| Supabaseの組織・プロジェクト | https://supabase.com/dashboard/project/plpceyhzhmbbbxscrdlu |
+| GitHubリポジトリ（プログラムの管理先） | https://github.com/jaclatumblr/jacla-portal |
+| Vercelプロジェクト（ポータルを動かしてるサーバー） | https://vercel.com/jaclas-projects/jacla-portal |
+| Supabaseプロジェクト（個人情報、ライブ、バンド等の管理先） | https://supabase.com/dashboard/project/plpceyhzhmbbbxscrdlu |
 
 パスワード・秘密鍵・APIトークンは矢内が厳重に管理運営しています。
 

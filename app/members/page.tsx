@@ -13,6 +13,7 @@ import { MemberCard } from "./components/MemberCard";
 import { MemberFilters } from "./components/MemberFilters";
 import { ExportButtons } from "./components/ExportButtons";
 import type { SortKey } from "./types";
+import { positionLabels } from "./types";
 
 export default function MembersPage() {
   const { members, subPartsByProfileId, loading, isAdministrator, canViewStudentId } =
@@ -51,7 +52,7 @@ export default function MembersPage() {
           member.enrollmentYear,
           member.birthDate,
           ...member.leaderRoles,
-          ...member.positions,
+          ...member.positions.flatMap((position) => [position, positionLabels[position]]),
           ...member.bands,
           ...(subPartsByProfileId[member.id] ?? []),
         ];

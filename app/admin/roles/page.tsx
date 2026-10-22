@@ -64,6 +64,7 @@ const positionOptions = [
   { value: "Lighting Chief", label: "照明長" },
   { value: "Public Relations", label: "広報" },
   { value: "Web Secretary", label: "Web幹事" },
+  { value: "Camp Organizer", label: "合宿幹事" },
 ];
 const uniquePositions = [
   "Official",
@@ -232,6 +233,7 @@ export default function AdminRolesPage() {
   const allowedPositions = useMemo(() => {
     const allowed = new Set<string>();
     allowed.add("Public Relations");
+    allowed.add("Camp Organizer");
     if (roleFlags.isAdministrator || roleFlags.isSupervisor) {
       uniquePositions.forEach((position) => {
         const holder = positionHolders[position];
@@ -826,7 +828,9 @@ export default function AdminRolesPage() {
         );
       if (upsertRes.error) {
         console.error(upsertRes.error);
-        toast.error("役職の保存に失敗しました。");
+        toast.error(upsertRes.error.code === "22P02" && desiredPositions.includes("Camp Organizer")
+          ? "合宿幹事の保存にはDBの更新が必要です。SQL/CampOrganizer.sql を適用してください。"
+          : "役職の保存に失敗しました。");
         setSaving(false);
         return;
       }

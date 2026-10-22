@@ -485,3 +485,9 @@ npm run build
 管理画面 `/admin/accounts` で、卒業・退部・休眠への変更と復帰ができます。バンドの所属と名前は保持します。導入時は先に `SQL/AccountLifecycle.sql` の適用とVercelの `CRON_SECRET` 設定が必要です。
 
 動作、移行手順、保持する情報、テスト方法は [在籍・アカウント管理](docs/account-lifecycle.md) を参照してください。
+
+### 合宿幹事の追加
+
+ユーザー管理の「権限管理」タブで、役職「合宿幹事」を複数人に設定・解除できます。管理権限は付与しません。部員一覧・マイプロフィールで日本語表示し、部員一覧では「合宿幹事」で検索できます。
+
+既存DBには、デプロイ前に [SQL/CampOrganizer.sql](SQL/CampOrganizer.sql) をSupabase SQL Editorで適用してください。役職ENUMに値を追加するだけのSQLで、プロフィール設定一式や在籍管理のSQLを再実行する必要はありません。新規DB用の `SQL/Profile.sql` にも追加済みです。

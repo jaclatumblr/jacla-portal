@@ -191,7 +191,8 @@ begin
       'PA Chief',
       'Lighting Chief',
       'Public Relations',
-      'Web Secretary'
+      'Web Secretary',
+      'Camp Organizer'
     );
   end if;
 end $$;
@@ -201,6 +202,7 @@ begin
   if exists (select 1 from pg_type where typname = 'position_role') then
     execute 'alter type position_role add value if not exists ''Official''';
     execute 'alter type position_role add value if not exists ''Public Relations''';
+    execute 'alter type position_role add value if not exists ''Camp Organizer''';
   end if;
 end $$;
 

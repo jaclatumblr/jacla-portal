@@ -64,6 +64,7 @@ const positionLabels: Record<string, string> = {
   "Lighting Chief": "照明長",
   "Public Relations": "広報",
   "Web Secretary": "Web幹事",
+  "Camp Organizer": "合宿幹事",
 };
 
 const positionPriority: Record<string, number> = {
@@ -75,6 +76,7 @@ const positionPriority: Record<string, number> = {
   "Lighting Chief": 4,
   "Public Relations": 5,
   "Web Secretary": 6,
+  "Camp Organizer": 7,
 };
 
 export default function ProfilePage() {
